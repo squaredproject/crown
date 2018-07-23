@@ -1,0 +1,45 @@
+[
+  {
+    "type": "fence",
+    "fenceIndex": 0,
+    "x": 1000.0,
+    "y": 1000.0,
+    "z": 0.0,
+    "ipAddress": "10.0.0.200"
+  },
+  {
+    "type": "tower",
+    "towerIndex": 0,
+	"x": 1000.0,
+    "y": 1000.0,
+    "z": 0.0,
+    "ipAddress": "10.0.0.201"
+  },
+    {
+    "type": "tower",
+    "towerIndex": 1,
+    "level": 9,
+	"x": 2000.0,
+    "y": 1000.0,
+    "z": 0.0,
+    "ipAddress": "10.0.0.202"
+  },
+    {
+    "type": "tower",
+    "towerIndex": 2,
+    "level": 9,
+	"x": 1000.0,
+    "y": 2000.0,
+    "z": 0.0,
+    "ipAddress": "10.0.0.203"
+  },
+    {
+    "type": "tower",
+    "towerIndex": 3,
+    "level": 9,
+	"x": 2000.0,
+    "y": 2000.0,
+    "z": 0.0,
+    "ipAddress": "10.0.0.204"
+  }
+]
