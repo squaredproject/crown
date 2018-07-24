@@ -292,13 +292,13 @@ class Fence extends LXModel implements Cluster  {
     
     Fixture f = (Fixture)this.fixtures.get(0);
     this.bulbs = f.bulbs;
+    this.ipAddress = f.ipAddress; 
     
     this.x = 0.0f;
     this.z = 0.0f;
     this.ry = 0.0f;
     
     this.id = 0; // happens to be only one
-
     
     List<Triangle> rawSTL = null;
     

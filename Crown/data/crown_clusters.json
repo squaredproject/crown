@@ -1,7 +1,7 @@
 [
   {
     "type": "fence",
-    "clusterIndex": 0,
+    "towerIndex": 4,
     "x": 1000.0,
     "y": 1000.0,
     "z": 0.0,
@@ -9,7 +9,7 @@
   },
   {
     "type": "tower",
-    "clusterIndex": 0,
+    "towerIndex": 0,
 	"x": 1000.0,
     "y": 1000.0,
     "z": 0.0,
@@ -17,7 +17,7 @@
   },
     {
     "type": "tower",
-    "clusterIndex": 1,
+    "towerIndex": 1,
     "level": 9,
 	"x": 2000.0,
     "y": 1000.0,
@@ -26,7 +26,7 @@
   },
     {
     "type": "tower",
-    "clusterIndex": 2,
+    "towerIndex": 2,
     "level": 9,
 	"x": 1000.0,
     "y": 2000.0,
@@ -35,7 +35,7 @@
   },
     {
     "type": "tower",
-    "clusterIndex": 3,
+    "towerIndex": 3,
     "level": 9,
 	"x": 2000.0,
     "y": 2000.0,
