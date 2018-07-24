@@ -92,6 +92,7 @@ abstract class Engine {
     configureAutomation();
 
     if (Config.enableOutputBigtree) {
+      System.out.println("NDB output enabled");
       lx.addEffect(new TurnOffDeadPixelsEffect(lx));
       configureExternalOutput();
     }
