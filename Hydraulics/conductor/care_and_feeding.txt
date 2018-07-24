@@ -1,0 +1,151 @@
+WAVE Conductor
+
+Description:
+
+The Conductor is a small, black, diecast metal box with a backlit
+L.C.Display, 8 continuous knobs (potentiometers,) 1 rotary switch (to
+switch modes,) a female USB "B" port, and a female RJ-45 receptacle.
+It's purpose is to generate smooth, cycling control messages for the
+WAVE piece, a kinetic art piece consisting of four "fingers" with
+three "knuckles" each (you'll forgive the author for running with the hand
+metaphor, but it works really well.)  These messages are broadcast
+over a multidrop RS-485 network to a series of controllers at the base
+of each finger, which monitor the position of each joint, and apply
+appropriate signals to proportional valves which seek to set the
+position of each joint.  It is called a "Conductor" as a music based
+metaphor for how it operates- the Conductor keeps pace and provides
+direction to the "orchestra", which would be all the finger nodes and
+the hydraulic/mechanical system.
+
+Numbering Convention:
+
+Fingers are numbered starting from zero, and are usually prefixed with
+the letter 'F'.  The four fingers are therefore:
+F0, F1, F2, F3
+
+Knuckles are numbered starting from 1, with 1 being the lowest
+(largest) joint on each finger, and are usually prefixed with the
+letter 'N'.  The three knuckles are therefore:
+N1, N2, N3
+
+User Interface:
+
+The user interface of the Conductor borrows ideas from analog music
+synthesizers, like those made in the 1960's through the 1980's.
+Instead of sound waves, which have a relatively high frequency, the
+Conductor generates very low frequency sine waves to set the position
+of each joint.  Internally, there is a "pacer" sinusoid, and the
+individual signals to each joint are customized relative to this.
+
+There are 12 joints, and several parameters which could be set for
+each joint, so it is impractical to make a separate control for each
+of these.  Instead, there are up to 8 different modes, each of which
+offers a subset of the parameters for the Maestro to adapt to her
+aesthetic pleasure.
+
+The currently implemented modes are:
+
+Mode 0: zero all - bring every joint to the zero position- straight up
+
+Mode 1: directly set the position of the lowest two knuckles (k1 and
+K2.)  All the K3's are set to zero.
+
+Mode 2: directly set the position of the upper two knuckles (K2 and
+K3.)  All the K1's are left at their existing positions.
+
+Mode 3: move all the fingers in a sine wave patter.  The pacer
+amplitude and period are set by the bottom two knobs.  It is possible
+to set a finger phase increment and a knuckle phase increment.  These
+are additive, like this:
+
+User input
+FP:45 (finger phase 45 degrees)
+
+Result
+F0 phase shift= 0, F1 phase shift = +45 deg, F2 phase shift= +90 deg,
+F3 phase shift = +135 deg
+
+Mode 4:  Pendulum series mode.  This mode borrows from the idea of
+series of pendula with varying lengths.  The user can set a frequency
+increment for the fingers relative to the pacer.  This is expressed in
+1/16ths of the pacer frequency, like this:
+
+User input
+FRQSH:+1
+
+Result:
+F0 freq. = pacer freq. , F1 freq. = pacer freq * 17/16 , F2 freq. =
+pacer freq * 18/16, F3 = pacer freq * 19/16
+
+Mode 5: Amplitude modulation.  An even lower frequency sine wave (LFO
+in synth speak,) is multiplied by the sine wave at each joint (with a
+constant positive offset...)
+
+User input
+MDFDV:4
+MDAMP:50
+
+Result
+modulator freq = pacer freq / 4
+modulator ranges from .5 to 1.5
+the sine waves at each joint vary from 50% of their normal amplitude
+to 150% over the course of 4 cycles.  (The starting amplitude has been
+divided by two to make this work.)
+
+Mode 6: zero all (place holder, same as Mode 0)
+
+Mode 7: zero all (place holder, same as Mode 0)
+
+
+Integration Recommendations:
+The Conductor is USB powered.  Supply 5V to the USB port, either via
+an adapter (e.g. an iPhone charger) or a computer.
+
+The center pair on the RJ-45 receptacle is connected to the RS-485 A
+and B lines.  If A and B need to be switched, there is a second
+connector wired to the RJ-45 jack inside the box.  Plug this into the
+daughter board in place of the current RS-485 connector.
+
+The chassis is not explicitly grounded, nor is there a ground line of
+the RJ-45 port.  Please make sure that there is nothing pulling the
+Conductor far below or above the ground level for the rest of the
+system.  The RS-485 driver is rated for a common mode voltage between
+-7VDC and +12VDC.
+
+There is no terminator resistor on the RS-485.  Technically, there
+should probably be a 120 Ohm resistor there.  If there are problems on
+the RS-485 network, this is one thing to try.
+
+The RS-485 is at 115200 Baud, 8N1
+
+The USB port provides debug information over a virtual com port, when
+plugged into a computer.  Download the Arduino drivers to make this
+work.  This is at 3400 Baud, 8N1
+
+Debug Protocol
+
+The following commands may be issued over the debug port (i.e., USB connection to a laptop.)  
+Except where noted, the response is also over the debug port. Please see above for port settings.
+
+Protocol: <AJONNNN> where:
+A is board address (single-char int).  'x' (lowercase) for conductor 
+J is joint number, 1, 2, 3. 'x' (lowercase) for conductor 
+O is opcode, single char like "I" for PID I value
+NNNN   integer uint16_t parameter as decimal chars. 
+For floats and signed things we just agree on a divisor and/or offset. 
+A lot of opcodes will be there for debugging/set up but not actually used in practice.  
+
+
+opcode: p
+example: <xxp>
+Streams the position output for all the joints. Generally, this is identical to what is broadcast over RS-485
+
+
+opcode: t
+example: <xxt>
+Streams theta (the input angle of the pacer sinusoid)  for all the joints. Generally, this is identical to what is broadcast over RS-485
+
+
+opcode: x
+example: <xxx>
+Stop streaming.
