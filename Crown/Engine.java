@@ -21,7 +21,7 @@ import heronarts.lx.LXChannel;
 import heronarts.lx.LXEngine;
 import heronarts.lx.color.LXColor;
 import heronarts.lx.effect.BlurEffect;
-import heronarts.lx.effect.LXEffect;
+import heronarts.lx.effect.LXEffect;            
 import heronarts.lx.model.LXModel;
 import heronarts.lx.output.FadecandyOutput;
 import heronarts.lx.output.LXDatagram;
@@ -54,7 +54,6 @@ abstract class Engine {
   InterfaceController uiDeck;
   MidiEngine midiEngine;
   TSDrumpad apc40Drumpad;
-  NFCEngine nfcEngine;
   LXListenableNormalizedParameter[] effectKnobParameters;
   final BasicParameter dissolveTime = new BasicParameter("DSLV", 400, 50, 1000);
   final BasicParameter drumpadVelocity = new BasicParameter("DVEL", 1);
@@ -78,12 +77,6 @@ abstract class Engine {
     lx.engine.addParameter(drumpadVelocity);
 
     configureChannels();
-
-    if (Config.enableNFC) {
-      configureNFC();
-      // this line to allow any nfc reader to read any bulb
-      nfcEngine.disableVisualTypeRestrictions = true;
-    }
 
     configureTriggerables();
     lx.engine.addLoopTask(new ModelTransformTask(model));
@@ -528,9 +521,6 @@ abstract class Engine {
       toggle = apc40DrumpadTriggerablesLists[apc40DrumpadRow].size() < 9 ? nfcToggles[apc40DrumpadRow][apc40DrumpadTriggerablesLists[apc40DrumpadRow].size()] : null;
       apc40DrumpadTriggerablesLists[apc40DrumpadRow].add(triggerable);
     }
-    if (nfcEngine != null) {
-      nfcEngine.registerTriggerable(nfcSerialNumber, triggerable, visualType, toggle);
-    }
   }
 
   Triggerable configurePatternAsTriggerable(TSPattern pattern) {
@@ -558,9 +548,6 @@ abstract class Engine {
         toggle = apc40DrumpadTriggerablesLists[0].size() < 9 ? nfcToggles[0][apc40DrumpadTriggerablesLists[0].size()] : null;
         apc40DrumpadTriggerablesLists[0].add(triggerable);
       }
-      if (nfcEngine != null) {
-        nfcEngine.registerTriggerable(nfcSerialNumber, triggerable, VisualType.Effect, toggle);
-      }
     }
   }
 
@@ -582,9 +569,6 @@ abstract class Engine {
     if (apc40Drumpad != null) {
       toggle = apc40DrumpadTriggerablesLists[row].size() < 9 ? nfcToggles[row][apc40DrumpadTriggerablesLists[row].size()] : null;
       apc40DrumpadTriggerablesLists[row].add(triggerable);
-    }
-    if (nfcEngine != null) {
-      nfcEngine.registerTriggerable(nfcSerialNumber, triggerable, VisualType.Effect, toggle);
     }
   }
 
@@ -693,21 +677,6 @@ abstract class Engine {
 
     // MIDI control
     midiEngine = new MidiEngine(lx, effectKnobParameters, apc40Drumpad, drumpadVelocity, previewChannels, bpmTool, uiDeck, nfcToggles, outputBrightness, automationSlot, automation, automationStop);
-  }
-
-  /* configureNFC */
-
-  void configureNFC() {
-    nfcEngine = new NFCEngine(lx);
-    nfcEngine.start();
-    
-    for (int i = 0; i < 6; i++) {
-      for (int j = 0; j < 9; j++) {
-        nfcToggles[i][j] = new BooleanParameter("toggle");
-      }
-    }
-
-    nfcEngine.registerReaderPatternTypeRestrictions(Arrays.asList(readerPatternTypeRestrictions()));
   }
 
   /* configureExternalOutput */
