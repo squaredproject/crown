@@ -275,7 +275,6 @@ SIGNAL(TIMER3_OVF_vect){
 SIGNAL(TIMER3_CAPT_vect){
 /*This subroutine checks was it start of pulse (rising edge)
 or was it end (fallingedge)and performs required operations*/
-  uint8_t sreg;
 
 
   if (PINE & _BV(7)) {//if high level

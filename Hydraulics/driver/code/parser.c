@@ -157,7 +157,7 @@ void parseCommand(uint8_t ptr){
 	if (joint_num) { 			/* if we specified one */
 	  putstr("\r\ni: ");
 	  putint(intData);
-	  jcb[joint_num-1]->dirve = intData;
+	  jcb[joint_num-1]->drive = intData;
 	  DP_SendValue((uint8_t) intData,joint_num -1);	  
 	}
 	break;
@@ -249,7 +249,7 @@ void parseCommand(uint8_t ptr){
   case 'A': /* print all joint information, machine-friendly format */
     for (int i = 0; i < 3; i++) {
       char buf[128];
-      sprintf(buf, "\r\n<%d%d: %d, %d, %d>", addr,j, jcb[i]->minpos, jcb[i]->maxpos, jcb[i]->currentpos);
+      sprintf(buf, "\r\n<%d%d: %d, %d, %d>", addr,i, jcb[i]->minpos, jcb[i]->maxpos, jcb[i]->currentPos);
       putstr(buf);
     }  
     break; 

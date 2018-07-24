@@ -70,7 +70,7 @@ static volatile unsigned char UART0_TxTail;
 
 
 void UART1_Init( unsigned int baud ) { 
-  unsigned char x;
+  //unsigned char x;
   
   UBRR1H = (unsigned char)(baud>>8);			/* Set baud rate */ 
   UBRR1L = (unsigned char)baud;				/* Value depends on MPU clock speed */
