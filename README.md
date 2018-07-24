@@ -1,6 +1,13 @@
-# LedSculpture
+# Crown
 
-This is a clone of some of the LED framework using LX from 2squared.
+This is all the code relating to the Crown burning man project of 2018.
 
-It is intended for another project of Charlie's, but I am not doing a straight clone, for my own reasons.
+## Crown
+
+The Crown subdirectory is the Processing model for light control. Processing demands the name
+of the directory is Crown, so Crown it is.
+
+## model
+
+Various design models
 
