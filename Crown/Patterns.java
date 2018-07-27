@@ -291,35 +291,37 @@ class T2Pattern extends TSPattern {
   final int FENCE_BULBS = 60;
   final int FENCE_CHANNELS = 12;
   
-  final BasicParameter period = new BasicParameter("RATE", 3000, 2000, 6000);
-  final SinLFO bulbIndex = new SinLFO(0, TOWER_CHANNELS, period);
+  // BasicParameter: start, lowlimit, highlimit
+  final BasicParameter period = new BasicParameter("RATE", 10000, 1000, 30000);
+  // period is time in millisecond it takes. Smaller is thus faster.
+  final SawLFO fenceBulbIndex = new SawLFO(0, FENCE_CHANNELS, period);
+  final SawLFO towerBulbIndex = new SawLFO(0, TOWER_CHANNELS, period);
   
   T2Pattern(LX lx) {
     super(lx);
-    addModulator(bulbIndex).start();
+    addModulator(fenceBulbIndex).start();
+    addModulator(towerBulbIndex).start();
     addParameter(period);
   }
   
   public void run(double deltaMs) {
     if (getChannel().getFader().getNormalized() == 0) return;
     
-    System.out.printf("Making Test Pattern: bulb index %f \n",bulbIndex.getValuef());
+    //System.out.printf("Making Test Pattern: towerBI %f fenceBI %f \n",towerBulbIndex.getValuef(), fenceBulbIndex.getValuef());
 
     for (Bulb bulb : model.bulbs) {
       if (bulb.modelType.equals("tower")) {
         setColor(bulb.index, lx.hsb(
-            (lx.getBaseHuef() + (bulb.clusterPosition % TOWER_BULBS)) % 360,
+            (lx.getBaseHuef() + (10*(bulb.clusterPosition % TOWER_BULBS))) % 360,
             100,
-            ( bulb.clusterPosition / TOWER_CHANNELS == (int) bulbIndex.getValuef() ) ? 100: 0
-            //Utils.max(0, 100 - 30*Utils.abs((bulb.clusterPosition / TOWER_CHANNELS) - bulbIndex.getValuef()))
+            ( bulb.clusterPosition / TOWER_BULBS == (int) towerBulbIndex.getValuef() ) ? 100: 0
          ));
       }
       else if (bulb.modelType.equals("fence")) {
           setColor(bulb.index, lx.hsb(
-            (lx.getBaseHuef() + (bulb.clusterPosition % FENCE_BULBS) ) % 360,
+            (lx.getBaseHuef() + (5*(bulb.clusterPosition % FENCE_BULBS))) % 360,
             100,
-            ( bulb.clusterPosition / TOWER_CHANNELS == (int) bulbIndex.getValuef() ) ? 100: 0
-            //Utils.max(0, 100 - 30*Utils.abs((bulb.clusterPosition / FENCE_CHANNELS) - bulbIndex.getValuef()))
+            ( bulb.clusterPosition / FENCE_BULBS == (int) fenceBulbIndex.getValuef() ) ? 100: 0
           ));
       }
       else {
