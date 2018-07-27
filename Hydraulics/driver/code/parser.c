@@ -25,7 +25,7 @@ extern uint8_t addr;
 
 extern joint_control_block *jcb[3];
 
-uint8_t debug_out = 1;			/* set this to output debug info */
+uint8_t debug_out = 0;			/* set this to output debug info */
 
 uint8_t cmd0_str[MAX_COMMAND_LENGTH];
 uint8_t cmd0_len = 0;
@@ -65,20 +65,20 @@ void Print_Counts(void) {
 void parseCommand(uint8_t ptr){
   int16_t intData=0;    /* holds numerical value of parsed data */
   uint8_t joint_num =0; /* if there's a joint specified, this is the num */
-  uint8_t charPos=1;	/* start with first char past the "<" */
-  uint8_t c;		   /* next char to parse */
-  uint8_t val;		  /* temp val */
+  uint8_t charPos=1;    /* start with first char past the "<" */
+  uint8_t c;            /* next char to parse */
+  uint8_t val;          /* temp val */
 
   uint8_t *cmd_str;
   uint8_t cmd_len;
 
   if (ptr == 1){
-	cmd_str = cmd1_str;
-	cmd_len = cmd1_len;
+    cmd_str = cmd1_str;
+    cmd_len = cmd1_len;
   }
   else {
-	cmd_str = cmd0_str;
-	cmd_len = cmd0_len;
+    cmd_str = cmd0_str;
+    cmd_len = cmd0_len;
 
   }
 
@@ -95,30 +95,31 @@ void parseCommand(uint8_t ptr){
     /* should use parseInt to get multi-byte addr, but assume 0-9 for now */
     if ((c - '0') != addr) {
       if(debug_out) {
-		putstr("\r  ");
-		putchr(c);
-		putstr(" != ");
-		putU8(addr);
+        putstr("\r  ");
+        putchr(c);
+        putstr(" != ");
+        putU8(addr);
       }
-	  cmd_len = 0;
-      return; 			/* skip rest of command */
+      cmd_len = 0;
+      return;           /* skip rest of command */
     }
     // it was a digit, so move ahead
-	charPos++;
+    charPos++;
   } 
 
   /* next char may be a joint digit spec, if so get it (0 otherwise) */
   c = cmd_str[charPos];
   joint_num = 0;
   if(isdigit(c)) { 
-	joint_num = c - '0';
-	if(debug_out) {
-	  putstr("\n\r  ");
-	  putstr("\n\r joint: ");
-	  putU8(joint_num);
-	}
+    joint_num = c - '0';
+/*  if(debug_out) {
+      putstr("\n\r  ");
+      putstr("\n\r joint: ");
+      putU8(joint_num);
+    }
+*/
     // it was a digit, so move ahead
-	charPos++;
+    charPos++;
   }
   
   /* OK, they are talking to us: get the rest of the command */
@@ -129,7 +130,7 @@ void parseCommand(uint8_t ptr){
   else if(cmd_str[charPos+1] == '-')  // check for end of string 
     intData = parseInteger(cmd_str,charPos+1);
   else 
-	intData = 0;
+    intData = 0;
   
   /* this is the command char byte */
   c = cmd_str[charPos];
@@ -137,119 +138,129 @@ void parseCommand(uint8_t ptr){
   switch (c) {
 
   case 'h': /* API  homing speed 0<h<63 */
-	if (joint_num) { 			/* if we specified one */
-	  if (debug_out) {
-		putstr("\r\nh: ");
-		intData &= 0x3F;
-		putint(intData);
-	  }
-	  jcb[joint_num - 1]->homespeed = (uint8_t)intData;
-	}
-	break;
+    if (joint_num) {            /* if we specified one */
+      if (debug_out) {
+        putstr("\r\nh: ");
+        intData &= 0x3F;
+        putint(intData);
+      }
+      jcb[joint_num - 1]->homespeed = (uint8_t)intData;
+    }
+    break;
+ 
+
 
   case 't': /* API  joint target value */
-	if (joint_num) { 			/* if we specified one */
-	  jcb[joint_num - 1]->targetPos = intData;
-	}
-	break;
+    if (joint_num) {            /* if we specified one */
+      jcb[joint_num - 1]->targetPos = intData;
+    }
+    break;
 
   case 'i': /* API  immediate raw valve output, 0 < val < 127 */
-	if (joint_num) { 			/* if we specified one */
-	  putstr("\r\ni: ");
-	  putint(intData);
-	  jcb[joint_num-1]->drive = intData;
-	  DP_SendValue((uint8_t) intData,joint_num -1);	  
-	}
-	break;
+    if (joint_num) {            /* if we specified one */
+      putstr("\r\ni: ");
+      putint(intData);
+      jcb[joint_num-1]->drive = intData;
+      DP_SendValue((uint8_t) intData,joint_num -1);   
+    }
+    break;
 
   case 'x': /* API dead band 0 < val < 127 */
-	if (joint_num) { 			/* if we specified one */
-	  putstr("\r\nx: ");
-	  putint(intData);
-	  jcb[joint_num - 1]->dead_band = intData;	}
-	break;
+    if (joint_num) {            /* if we specified one */
+      putstr("\r\nx: ");
+      putint(intData);
+      jcb[joint_num - 1]->dead_band = intData;  }
+    break;
 
   case 'S': /* API print joint status value */
-	if(joint_num) {
-	  Print_Joint_Status(jcb[joint_num - 1]);
-	  if (intData & 0x01) Dump_JCB(jcb[joint_num - 1]);
-	}
-	break;
+    if(joint_num) {
+      Print_Joint_Status(jcb[joint_num - 1]);
+      if (intData & 0x01) Dump_JCB(jcb[joint_num - 1]);
+    }
+    break;
 
   case 'o': /* API Print pOsition counts */
-	Print_Counts();
-	break;
+    Print_Counts();
+    break;
 
   case 'H': /* home this joint number */
-	if(joint_num)
-	  Home_Joint(jcb[joint_num - 1]);
-	break;
-	
+    if(joint_num)
+      Home_Joint(jcb[joint_num - 1]);
+    break;
+    
   case 'L': /* API set drive limit */
-	val = (uint8_t) intData & 0x7F; /* limit value to 0-63 */
-	if(joint_num) {
-	  jcb[joint_num - 1]->dmin = 63 - val;
-	  jcb[joint_num - 1]->dmax = 63 + val;
-	}
-	break;
+    val = (uint8_t) intData & 0x7F; /* limit value to 0-63 */
+    if(joint_num) {
+      jcb[joint_num - 1]->dmin = 63 - val;
+      jcb[joint_num - 1]->dmax = 63 + val;
+    }
+    break;
 
   case 'C': /* API set joint center value BEST DONE VIA HOME COMMAND*/
-	if(joint_num)
-	  jcb[joint_num - 1]->center = intData;
-	break;
+    if(joint_num)
+      jcb[joint_num - 1]->center = intData;
+    break;
 
   case 'D': /* API direction flag, set to invert sense of PID */
-	if(joint_num)
-	  if (debug_out) {
-		putstr("\r\nD: ");
-		putint(intData);
-	  }
-	  jcb[joint_num - 1]->direction = (uint8_t) intData;
-	break;
+    if(joint_num)
+      if (debug_out) {
+        putstr("\r\nD: ");
+        putint(intData);
+      }
+      jcb[joint_num - 1]->direction = (uint8_t) intData;
+    break;
 
 
   case 'P': /* API  joint PID P value */
-	if (joint_num) { 			/* if we specified one */
-	  if (debug_out) {
-		putstr("\r\nP: ");
-		putint(intData);
-	  }
-	  jcb[joint_num - 1]->Kp = intData;
-	}
-	break;
+    if (joint_num) {            /* if we specified one */
+      if (debug_out) {
+        putstr("\r\nP: ");
+        putint(intData);
+      }
+      jcb[joint_num - 1]->Kp = intData;
+    }
+    break;
 
   case 'I': /* API  joint PID I value */
-	if (joint_num) { 			/* if we specified one */
-	  if (debug_out) {
-		putstr("\r\nP: ");
-		putint(intData);
-	  }
-	  jcb[joint_num - 1]->Ki = intData;
-	}
-	break;
+    if (joint_num) {            /* if we specified one */
+      if (debug_out) {
+        putstr("\r\nP: ");
+        putint(intData);
+      }
+      jcb[joint_num - 1]->Ki = intData;
+    }
+    break;
 
   case 'T': /* API  joint PID trace value */
-	if (joint_num) { 			/* if we specified one */
-	  putstr("\r\nT: ");
-	  putint(intData);
-	  jcb[joint_num - 1]->trace = intData;
-	}
-	break;
-	
+    if (joint_num) {            /* if we specified one */
+      putstr("\r\nT: ");
+      putint(intData);
+      jcb[joint_num - 1]->trace = intData;
+    }
+    break;
+    
   case 'm': /* Set joint minimum position */
-  	if(joint_num)
-	  jcb[joint_num - 1]->minpos = intData;
-	break;
-	
+    if(joint_num)
+      jcb[joint_num - 1]->minpos = intData;
+    break;
+    
   case 'M': /* Set joint maximum position */
-  	if(joint_num)
-	  jcb[joint_num - 1]->maxpos = intData;
-	break;
-	
+    if(joint_num)
+      jcb[joint_num - 1]->maxpos = intData;
+    break;
+    
+  case 'd': /* toggle debug */
+    if (debug_out) 
+        debug_out = 0;
+    else 
+        debug_out = 1;
+    break;
+    
   case 'A': /* print all joint information, machine-friendly format */
     for (int i = 0; i < 3; i++) {
       char buf[128];
-      sprintf(buf, "\r\n<%d%d: %d, %d, %d>", addr,i, jcb[i]->minpos, jcb[i]->maxpos, jcb[i]->currentPos);
+      sprintf(buf, "[%d, %d, %d, %d, %d, %d]\n", addr,i, jcb[i]->minpos, jcb[i]->maxpos, 
+                                                   jcb[i]->center, jcb[i]->currentPos);
       putstr(buf);
     }  
     break; 
@@ -323,11 +334,11 @@ uint8_t accumulateCommandString0(uint8_t c){
     if (cmd0_len < MAX_COMMAND_LENGTH) 
       cmd0_str[cmd0_len++] = c;
     if (c == '>') {
-	char buf[128];
-	memcpy(buf, cmd0_str, cmd0_len);
-	buf[cmd0_len] = '\0';
-	putstr(buf);
-	return 1;
+        char buf[128];
+        memcpy(buf, cmd0_str, cmd0_len);
+        buf[cmd0_len] = '\0';
+        //putstr(buf);
+        return 1;
     }
   }
   return 0;
@@ -350,7 +361,7 @@ uint8_t accumulateCommandString1(uint8_t c){
 	char buf[128];
 	memcpy(buf, cmd1_str, cmd1_len);
 	buf[cmd1_len] = '\0';
-	putstr(buf);
+	//putstr(buf);
 	return 1;
     }
   }

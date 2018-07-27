@@ -474,8 +474,8 @@ int main( void ){
         }
       } if (button_state & SPF4_SW) {
         // reset the fucking thing. Watchdog?
-        wdt_enable(WDTO_30MS);
-        while(1) {};
+        //wdt_enable(WDTO_30MS);
+        //while(1) {};
       }
     }/* endif 100hz */
   } /* end while(1) */

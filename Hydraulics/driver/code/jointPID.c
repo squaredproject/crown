@@ -441,7 +441,7 @@ void Print_Joint_Status(joint_control_block *j )
   putS16(j->maxpos);
 }
 
-#define DEBUG 1
+//#define DEBUG 1
 
 /* calculate new drive parameter from current position */
 uint8_t Joint_Servo_Task(joint_control_block *j){
