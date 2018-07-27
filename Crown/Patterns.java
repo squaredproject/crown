@@ -235,37 +235,103 @@ class DiffusionTestPattern extends TSPattern {
 ** with the objects I now have
 */
 
-/*
 
-class TestPattern extends TSPattern {
+class T1Pattern extends TSPattern {
+
+  // towers and fences have a different number of bulbs per channel
+  final int TOWER_BULBS = 36;
+  final int TOWER_CHANNELS = 12;
   
-  int CUBE_MOD = 14;
+  final int FENCE_BULBS = 60;
+  final int FENCE_CHANNELS = 12;
   
-  final BasicParameter period = new BasicParameter("RATE", 3000, 2000, 6000);
-  final SinLFO bulbIndex = new SinLFO(0, CUBE_MOD, period);
+  final BasicParameter period = new BasicParameter("RATE", 200000, 25000, 2000000);
+  final SawLFO towerBulbIndex = new SawLFO(0, TOWER_CHANNELS * TOWER_BULBS, period);
+  final SawLFO fenceBulbIndex = new SawLFO(0, FENCE_CHANNELS * FENCE_BULBS, period);
   
-  TestPattern(LX lx) {
+  T1Pattern(LX lx) {
     super(lx);
-    addModulator(bulbIndex).start();
+    addModulator(towerBulbIndex).start();
+    addModulator(fenceBulbIndex).start();
     addParameter(period);
   }
   
   public void run(double deltaMs) {
     if (getChannel().getFader().getNormalized() == 0) return;
+    
+//    System.out.printf("Making Test Pattern: fence BI %f tower BI %f \n",
+//        fenceBulbIndex.getValuef(),towerBulbIndex.getValuef());
 
-    int ci = 0;
     for (Bulb bulb : model.bulbs) {
-      setColor(bulb.index, lx.hsb(
-        (lx.getBaseHuef() + bulb.cx + bulb.cy) % 360,
-        100,
-        Utils.max(0, 100 - 30*Utils.abs((ci % CUBE_MOD) - bulbIndex.getValuef()))
-      ));
-      ++ci;
+      if (bulb.modelType.equals("tower")) {
+        setColor(bulb.index, lx.hsb(
+            0,
+            0,
+            ( bulb.clusterPosition == (int) towerBulbIndex.getValuef() ) ? 100: 0
+         ));
+      }
+      else if (bulb.modelType.equals("fence")) {
+          setColor(bulb.index, lx.hsb(
+            0,
+            0,
+            ( bulb.clusterPosition == (int) fenceBulbIndex.getValuef() ) ? 100: 0
+          ));
+      }
+    }
+  }
+}
+
+
+class T2Pattern extends TSPattern {
+
+  // towers and fences have a different number of bulbs per channel
+  final int TOWER_BULBS = 36;
+  final int TOWER_CHANNELS = 12;
+  
+  final int FENCE_BULBS = 60;
+  final int FENCE_CHANNELS = 12;
+  
+  // BasicParameter: start, lowlimit, highlimit
+  final BasicParameter period = new BasicParameter("RATE", 10000, 1000, 30000);
+  // period is time in millisecond it takes. Smaller is thus faster.
+  final SawLFO fenceBulbIndex = new SawLFO(0, FENCE_CHANNELS, period);
+  final SawLFO towerBulbIndex = new SawLFO(0, TOWER_CHANNELS, period);
+  
+  T2Pattern(LX lx) {
+    super(lx);
+    addModulator(fenceBulbIndex).start();
+    addModulator(towerBulbIndex).start();
+    addParameter(period);
+  }
+  
+  public void run(double deltaMs) {
+    if (getChannel().getFader().getNormalized() == 0) return;
+    
+    //System.out.printf("Making Test Pattern: towerBI %f fenceBI %f \n",towerBulbIndex.getValuef(), fenceBulbIndex.getValuef());
+
+    for (Bulb bulb : model.bulbs) {
+      if (bulb.modelType.equals("tower")) {
+        setColor(bulb.index, lx.hsb(
+            (lx.getBaseHuef() + (10*(bulb.clusterPosition % TOWER_BULBS))) % 360,
+            100,
+            ( bulb.clusterPosition / TOWER_BULBS == (int) towerBulbIndex.getValuef() ) ? 100: 0
+         ));
+      }
+      else if (bulb.modelType.equals("fence")) {
+          setColor(bulb.index, lx.hsb(
+            (lx.getBaseHuef() + (5*(bulb.clusterPosition % FENCE_BULBS))) % 360,
+            100,
+            ( bulb.clusterPosition / FENCE_BULBS == (int) fenceBulbIndex.getValuef() ) ? 100: 0
+          ));
+      }
+      else {
+          System.out.println(" Test Pattern: found unknown model type "+bulb.modelType);
+      }
     
     }
   }
 }
-*/
+
 
 class TestCluster extends TSPattern {
   final DiscreteParameter lightNo = new DiscreteParameter("LIGHT", 0, 19);
