@@ -155,6 +155,7 @@ abstract class Engine {
     registerPatternController("Lightning", new Lightning(lx));
     registerPatternController("Wisps", new Wisps(lx));
     registerPatternController("Fireworks", new Explosions(lx));
+    
   }
 
   void registerIPadEffects() {
@@ -241,6 +242,8 @@ abstract class Engine {
     patterns.add(new Pixels(lx));
     patterns.add(new Wedges(lx));
     patterns.add(new Parallax(lx));
+    
+    patterns.add(new TestPattern(lx));
   }
 
   LXPattern[] getPatternListForChannels() {

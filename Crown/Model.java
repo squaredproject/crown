@@ -591,12 +591,12 @@ class Bulb extends LXPoint {
   public final float tz;
   
   /**
-   * Radial distance from bulb center to center of model in x-z plane 
+   * Radial distance from bulb center to center of tower ( ie relative ) in x-z plane 
    */
   public final float r;
   
   /**
-   * Angle in degrees from bulb center to center of tower in x-z plane
+   * Angle in degrees from bulb center to center of tower ( ie relative ) in x-z plane
    */
   public final float theta;
   

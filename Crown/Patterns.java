@@ -235,14 +235,18 @@ class DiffusionTestPattern extends TSPattern {
 ** with the objects I now have
 */
 
-/*
 
 class TestPattern extends TSPattern {
+
+  // towers and fences have a different number of bulbs per channel
+  final int TOWER_BULBS = 36;
+  final int TOWER_CHANNELS = 12;
   
-  int CUBE_MOD = 14;
+  final int FENCE_BULBS = 60;
+  final int FENCE_CHANNELS = 12;
   
   final BasicParameter period = new BasicParameter("RATE", 3000, 2000, 6000);
-  final SinLFO bulbIndex = new SinLFO(0, CUBE_MOD, period);
+  final SinLFO bulbIndex = new SinLFO(0, TOWER_CHANNELS, period);
   
   TestPattern(LX lx) {
     super(lx);
@@ -253,19 +257,29 @@ class TestPattern extends TSPattern {
   public void run(double deltaMs) {
     if (getChannel().getFader().getNormalized() == 0) return;
 
-    int ci = 0;
     for (Bulb bulb : model.bulbs) {
-      setColor(bulb.index, lx.hsb(
-        (lx.getBaseHuef() + bulb.cx + bulb.cy) % 360,
-        100,
-        Utils.max(0, 100 - 30*Utils.abs((ci % CUBE_MOD) - bulbIndex.getValuef()))
-      ));
-      ++ci;
+      if (bulb.modelType.equals("tower")) {
+        setColor(bulb.index, lx.hsb(
+            (lx.getBaseHuef() + (bulb.clusterPosition % TOWER_BULBS)) % 360,
+            100,
+            Utils.max(0, 100 - 30*Utils.abs((bulb.clusterPosition / TOWER_CHANNELS) - bulbIndex.getValuef()))
+         ));
+      }
+      else if (bulb.modelType.equals("fence")) {
+          setColor(bulb.index, lx.hsb(
+            (lx.getBaseHuef() + (bulb.clusterPosition % FENCE_BULBS) ) % 360,
+            100,
+            Utils.max(0, 100 - 30*Utils.abs((bulb.clusterPosition / FENCE_CHANNELS) - bulbIndex.getValuef()))
+          ));
+      }
+      else {
+          System.out.println(" Test Pattern: found unknown model type "+bulb.modelType);
+      }
     
     }
   }
 }
-*/
+
 
 class TestCluster extends TSPattern {
   final DiscreteParameter lightNo = new DiscreteParameter("LIGHT", 0, 19);
