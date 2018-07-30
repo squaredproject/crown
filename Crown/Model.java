@@ -33,10 +33,13 @@ import java.nio.file.Path;
 class Geometry {
 
   // we are in MM in this model
-  final static float INCHES = 25.4f;
+  // change to inches to see how the patterns react
+  final static float INCHES = 1.0f;
   final static float INCH = INCHES;
   final static float FEET = 12 * INCHES;
   final static float FOOT = FEET;
+  
+  final static float MMS_INCHES = 25.4f;
   
 
   /**
@@ -331,16 +334,24 @@ class Fence extends LXModel implements Cluster  {
     //    minX, maxX, minY, maxY, minZ, maxZ );
     
     // Copy into the Toxi structures someone liked at some time
+    // CONVERT MM TO INCHES
     fenceSTL = new ArrayList<>();
     
     float xDelta = - (float)maxX;
     float yDelta = - (float)minY;
     float zDelta = - (float)minZ;
+    float scale = 1.0f / geometry.MMS_INCHES;
     for (Triangle t : rawSTL ) {
         Vec3d v[] = t.getVertices();
-        Vec3D a = new Vec3D( (float)v[0].x + xDelta, (float)v[0].y + yDelta, (float)v[0].z + zDelta );
-        Vec3D b = new Vec3D(  (float)v[1].x + xDelta,  (float)v[1].y + yDelta, (float) v[1].z + zDelta );
-        Vec3D c = new Vec3D(  (float)v[2].x + xDelta,  (float)v[2].y + yDelta, (float) v[2].z + zDelta );
+        Vec3D a = new Vec3D( ((float)v[0].x + xDelta) * scale, 
+                             ((float)v[0].y + yDelta) * scale, 
+                             ((float)v[0].z + zDelta) * scale );
+        Vec3D b = new Vec3D(  ((float)v[1].x + xDelta) * scale,  
+                               ((float)v[1].y + yDelta) * scale,
+                               ((float) v[1].z + zDelta) * scale );
+        Vec3D c = new Vec3D( ((float)v[2].x + xDelta) * scale,  
+                             ((float)v[2].y + yDelta) * scale, 
+                             ((float) v[2].z + zDelta) * scale );
         fenceSTL.add ( new Triangle3D( a, b, c ) );
     }
     
