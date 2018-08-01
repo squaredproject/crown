@@ -10,7 +10,7 @@ sourceSets {
             srcDirs = ['.']
         }
         resources {
-            srcDirs = ['.']
+            srcDirs = ['data']
         }
     }
 }
