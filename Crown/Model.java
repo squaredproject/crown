@@ -171,8 +171,10 @@ class Model extends LXModel {
         _clustersByIp.put(tower.getIpAddress(), tower);
     }
     
-    _clusters.add(this.fence);
-    _clustersByIp.put(this.fence.getIpAddress(), this.fence);
+    for (Cluster c : this.fence.clusters ) {
+        _clusters.add(c);
+        _clustersByIp.put(c.getIpAddress(), c);
+    }
     
     this.clusters = Collections.unmodifiableList(_clusters);
     this.clustersByIp = Collections.unmodifiableMap(_clustersByIp);
@@ -208,10 +210,12 @@ class Model extends LXModel {
       }
       
       fence = new Fence(geometry, clusterConfig, dataPath );
-      for (Bulb bulb: fence.bulbs) {
-          points.add(bulb);
+      for (Cluster cluster : fence.clusters ) {
+          List<Bulb> _bulbs = cluster.getBulbs();
+          for (Bulb _bulb: _bulbs) {
+              points.add(_bulb);
+          }
       }
-      
     }
   }
 
@@ -241,23 +245,26 @@ class Model extends LXModel {
 
 class ClusterConfig {
   String type;
-  int towerIndex;
+  int index;
   String ipAddress;
-  float x;
-  float y;
-  float z;
 }
 
+// Fence class:
+// is a little different because it has two "cluster" objects,
+// because it has two NDB, because although we COULD use one NDB, 
+// we fall afoul of 1500 byte UDP MTU and I am loath to spec everything
+// as jumbo frames
 
-class Fence extends LXModel implements Cluster  {
+
+class Fence extends LXModel  {
   
-  /**
-   * Bulbs in the fence
-   */
-  public final List<Bulb> bulbs;
+  /*
+  ** The fence model includes multiple fence clusters
+  ** They get constructed....
+  */
   
-  public String ipAddress;
-  
+  public final List<Cluster> clusters;
+
   /*
   **
   */
@@ -279,10 +286,6 @@ class Fence extends LXModel implements Cluster  {
    */
   public final float ry;
     
-  public List<Bulb> getBulbs() { return ( bulbs ); }
-  
-  public String getIpAddress() { return ( ipAddress ); }
-  
   List<Triangle3D> fenceSTL;
   
   /*
@@ -292,11 +295,11 @@ class Fence extends LXModel implements Cluster  {
   Fence( Geometry geometry, List<ClusterConfig> clusterConfig, String dataPath ) {
       
     super(new Fixture(geometry, clusterConfig, 0.0f, 0.0f, 0.0f));
-    
     Fixture f = (Fixture)this.fixtures.get(0);
-    this.bulbs = f.bulbs;
-    this.ipAddress = f.ipAddress; 
-    
+    this.clusters = new ArrayList<>();
+    for (FenceCluster fc : f.clusters) {
+        this.clusters.add(fc);
+    }
     this.x = 0.0f;
     this.z = 0.0f;
     this.ry = 0.0f;
@@ -305,7 +308,8 @@ class Fence extends LXModel implements Cluster  {
     
     List<Triangle> rawSTL = null;
     
-    // Load the fence triangles - TODO: get the file path right
+    // Load the fence triangles - TODO: move this to it's own class, since we also
+    // need the STL loader for the Tower components
     try {
         rawSTL = STLParser.parseSTLFile(Paths.get(dataPath +"fence.stl") );
     } catch (IOException ex) {
@@ -357,27 +361,44 @@ class Fence extends LXModel implements Cluster  {
     
   }
   
+  public static class FenceCluster implements Cluster {
+      
+      public final List<Bulb> bulbs;
+      public List<Bulb> getBulbs() { return(bulbs); }
+      
+      public final String ipAddress;
+      public String getIpAddress() { return(ipAddress); }
+      
+      FenceCluster(String ipAddress) {
+        bulbs = new ArrayList<Bulb>();
+        this.ipAddress = ipAddress;
+      }
+      
+  };
+  
   // FENCE
   private static class Fixture extends LXAbstractFixture {
-    
-    final List<Bulb> bulbs;
-    
-    final String ipAddress;
+      
+    final List<FenceCluster> clusters;
     
     Fixture(Geometry geometry, List<ClusterConfig> clusterConfig, float x, float z, float ry) {
         
       Vec3D fenceCenter = new Vec3D(0, 0, 0);
       
-      this.bulbs = new ArrayList<>();
+      clusters = new ArrayList<>();
       
-      String _ipAddress = null;
-      for (ClusterConfig cp : clusterConfig) {
-        if (cp.type.equals("fence") ) {
-          _ipAddress = cp.ipAddress;
-        }
+      // there are two indexed fence objects in the config file
+      for (int i=0; i<2 ; i++ ) {
+          String _ipAddress = null;
+          for (ClusterConfig cp : clusterConfig) {
+            if (cp.type.equals("fence") && (i == cp.index )) {
+              _ipAddress = cp.ipAddress;
+            }
+          }
+          if (_ipAddress == null) { System.out.println("fence "+i+" not found in config, things will go wrong"); }
+          clusters.add( new FenceCluster(_ipAddress) );
       }
-      if (_ipAddress == null) { System.out.println("must have a fence in the config"); }
-      this.ipAddress = _ipAddress;
+
       
       // The centers of each bulb - vertically within the wall - 6 strands
       // Eric told me 8 inches, with the gap, but those look wrong.
@@ -394,6 +415,7 @@ class Fence extends LXModel implements Cluster  {
       // Add in the same order the NDB will be addressing them,
       // which means row by row fgoing down
       int clusterIndex = 0;
+      FenceCluster fc = clusters.get(0);
       for ( int i = 0 ; i < centerHeights.length; i++ ) {
           // Eastern edge
           for ( int j = 0; j < bulbsPerSide ; j++ ) {
@@ -402,7 +424,7 @@ class Fence extends LXModel implements Cluster  {
               float bx = (fenceWidth / 2) - Geometry.FENCE_LED_INSET;
               float bz = (- fenceWidth / 2) + (j * bulbDistance );
               Bulb b = new Bulb( clusterIndex, "fence", 0, fenceCenter, t, bx, centerHeights[i], bz, 0.0f, Utils.PI/2, 0.0f );
-              bulbs.add(b);
+              fc.bulbs.add(b);
               clusterIndex++;
           }
           // North edge
@@ -411,16 +433,21 @@ class Fence extends LXModel implements Cluster  {
               float bx = (fenceWidth / 2) - ( j * bulbDistance );
               float bz = (fenceWidth / 2) - Geometry.FENCE_LED_INSET;
               Bulb b = new Bulb( clusterIndex, "fence", 0, fenceCenter, t, bx, centerHeights[i], bz, 0.0f, 0.0f, 0.0f);
-              bulbs.add(b);
+              fc.bulbs.add(b);
               clusterIndex++;
           }
+      }
+      
+      clusterIndex = 0;
+      fc = clusters.get(1);
+      for ( int i = 0 ; i < centerHeights.length; i++ ) {
           // South Edge
           for ( int j = 0; j < bulbsPerSide ; j++ ) {
               LXTransform t = new LXTransform();
               float bx = (fenceWidth / 2) - ( j * bulbDistance );
               float bz = (- fenceWidth / 2) + Geometry.FENCE_LED_INSET;
               Bulb b = new Bulb( clusterIndex, "fence", 0, fenceCenter, t, bx, centerHeights[i], bz, 0.0f, 0.0f, 0.0f );
-              bulbs.add(b);
+              fc.bulbs.add(b);
               clusterIndex++;
           }
           // West edge
@@ -429,12 +456,15 @@ class Fence extends LXModel implements Cluster  {
               float bx = (- fenceWidth / 2) + Geometry.FENCE_LED_INSET;
               float bz =  (- fenceWidth / 2) + ( j * bulbDistance );
               Bulb b = new Bulb( clusterIndex, "fence", 0, fenceCenter, t, bx, centerHeights[i], bz, 0.0f, Utils.PI/2, 0.0f );
-              bulbs.add(b);
+              fc.bulbs.add(b);
               clusterIndex++;
           }
       }
     }
-  }
+  };
+  
+
+  
 }
 
 
@@ -519,7 +549,7 @@ class Tower extends LXModel implements Cluster  {
       bulbs = new ArrayList<>();
       
       for (ClusterConfig cp : clusterConfig) {
-        if (cp.type.equals("tower") && cp.towerIndex == towerIndex) {
+        if (cp.type.equals("tower") && cp.index == towerIndex) {
           _ipAddress = cp.ipAddress;
          }
       }
