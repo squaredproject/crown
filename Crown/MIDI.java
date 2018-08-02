@@ -16,6 +16,12 @@ import heronarts.lx.parameter.DiscreteParameter;
 import heronarts.lx.parameter.LXListenableNormalizedParameter;
 import heronarts.lx.parameter.LXParameter;
 import heronarts.lx.parameter.LXParameterListener;
+//launchpad jars
+//import net.thecodersbreakfast.lp4j.api.*;
+//import net.thecodersbreakfast.lp4j.midi.*;
+//import java.util.concurrent.CountDownLatch;
+
+//import javax.sound.midi.InvalidMidiDataException;
 
 interface InterfaceController {
   void select();
@@ -251,7 +257,8 @@ class MidiEngine {
       });
       setAutomation(apc40);
     }
-    
+   //launchpad attempt
+   //lx.engine.midiEngine.addListener(new LXAbstractMidiListener() { 
   }
   
   void setAutomation(APC40 apc40) {
