@@ -1,3 +1,8 @@
+#include <mcp_can_dfs.h>
+#include <mcp_can.h>
+
+#include <SPI.h>
+
 // basic arduino code
 // Weirdly with arduino ide all the standard headers
 // appear to get added for you. I'm not sure how I feel about that...
@@ -6,7 +11,7 @@
 #define NUM_JOINTS 3
 #define MIN_POT 384
 #define MAX_POT 640
-#define POT_RANGE 2048
+#define POT_RANGE 1024
 #define SCULPTURE_RANGE 8192
 
 #ifndef TRUE 
@@ -19,6 +24,9 @@
 
 #define SETTLE_TIME 2
 
+const int SPI_CS_PIN = 53;
+
+
 
 typedef enum {
    MODE_OFF = 0,
@@ -29,10 +37,17 @@ typedef enum {
 
 Mode mode = MODE_OFF;
 
-uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-200, 200}, {-200, 200}, {-200, 200}},
+uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 200}, {-532, 328}, {-275, 276}},
                                                   {{-200, 200}, {-200, 200}, {-200, 200}},
                                                   {{-200, 200}, {-200, 200}, {-200, 200}},
                                                   {{-200, 200}, {-200, 200}, {-200, 200}}};
+
+/*uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-200, 200}, {-200, 200}, {-200, 200}},
+                                                  {{-200, 200}, {-200, 200}, {-200, 200}},
+                                                  {{-200, 200}, {-200, 200}, {-200, 200}},
+                                                  {{-200, 200}, {-200, 200}, {-200, 200}}};
+*/
+uint16_t jointCenter[NUM_TOWERS][NUM_JOINTS] = {{POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}};
                                
 // XXX - above. At some point I use real values. Not just yet though.
 
@@ -100,13 +115,21 @@ static void readAllButtons();
 static void InitButtons();
 static ButtonState *readButtonState(int button);
 static void readSerial();
+static void readSerial1();
 static uint8_t accumulateCommandString(uint8_t c);
 static void parseCommand();
+
+static void CAN_init();
+static void CAN_sendData(unsigned char *data, unsigned char len);
+
 
 void setup(){
   Serial.begin(115200);
   Serial1.begin(115200);
   InitButtons();
+  //CAN_init();
+  Serial.println("Starting maquette...");
+  //Serial1.println("Starting maquette...");
   //pinMode(35, INPUT_PULLUP);
 }
 
@@ -114,19 +137,30 @@ int timerIdx = 0;
 void loop() {
     delay(20); 
 
+    //CAN_sendData("hi there", 8);
+
     timerIdx++;
     
     readAllButtons();
 
     readSerial();
+    readSerial1();
+
+    //Serial1.println("This is the 485 bus talking to you\r\n");
     
-    if (timerIdx > 5) { // only run main control loop every 10th of a second
+    if (timerIdx > 100) { // only run main control loop every 10th of a second
       timerIdx = 0; 
 
       for (int i=0; i<NUM_TOWERS; i++) {
           for (int j=0; j<NUM_JOINTS; j++) {
               uint16_t potValue  = analogRead(pinMapping[i][j]);
               modelPosition[i][j] = maquetteToModel(potValue, i, j);
+             /* if (i==0 && j==1) { // debugging shit
+                Serial.print("maquette read middle joint of first tower, raw: ");
+                Serial.print(potValue);
+                Serial.print(" , sculpture ");
+                Serial.println(modelPosition[i][j]);
+              } */
           }
       }
   
@@ -288,17 +322,23 @@ static ButtonState *readButtonState(int button)
    values read by the potentiometer are valid - we clamp the 
    value between MAX_POT and MIN_POT */
 
-static int16_t maquetteToModel(uint16_t pos, int i, int j) {
-// Potentiometer has a range of POT_RANGE
+static int16_t maquetteToModel(uint16_t potValue, int towerId, int jointId) {
+// Potentiometer has a range of POT_RANGE (1K)
 // Sculpture has a range of SCULPTURE_RANGE (8K)
 // Assuming the zeros are lined up, that means that the translation is
-// int16_t val = (int16_t)((long)pos * SCULPTURE_RANGE)/POT_RANGE;
-// And then we clamp to joint range
-// return clamp(val, jointRange[i][j][0], jointRange[i][j][1]);
-    int16_t value = clamp(pos, MIN_POT, MAX_POT) - 512;
+   long potValueCentered = ((long)potValue) - jointCenter[towerId][jointId];
+   int16_t val = (int16_t)((potValueCentered * SCULPTURE_RANGE)/POT_RANGE);
+/*   if (towerId==0 && jointId == 1){
+    Serial.print(potValueCentered);
+    Serial.print(", ");
+    Serial.println(val);
+   }
+*/
+   return clamp(val, jointRange[towerId][jointId][0], jointRange[towerId][jointId][1]);
+//  int16_t value = clamp(pos, MIN_POT, MAX_POT) - 512;
     
-    return  ((long)value * (long)(jointRange[i][j][1] - jointRange[i][j][0]))/(long)(MAX_POT - MIN_POT);
-    return  ((long)value * (long)(jointRange[i][j][1] - jointRange[i][j][0]))/(long)(MAX_POT - MIN_POT);
+//    return  ((long)value * (long)(jointRange[i][j][1] - jointRange[i][j][0]))/(long)(MAX_POT - MIN_POT);
+//    return  ((long)value * (long)(jointRange[i][j][1] - jointRange[i][j][0]))/(long)(MAX_POT - MIN_POT);
 }
 
 
@@ -314,19 +354,25 @@ static int16_t clamp(int16_t value, int16_t min, int16_t max) {
 // Send target position to sculpture
 static void targetSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]) {
     char modelString[256];
+    char smallModelString[64];
     char *ptr = modelString;
     for (int i=0; i<NUM_TOWERS; i++){
         for (int j=0; j<NUM_JOINTS; j++) {
-            sprintf(ptr, "<%d%dt%d>", i, j, positionArray[i][j]);
+            sprintf(ptr, "<%d%dt%d>", i+1, j+1, positionArray[i][j]);
             ptr += strlen(ptr);
+            if (i==0 && j==1) {
+              sprintf(smallModelString, "<%d%dt%d>\r\n", i+1, j+1, positionArray[i][j]);
+              Serial.print(smallModelString);
+            }
         }
     }
     sprintf(ptr, "\r\n");
-    Serial1.print(modelString);
+//    Serial1.print(modelString);
+    Serial1.print(smallModelString);
 
-    if (debug) {
-      Serial.print(modelString);
-    }
+ //   if (debug) {
+ //     Serial.println(modelString);
+ //   }
 }
 
 // Let the rest of the world know what we're doing
@@ -359,13 +405,30 @@ uint8_t cmd_len = 0;
 
 static void readSerial()
 {
+  //Serial.println("Sanity test...");
   while(Serial.available() > 0) {
     int haveCommand = FALSE;
+    //uint8_t serialChar = Serial.read();
     haveCommand = accumulateCommandString(Serial.read());
+    //Serial.write(serialChar);
     if (haveCommand) {
+      Serial.println("Have command!!");
       parseCommand();
     }
+    Serial.println("Read a char");
   }
+}
+
+static void readSerial1() {
+/*  int nAvailable = Serial1.available();
+  if (nAvailable > 0) {
+    char strBuf[32];
+    sprintf(strBuf, "Have %d bytes on Serial1\n\r", nAvailable);
+    Serial.print(strBuf); 
+  }*/
+//  while (Serial1.available() > 0) {
+//    Serial.print(Serial1.read()); // just echo for the moment
+//  }
 }
 
 static uint8_t accumulateCommandString(uint8_t c)
@@ -408,6 +471,7 @@ static void parseCommand()
   uint8_t len = strlen(cmd_str);
   char *limitstr[3] = {NULL, NULL, NULL};
   uint16_t jtarget[3];  /* joint target data */
+  uint16_t jcenter[3];  /* joint center data. Raw units from the potentiometer */
   int maxVal;
   int minVal;
   int centerVal;
@@ -475,7 +539,9 @@ static void parseCommand()
     case 'm':  // set mode
       c = cmd_str[charPos++];
       val = c - '0';
+      Serial.print("Setting mode to ");
       Serial.println(val);
+      modeIsLocal = FALSE;
       switch(val) {
         case 0:
             mode = MODE_OFF;
@@ -490,6 +556,8 @@ static void parseCommand()
             mode = MODE_SLAVE;
             break;
         default:
+            modeIsLocal = TRUE;
+            Serial.println("Restoring mode control to switch");
             break;
       }
 
@@ -500,20 +568,23 @@ static void parseCommand()
         poseValidBitmask = 0x00;
       }
 
-      if (debug) {
-        sprintf(strBuf, "Mode set to %s\n", modeStr[mode]);
+      if (!modeIsLocal) {
+        if (debug ) {
+          sprintf(strBuf, "Mode set to %s\n", modeStr[mode]);
+          Serial.print(strBuf);
+        }     
+        sprintf(strBuf, "{'mode': %d}\n", mode);
         Serial.print(strBuf);
       }
       
-      sprintf(strBuf, "{'mode': %d}\n", mode);
-      Serial.print(strBuf);
       break;
     case 's': // Get status
         sprintf(strBuf, "{'mode': %d, [", mode);
         for (int i=0; i<4; i++) {
-            char towerStr[64];
-            sprintf(towerStr, "{'tower': %d, 'joints' : [%d, %d, %d ]},",
-                                i, modelPosition[i][0], modelPosition[i][1], modelPosition[i][2]);
+            char towerStr[128];
+            sprintf(towerStr, "{'tower': %d, 'jointPos' : [%d, %d, %d ], 'jointCenter': [%d, %d, %d]},",
+                                i, modelPosition[i][0], modelPosition[i][1], modelPosition[i][2],
+                                jointCenter[i][0], jointCenter[i][1], jointCenter[i][2]);
             strcat(strBuf, towerStr);
         }
         strBuf[strlen(strBuf)-1] = '\0'; // remove trailing ','
@@ -523,7 +594,7 @@ static void parseCommand()
     case 'P':  // set slave (pose) data
         ntokens = sscanf ((char *)&cmd_str[charPos],"t%d:%d,%d,%d", &towerId, &jtarget[0], &jtarget[1], &jtarget[2]); 
         if (ntokens != 4 || towerId > 4 || towerId < 1) {
-          Serial.println("Invalid data");
+          Serial.println("Invalid tower");
           break;
         }
         towerId--; // 0 based idx
@@ -544,10 +615,79 @@ static void parseCommand()
            sprintf(strBuf, "Slave bitmask is %x\n", slaveValidBitmask);
            Serial.print(strBuf);
         }
-        break;      
+        break;  
+    case 'c': // Set center of joint.
+        ntokens = sscanf((char *)&cmd_str[charPos], "%d:%d,%d,%d", &towerId, &jcenter[0], &jcenter[1], &jcenter[2]);  
+        if (ntokens != 4 || towerId > 4 || towerId < 1) {
+          Serial.println("Invalid tower");
+          break;
+        }
+
+        if (jcenter[0] > POT_RANGE || jcenter[0] < 0) {
+            Serial.print("Joint 1 center out of range\n");
+            break;
+        } else if (jcenter[1] > POT_RANGE || jcenter[1] < 0) {
+            Serial.print("Joint 2 center out of range\n");
+            break;
+        } else if (jcenter[2] > POT_RANGE || jcenter[2] < 0) {
+            Serial.print("Joint 3 center out of range\n");
+            break;
+        } 
+        
+       towerId--;
+       for (int i=0; i<NUM_JOINTS; i++) {
+          jointCenter[towerId][i] = jcenter[i];   
+       }
+       break;
+       
     default:
       break;
   }
+}
+
+
+// CAN stuff here...
+// Build an ID or PGN
+
+ long unsigned int txID = 0x1881ABBA;// This format is typical of a 29 bit identifier.. the most significant digit is never greater than one.
+unsigned char stmp[8] = {0x0E, 0x00, 0xFF, 0x22, 0xE9, 0xFA, 0xDD, 0x51};
+
+//Construct a MCP_CAN Object and set Chip Select to 53.
+
+MCP_CAN CAN(SPI_CS_PIN);                            
+
+
+void CAN_init()
+{
+    //Serial.begin(115200);
+
+    while (CAN_OK != CAN.begin(CAN_250KBPS))              // init can bus : baudrate = 250K
+    {
+        Serial.println("CAN BUS Module Failed to Initialized");
+        Serial.println("Retrying....");
+        delay(200); 
+    }
+    Serial.println("CAN BUS Shield init ok!");
+}
+
+
+void CAN_sendData(unsigned char *data, unsigned char len)
+{   
+    if (len > 8) {
+      Serial.println("Bad CAN data len");
+      return;
+    }
+    
+    Serial.println("sending CAN data");
+
+    // send the data:  id = 0x00, Extended Frame, data len = 8, stmp: data buf
+    // Extended Frame = 1.
+    
+    unsigned char ret = CAN.sendMsgBuf(txID,1, len, data);
+    if (ret == CAN_FAILTX) {
+      Serial.println("Failed sending CAN data");
+    }
+    //delay(25);    // send data every 25mS
 }
 
 
