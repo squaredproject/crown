@@ -820,7 +820,7 @@ class UIMapping extends UIWindow {
     (ipAddress = new UILabel()).setAlignment(CENTER, CENTER).setBorderColor(#666666).setBackgroundColor(#292929);
     tower = new UIToggleSet() {
       protected void onToggle(String value) {
-        mappingTool.getConfig().towerIndex =  (value == "L") ? 0 : 1;
+        mappingTool.getConfig().index =  (value == "L") ? 0 : 1;
       }
     }.setOptions(new String[] { "L", "R" });
     
