@@ -2,6 +2,8 @@
 #include <mcp_can.h>
 
 #include <SPI.h>
+#include "UART1.h"
+#include "UARTbaudrates.h"
 
 // basic arduino code
 // Weirdly with arduino ide all the standard headers
@@ -115,40 +117,46 @@ static void readAllButtons();
 static void InitButtons();
 static ButtonState *readButtonState(int button);
 static void readSerial();
-static void readSerial1();
 static uint8_t accumulateCommandString(uint8_t c);
 static void parseCommand();
 
 static void CAN_init();
 static void CAN_sendData(unsigned char *data, unsigned char len);
 
+#define NETWORKFILE   &uart1file
 
 void setup(){
   Serial.begin(115200);
-  Serial1.begin(115200);
+  UART1_Init(UART_115200);  // Network Baud out to nodes
   InitButtons();
   //CAN_init();
   Serial.println("Starting maquette...");
-  //Serial1.println("Starting maquette...");
+  fprintf(NETWORKFILE, "Starting maquette...");
   //pinMode(35, INPUT_PULLUP);
 }
 
 int timerIdx = 0;
+int secIdx = 0;
 void loop() {
     delay(20); 
 
     //CAN_sendData("hi there", 8);
 
     timerIdx++;
+    secIdx ++;
     
     readAllButtons();
 
     readSerial();
-    readSerial1();
 
-    //Serial1.println("This is the 485 bus talking to you\r\n");
+ /*   if (secIdx > 50) {
+       fprintf(NETWORKFILE, "ACK\n");
+       Serial.println("echo ACK");
+       secIdx = 0;
+    }
+ */
     
-    if (timerIdx > 100) { // only run main control loop every 10th of a second
+    if (timerIdx > 5) { // only run main control loop every 10th of a second
       timerIdx = 0; 
 
       for (int i=0; i<NUM_TOWERS; i++) {
@@ -168,7 +176,9 @@ void loop() {
       if (modeIsLocal) {
         setModeFromSwitch();
       } 
- 
+      
+      targetSculpture(modelPosition);
+
   
       // What I do here depends on what mode I'm in.
       switch (mode) {
@@ -360,15 +370,16 @@ static void targetSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]) {
         for (int j=0; j<NUM_JOINTS; j++) {
             sprintf(ptr, "<%d%dt%d>", i+1, j+1, positionArray[i][j]);
             ptr += strlen(ptr);
+            
             if (i==0 && j==1) {
               sprintf(smallModelString, "<%d%dt%d>\r\n", i+1, j+1, positionArray[i][j]);
               Serial.print(smallModelString);
             }
+            
         }
     }
     sprintf(ptr, "\r\n");
-//    Serial1.print(modelString);
-    Serial1.print(smallModelString);
+    fprintf(NETWORKFILE, modelString);
 
  //   if (debug) {
  //     Serial.println(modelString);
@@ -419,17 +430,6 @@ static void readSerial()
   }
 }
 
-static void readSerial1() {
-/*  int nAvailable = Serial1.available();
-  if (nAvailable > 0) {
-    char strBuf[32];
-    sprintf(strBuf, "Have %d bytes on Serial1\n\r", nAvailable);
-    Serial.print(strBuf); 
-  }*/
-//  while (Serial1.available() > 0) {
-//    Serial.print(Serial1.read()); // just echo for the moment
-//  }
-}
 
 static uint8_t accumulateCommandString(uint8_t c)
 {
