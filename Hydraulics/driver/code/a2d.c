@@ -90,11 +90,12 @@ void A2D_poll_adc(void)
 // ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Return most recent value read from A2D converter for requested channel.
 // This avoids waiting or having to turn off interupts to read/write values.
+static uint8_t map[8] = {2, 1, 0, 1, 1, 1, 1};  // remapping. The outside of the box has changed, as has the ordering of the cables
 
 uint16_t A2D_read_channel(uint8_t chanNum)
 {
   if (chanNum < 8)
-    return ADValue[chanNum];
+    return ADValue[map[chanNum]];
   else
     return 0;
 }

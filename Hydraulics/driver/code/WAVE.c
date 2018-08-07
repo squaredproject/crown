@@ -12,7 +12,7 @@
 #include "a2d.h"
 #include "WAVE.h"
 #include "sine.h"  
-#include "jointPID.h"  
+#include "jointPID.h"
 
 // needs F_CPU def from WAVE.h
 #include <util/delay.h>
@@ -113,17 +113,13 @@ volatile uint16_t pwm=0;
 extern volatile uint16_t Timer0_ticks;
 extern volatile uint8_t KHZ_Flag;
 
-/* counts for input capture on Timer 4 */
-//extern volatile uint16_t ov_counter; // ovrflow counter
-//extern volatile uint16_t rising, falling; //start and end of signal
 
-
-//volatile uint16_t period0 = 100; /* inverse frequency (table increment) */
-//volatile double  amp0 = 1.0;  	 /* amplitude factor (normalized to 1.0)*/
 volatile uint16_t omega0 = 0; 	 /* actual phase, 0 <= omega < TABLENGTH */
-//volatile uint16_t phase0 = 0;  	 /* phase offset */
+
+static int isRunning = FALSE;
 
 double ftablemax = (double)(TABLEMAX/2);
+
 
 uint8_t get_sine(uint16_t omega, double amp) {
   uint16_t sinval  = pgm_read_word(&stab[omega]);
@@ -267,9 +263,6 @@ int main( void ){
   DDRB = 0x80;
   PORTB = 0x70;
   
-  /* determine address from jumpers on PB4 (10), PB5(11),PB6(12),PB7(13) */
-  addr = (~PINB & 0x70) >> 4;
-
   //UART_Init(UART_9600); 
   UART0_Init(UART_115200); 
   UART1_Init(UART_115200); 
@@ -284,8 +277,8 @@ int main( void ){
   ICP3_Init();			/* init timer3 for jointx PWM measure  */
   ICP4_Init();			/* init timer4 for jointx PWM measure  */
   ICP5_Init();			/* init timer5 for jointx PWM measure  */
-  A2D_Init(); 					/* int ADC8-15 for analog input */
-  PID_Init();					/* init data structures for joint PID loops */
+  A2D_Init(); 			/* int ADC8-15 for analog input */
+  PID_Init();			/* init data structures for joint PID loops */
 
   DDRC = 0x00;			/* pins on PORTC designated for limit sw, estop */
   PORTC = 0xFF;			/* pullups on */
@@ -304,10 +297,21 @@ int main( void ){
 
   
   sei();
+  
+  // start with no power to the drives
+  DP_SendValue(63,0);
+  DP_SendValue(63,1);
+  DP_SendValue(63,2);
 
   _delay_ms(100);
+  
+  _delay_ms(100);
+  
+  /* determine address from jumpers on PB4 (10), PB5(11),PB6(12),PB7(13) */
+  /* Note that this needs to go below the delay - there appears to be a race condition
+     on read that affects some (but not all) boards */
+  addr = (~PINB & 0x70) >> 4;
 
-  //addr = (~PINB & 0x70) >> 4;
 
   if(1){
     putstr("WAVE v0.10_CSW\r\n");
@@ -315,13 +319,13 @@ int main( void ){
     puthex(addr);
     putstr("\r\n");
   }
-
+  
   // start main loop =======================================================
   for(;;)    {
 
     A2D_poll_adc(); // check if adc conversion is done
     
-    // Main parser loop starts here. To save space, not modularized 
+    // Parser for data from the USB
     if (UART0_data_in_ring_buf()) { // check for waiting UART data from SPU
       cData = UART0_ring_buf_byte(); // get next char from ring buffer... 
       if(accumulateCommandString0(cData) ){ // ... and add to command string
@@ -330,22 +334,33 @@ int main( void ){
       }
     }
 
-    // Main parser loop starts here. To save space, not modularized 
+    // Parser for data on the 485 bus
     if (UART1_data_in_ring_buf()) { // check for waiting UART data from SPU
+      //char buf[16];
       cData = UART1_ring_buf_byte(); // get next char from ring buffer... 
+      //sprintf(buf, "485 Receive %c\n", cData);
+      //putstr(buf);
 	  if(accumulateCommandString1(cData) ){ // ... and add to command string
 		// if we are here we have a complete command; parse it
 		parseCommand(1); // parse and execute commands
       }
     }
     
+    
 	/* roughly 976 hz at 16Mhz clock */
-    if (KHZ_Flag) {		
+    if (KHZ_Flag) {	
       KHZ_Flag = 0;
+      
+      Poll_Limit_Switches();
 
       if(tenhz_count++ > 98) {/* main loop at ~ten hz */
         tenhz_count = 0;
 
+        if (!isRunning) {
+            set_status_LEDs(RED_LED);
+            continue;
+        }
+        
         /* first, check enable pins PORTK 0, 1, 2
          only test and control a joint if corresponing enable is set */
         enable = ~PINK;
@@ -356,7 +371,7 @@ int main( void ){
         if (ESTOP_PORT & _BV(ESTOP_PIN)) {
           pause_error(ESTOP_ERROR);
         } 
-
+        
 #ifdef foo
 		else if (ESTOP_PORT & _BV(5)) {  /* sinusoid with PID */
 		  omega0 += (A2D_read_channel(0) >> 5) + 1;
@@ -485,6 +500,11 @@ void Dump_Status(void) {
   char buf[128];
   uint8_t enable = ~PINK;
   putstr("\r\n***GLOBAL STATUS***\n");
+  addr = (~PINB & 0x70) >> 4; // Get addr again, just in case
+  sprintf(buf, "\r\n  Addr is            : %d", addr);
+  putstr(buf);
+  sprintf(buf, "\r\n  Running is         : %s", isRunning ? "TRUE" : "FALSE");
+  putstr(buf);
   sprintf(buf, "\r\n  Use Pot for Target : %s", (~ESTOP_PORT & _BV(6)) ? "TRUE" : "FALSE");
   putstr(buf);
   sprintf(buf, "\r\n  Estop Triggered    : %s",  ((ESTOP_PORT & _BV(ESTOP_PIN)) ? "TRUE" : "FALSE"));
@@ -492,7 +512,18 @@ void Dump_Status(void) {
   sprintf(buf, "\r\n  Error              : %s",  (state == ERROR ? "TRUE" : "FALSE"));
   putstr(buf);
   for (int i=0; i<3; i++) {
-    sprintf(buf, "\r\n  Joint %d Enabled  : %s", i, ((enable & _BV(i)) ? "TRUE" : "FALSE"));
+    sprintf(buf, "\r\n  Joint %d Enabled : %s", i, ((enable & _BV(i)) ? "TRUE" : "FALSE"));
     putstr(buf);
   }  
+  for (int i=0; i<3; i++) {
+    sprintf(buf, "\r\n  Joint %d Homed   : %s", i, (jcb[i]->homed ? "TRUE" : "FALSE"));
+    putstr(buf);
+  }
 }
+
+void setRunning(uint8_t bRunning) {
+    isRunning = (bRunning == TRUE);
+}
+
+
+

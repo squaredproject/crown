@@ -10,7 +10,7 @@
 // Routine returns immediately unless no room in Ring Buf. 
 // Interrupts Transmit chrs out of ring buf.
 
-void putstr(char *str)
+void putstr(const char *str)
 {
   uint8_t ch;
 

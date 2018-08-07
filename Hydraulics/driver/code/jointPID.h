@@ -16,21 +16,21 @@ typedef struct {
   int16_t targetPos;		/* where we want to go */
   int16_t currentPos;		/* where we are now */
   uint8_t drive;	        /* the pwer we are giving it now */
-  uint8_t homespeed;	        /* the homeing speed */
+  uint8_t homespeed;	    /* the homing speed */
   int16_t dead_band;	    /* close enough to desired speed if within */
   int16_t lastError;	    /* the error we had last iteration */
   uint8_t lastVal;	        /* the power we gave it last iteration */
   int16_t integrator;  		/* integrator value */
   int16_t intLimit;  		/* integrator limit */
   int16_t center;           /* center value: subtract this from raw pos */
-  int8_t dmin;	            /* limit drive to this min value */
-  int8_t dmax;	            /* limit drive to this max value */
-  int16_t minpos;				/* value at left limit sw */
-  int16_t maxpos;				/* value at right limit sw */
-  uint8_t  trace;			/* trace value for online tuning */
-  uint8_t  direction;		/* non-zero to INVERT sense of PID */
-  uint8_t  switches;		/* last measured value of limit switches */
-  uint8_t  homed;		    /* set to 1 if we are homed (center = OK) */
+  int8_t  dmin;	            /* limit drive to this min value */
+  int8_t  dmax;	            /* limit drive to this max value */
+  int16_t minpos;			/* value at left limit sw */
+  int16_t maxpos;			/* value at right limit sw */
+  uint8_t trace;			/* trace value for online tuning */
+  uint8_t direction;		/* non-zero to INVERT sense of PID */
+  uint8_t switches;		    /* last measured value of limit switches */
+  uint8_t homed;		    /* set to 1 if we are homed (center = OK) */
   
 } joint_control_block;
 

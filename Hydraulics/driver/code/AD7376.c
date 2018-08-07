@@ -39,17 +39,21 @@ void DP_enable(void) {
 
 void DP_SendValue(uint8_t val, uint8_t chan) {
   /* val is 0-127 control for digital pot, chan is 0,1,2 for chan 1, 2, 3 */
+  /* CSW - 2018 - I've reversed the mapping of channels to joints. CS1 now maps
+  to joint 2, and CS3 to joint 0. Arguably, we should leave this function
+  alone and add a joint-to-channel mapping in the higher level code, but <eh> */
+  
   uint8_t j;
 
   switch(chan){
   case 0:
-	DP_PORT &= ~ _BV(CS1_PIN);  // enable shift in
+	DP_PORT &= ~ _BV(CS3_PIN);  // enable shift in
 	break;
   case 1:
 	DP_PORT &= ~ _BV(CS2_PIN);  // enable shift in
 	break;
   case 2:
-	DP_PORT &= ~ _BV(CS3_PIN);  // enable shift in
+	DP_PORT &= ~ _BV(CS1_PIN);  // enable shift in
 	break;
   }
 
@@ -71,4 +75,3 @@ void DP_SendValue(uint8_t val, uint8_t chan) {
   /* take all chip select pins high */
   DP_PORT = _BV(CS1_PIN) | _BV(CS2_PIN) | _BV(CS3_PIN) |  _BV(RS_PIN);
 }
-

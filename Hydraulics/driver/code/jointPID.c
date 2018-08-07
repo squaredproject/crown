@@ -30,6 +30,8 @@ extern volatile int16_t counts[3];  // encoder pulse widths
 /* use this to access joint control blocks */
 volatile joint_control_block *jcb[3] = {&joint1, &joint2, &joint3};
 
+static void finishHomingSetup(joint_control_block *j, uint16_t minpos_raw, uint16_t maxpos_raw, uint16_t centerPos);
+
 void PID_Init(void)
 {
   Joint_Init_JCB((joint_control_block *) jcb[0],0);
@@ -62,30 +64,22 @@ void PID_Init(void)
 #define MAX_STALLS_IN_HOME 500
 #define STALL_MARGIN 5
 
-//#define IN_LIVING_ROOM // living room testing only!! CSW
-
 void Poll_Limit_Switches(void){
   /*  */
   uint8_t val; 
   
   /* read limit switches for joint 1 */
   val = PINC;
-  jcb[0]->switches =  ~val & JOINT0MASK;
+  jcb[2]->switches =  ~val & JOINT0MASK;
   jcb[1]->switches = (~val & JOINT1MASK) >> 3;
   val = PINF;
-  jcb[2]->switches =  ~val & JOINT2MASK;
+  jcb[0]->switches =  ~val & JOINT2MASK;
   //putstr("\r\n PC:");
   //putB8(val);
   //val = PINF;
   //putstr(" PF:");
   //putB8(val);
 
-// XXX CSW - temporary code to swap value of limit switches for home testing
-#ifdef IN_LIVING_ROOM
-  for (int i=0; i<3; i++) {
-    jcb[i]->switches = (~jcb[i]->switches) & 0x07;
-  }
-#endif // IN_LIVING_ROOM
 }
 
 
@@ -250,30 +244,45 @@ void Home_Joint(joint_control_block *j) {
     pause_error(HOME_ERROR);
   } else if (numLimits > MAX_LIMITS_IN_HOME) {
     /* went back and forth a few times without triggering the home button */
-    putstr("\r\n HOME failed. Home button does not trigger");
-    pause_error(HOME_ERROR);
+    putstr("\r\n HOME failed. Home button does not trigger. Will set to median of min/max");
+    finishHomingSetup(j, minpos_raw, maxpos_raw, (minpos_raw + maxpos_raw)/2);
   } else {
     /* if we get here, we are homed */
-    /* set valve command to zero*/
+    finishHomingSetup(j, minpos_raw, maxpos_raw, counts[j->id]);
+    
 
-    // make min and max pos relative
-    j->minpos = minpos_raw - j->center;
-    j->maxpos = maxpos_raw - j->center;
+  }
+}
 
+static void finishHomingSetup(joint_control_block *j, uint16_t minpos_raw, uint16_t maxpos_raw, uint16_t centerPos)
+{
+    int allFinished = TRUE;
+    
+     // make min and max pos relative
+    j->minpos = minpos_raw - centerPos;
+    j->maxpos = maxpos_raw - centerPos;
+    j->center = centerPos;
+ 
+    // turn off valves; set target position to where ever we are now
+    set_LED_out(HOME_SPEED);
+    DP_SendValue(HOME_SPEED,j->id);
+    j->homed = TRUE;
+    j->targetPos = centerPos - counts[j->id];  
+    
     putstr("\r\nHomed at ");
-    putint(counts[j->id]);
+    putint(j->center);
     putstr(" min/max:");
     putS16(j->minpos);
     putchr(' ');
     putS16(j->maxpos);
-
-    speed = 63;
-    set_LED_out(speed);
-    DP_SendValue(speed,j->id);
-    j->homed = 1;
-    j->center = counts[j->id];
-    j->targetPos = 0;
-  }
+    
+    for (int i=0; i<3; i++) {
+        allFinished &= jcb[i]->homed;
+    }
+    
+    if (allFinished) {
+        setRunning(TRUE);
+    }
 }
 
 // make sure minVal < v < maxVal (!)
@@ -588,3 +597,4 @@ void Dump_JCB(joint_control_block *j){
 
 // TODOs -
 // Find a way of reporting back limits, current position!
+

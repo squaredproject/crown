@@ -28,5 +28,6 @@ void set_status_LEDs(uint8_t val);
 void pause_error(uint8_t code);
 void Dump_Status(void);
 uint8_t get_Fbuttons(uint8_t debounce);
+void setRunning(uint8_t bRunning);
 
 #endif //WAVE_H

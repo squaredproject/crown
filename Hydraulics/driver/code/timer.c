@@ -18,23 +18,16 @@ volatile int16_t OFcounts[] = {0, 0, 0}; /* array of position counts */
 
 
 /* TIMER ASSIGNMENTS: 
-
 Timer0: 1khz timer
 Timer2: PWM timer for LED brightness
-
 Timer3: Joint 3 encoder timer on pin PE7 (ICP3)
 Timer4: Joint 1 encoder timer on pin PL0 (ICP4) (Arduino digital 48)
 Timer5: Joint 2 encoder timer on pin PL1 (ICP5) (Arduino digital 49)
-
-
 Joint encoders have PWM outputs: pulse length is proportional to joint angle. At these clock and register settings:
 minimum pulse is a count of 8400+
 maximum pulse is a count of less than  10
-
 encoders have been marked at a center point of raw encoder count = 4200
-
 timer values and overflows in counts[] and OFcounts[] respectively
-
 CW rotation of encoder lokoing into shaft, so 
 LEFT rotation of (CCW) joint is negative, min is at far left
 */
@@ -139,15 +132,15 @@ void ICP4_Init(void){
   /*Noise canceller, without prescaler, rising edge*/
   //TCCR4B=  0xC1;
   TCCR4B = _BV(ICNC4) | _BV(ICES4) | _BV(CS41);
-  OFcounts[0] = 0;
-  counts[0] = 0;
+  OFcounts[2] = 0;
+  counts[2] = 0;
   rising1 = 0;
   falling1 = 0;
 }
 
 //overflow counter interrupts service routine
 SIGNAL(TIMER4_OVF_vect){
-  OFcounts[0]++;
+  OFcounts[2]++;
 
 }
 
@@ -166,7 +159,7 @@ or was it end (fallingedge)and performs required operations*/
 	TCCR4B = _BV(ICNC4)  | _BV(CS41);
 	
 	//reset overflow counter
-	OFcounts[0]=0;
+	OFcounts[2]=0;
 
   } else {
 
@@ -176,9 +169,9 @@ or was it end (fallingedge)and performs required operations*/
 	//rising edge triggers next
 	TCCR4B = _BV(ICNC4) | _BV(ICES4) | _BV(CS41);
 	
-	counts[0]= falling1 - rising1;
+	counts[2]= falling1 - rising1;
 
-	OFcounts[0] = 0; 			/* got a pulse, clear overflow ctr */
+	OFcounts[2] = 0; 			/* got a pulse, clear overflow ctr */
   }
 }
 
@@ -257,8 +250,8 @@ void ICP3_Init(void){
   // initialize timer interrupt
   TIMSK3 = _BV(ICIE3) | _BV(TOIE3);
   TCCR3B = _BV(ICNC3) | _BV(ICES3) | _BV(CS31);
-  OFcounts[2] = 0;
-  counts[2] = 0;
+  OFcounts[0] = 0;
+  counts[0] = 0;
   rising3 = 0;
   falling3 = 0;
 }
@@ -267,7 +260,7 @@ void ICP3_Init(void){
 //overflow counter interrupts service routine
 SIGNAL(TIMER3_OVF_vect){
 
-  OFcounts[2]++;
+  OFcounts[0]++;
 
 }
 
@@ -286,7 +279,7 @@ or was it end (fallingedge)and performs required operations*/
 	TCCR3B = _BV(ICNC3)  | _BV(CS31);
 	
 	//reset overflow counter
-	OFcounts[2]=0;
+	OFcounts[0]=0;
 
   } else {
 
@@ -295,10 +288,11 @@ or was it end (fallingedge)and performs required operations*/
 	//rising edge triggers next
 	TCCR3B = _BV(ICNC3) | _BV(ICES3) | _BV(CS31);
 	
-	counts[2]= falling3 - rising3;
-	OFcounts[2] = 0; 			/* got a pulse, clear overflow ctr */
+	counts[0]= falling3 - rising3;
+	OFcounts[0] = 0; 			/* got a pulse, clear overflow ctr */
 
   }
 }
+
 
 

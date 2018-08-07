@@ -1,6 +1,6 @@
 // putstr.h
 
-void putstr(char *str);
+void putstr(const char *str);
 void putchr(char c);
 void putU8(uint8_t number);
 void putB8(uint8_t number);
