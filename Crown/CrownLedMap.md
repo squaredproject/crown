@@ -5,13 +5,20 @@ own IP address.
 
 ## Fence
 
-The fence is controlled by one NDB. By convention, the NDB will be placed in the south-west corner.
+The fence is controlled by two NDBs. By convention, the NDB will be placed in the south-west corner.
 
-The NDB will have 12 lines active. Think of them as the counter-clockwise LED strings, and the clockwise LED strings.
+The NDBs will have 6 lines active. 
+
+The first NDB will do all counter-clockwise LEDs. That is noted as "index 0" in the config file.
+
+The second NDB will do clockwise LEDs. that will be noted as "index 1" in the config file.
+
 
 There will be six rows of LEDs.
 
 Each edge of the fence will have 30 LEDs per row - but the row will continue around a single corner, and connect 30 more LEDs.
+
+Thus, the NDB will be configured with 60 LEDs per channel.
 
 In the map, the order is:
 
@@ -20,7 +27,8 @@ In the map, the order is:
 - Next one down, counterclockwise
 - Next one down, clockwise
 
-etc.
+Note: the reason we have two NDBs is entirely related to the issue of maximum packet size.
+If you have too many NDBs, you will find 
 
 ### Fence NDB map
 
