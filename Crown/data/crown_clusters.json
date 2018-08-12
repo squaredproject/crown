@@ -2,31 +2,31 @@
   {
     "type": "fence",
     "index": 0,
-    "ipAddress": "10.0.0.200"
+    "ipAddress": "10.0.0.205"
   },
   {
     "type": "fence",
     "index": 1,
-    "ipAddress": "10.0.0.200"
+    "ipAddress": "10.0.0.206"
   },
   {
     "type": "tower",
     "index": 0,
-    "ipAddress": "10.0.0.201"
+    "ipAddress": "10.0.0.200"
   },
     {
     "type": "tower",
     "index": 1,
-    "ipAddress": "10.0.0.202"
+    "ipAddress": "10.0.0.201"
   },
     {
     "type": "tower",
     "index": 2,
-    "ipAddress": "10.0.0.203"
+    "ipAddress": "10.0.0.202"
   },
     {
     "type": "tower",
     "index": 3,
-    "ipAddress": "10.0.0.204"
+    "ipAddress": "10.0.0.203"
   }
 ]

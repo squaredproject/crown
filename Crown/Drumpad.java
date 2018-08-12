@@ -9,9 +9,16 @@ class TSDrumpad implements Drumpad {
   Triggerable[][] triggerables = null;
   
   public void padTriggered(int row, int col, float velocity) {
-    if (triggerables != null && row < triggerables.length && col < triggerables[row].length) {
+
+    if (triggerables == null) {
+      return;
+    }
+
+    if ((row < triggerables.length) && (col < triggerables[row].length)) {
+      //System.out.printf( " pad triggered: row %d col %d vel %f\n",row,col,velocity);
       triggerables[row][col].onTriggered(velocity);
     }
+    
   }
   
   public void padReleased(int row, int col) {
