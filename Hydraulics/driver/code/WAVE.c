@@ -340,14 +340,14 @@ int main( void ){
       cData = UART1_ring_buf_byte(); // get next char from ring buffer... 
       //sprintf(buf, "485 Receive %c\n", cData);
       //putstr(buf);
-	  if(accumulateCommandString1(cData) ){ // ... and add to command string
-		// if we are here we have a complete command; parse it
-		parseCommand(1); // parse and execute commands
+	    if(accumulateCommandString1(cData) ){ // ... and add to command string
+		    // if we are here we have a complete command; parse it
+		    parseCommand(1); // parse and execute commands
       }
     }
     
     
-	/* roughly 976 hz at 16Mhz clock */
+	  /* roughly 976 hz at 16Mhz clock */
     if (KHZ_Flag) {	
       KHZ_Flag = 0;
       

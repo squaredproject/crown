@@ -61,8 +61,8 @@ AVRDUDE_PORT = U
 
 
 # MCU name
-#MCU = atmega2560
-MCU = atmega1280
+MCU = atmega2560
+#MCU = atmega1280
 
 
 # Processor frequency.
@@ -70,7 +70,7 @@ MCU = atmega1280
 #     processor frequency. You can then use this symbol in your source code to 
 #     calculate timings. Do NOT tack on a 'UL' at the end, this will be done
 #     automatically to create a 32-bit value in your source code.
-F_CPU = 1600000
+F_CPU = 16000000
 
 
 # Output format. (can be srec, ihex, binary)
@@ -83,7 +83,8 @@ TARGET = WAVE
 
 # List C source files here. (C dependencies are automatically generated.)
 #SRC = $(TARGET).c UART.c putstr.c parser.c timer.c a2d.c AD7376.c jointPID.c
-SRC = $(TARGET).c UARTS.c putstr.c parser.c timer.c a2d.c AD7376.c jointPID.c
+C_SRC = $(TARGET).c UARTS.c putstr.c parser.c timer.c a2d.c AD7376.c jointPID.c wiring_digital.c wiring.c
+CXX_SRC = mcp_can.cpp mcp_can_wrapper.cpp SPI.cpp 
 
 
 # List Assembler source files here.
@@ -94,6 +95,17 @@ SRC = $(TARGET).c UARTS.c putstr.c parser.c timer.c a2d.c AD7376.c jointPID.c
 #     it will preserve the spelling of the filenames, and gcc itself does
 #     care about how the name is spelled on its command-line.
 ASRC = 
+
+## Arduino Libraries
+# Many projects need arduino libraries, they are plentiful and bounitful
+# Thus you need the Arduino path and whatnot
+# I am using Windows WSL ( 2018 ) so my path looks odd, you'll have to track
+# down your Arduino environment and change this
+
+ARDUINO_ROOT = /mnt/c/Users/bbulk/dev/Arduino
+ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/arduino/avr/cores/arduino
+ARDUINO_VARIANT = mega
+ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/arduino/avr/variants/$(ARDUINO_VARIANT)
 
 
 # Optimization level, can be [0, 1, 2, 3, s]. 
@@ -113,7 +125,7 @@ DEBUG = dwarf-2
 #     Each directory must be seperated by a space.
 #     Use forward slashes for directory separators.
 #     For a directory that has spaces, enclose it in quotes.
-EXTRAINCDIRS = 
+EXTRAINCDIRS = $(ARDUINO_CORE) $(ARDUINO_VARIANT_DIR)
 
 
 # Compiler flag to set the C Standard level.
@@ -123,13 +135,18 @@ EXTRAINCDIRS =
 #     gnu99 = c99 plus GCC extensions
 CSTANDARD = -std=gnu99
 
+CXXSTANDARD = -std=gnu++11
 
-# Place -D or -U options here
-#CDEFS = -DF_CPU=$(F_CPU)UL
+
+# Place -D or -U options here ( breadcrumb: there was a F_CPULU def here too )
+CDEFS = -DF_CPU=$(F_CPU)
+CXXDEFS = -DF_CPU=$(F_CPU)
 
 
 # Place -I options here
 CINCS =
+
+CXXINCS =
 
 
 
@@ -148,6 +165,22 @@ CFLAGS += -Wall -Wstrict-prototypes
 CFLAGS += -Wa,-adhlns=$(<:.c=.lst)
 CFLAGS += $(patsubst %,-I%,$(EXTRAINCDIRS))
 CFLAGS += $(CSTANDARD)
+
+# C PlusPlus 
+#  -g*:          generate debugging information
+#  -O*:          optimization level
+#  -f...:        tuning, see GCC manual and avr-libc documentation
+#  -Wall...:     warning level
+#  -Wa,...:      tell GCC to pass this to the assembler.
+#    -adhlns...: create assembler listing
+CXXFLAGS = -g$(DEBUG)
+CXXFLAGS += $(CXXDEFS) $(CXXINCS)
+CXXFLAGS += -O$(OPT)
+CXXFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
+CXXFLAGS += -Wno-write-strings -Wall
+#CXXFLAGS += -Wa,-adhlns=$(<:.c=.lst)
+CXXFLAGS += $(patsubst %,-I%,$(EXTRAINCDIRS))
+CXXFLAGS += $(CXXSTANDARD)
 
 
 #---------------- Assembler Options ----------------
@@ -278,6 +311,7 @@ DEBUG_HOST = localhost
 # Define programs and commands.
 SHELL = sh
 CC = avr-gcc
+CXX = avr-g++
 OBJCOPY = avr-objcopy
 OBJDUMP = avr-objdump
 SIZE = avr-size
@@ -309,11 +343,12 @@ MSG_CLEANING = Cleaning project:
 
 
 
-# Define all object files.
-OBJ = $(SRC:.c=.o) $(ASRC:.S=.o) 
+# Define all object files. Remember that all C_SRC must have nothing but .c files,
+# same for CXX and ASRC
+OBJ = $(C_SRC:.c=.o) $(CXX_SRC:.cpp=.o) $(ASRC:.S.o)
 
 # Define all listing files.
-LST = $(SRC:.c=.lst) $(ASRC:.S=.lst) 
+LST = $(C_SRC:.c=.lst) $(CXX_SRC:.cpp=.lst) $(ASRC:.S=.lst) 
 
 
 # Compiler flags to generate dependency files.
@@ -323,11 +358,8 @@ GENDEPFLAGS = -MD -MP -MF .dep/$(@F).d
 # Combine all necessary flags and optional flags.
 # Add target processor to flags.
 ALL_CFLAGS = -mmcu=$(MCU) -I. $(CFLAGS) $(GENDEPFLAGS)
+ALL_CXXFLAGS = -mmcu=$(MCU) -I. $(CXXFLAGS) $(GENDEPFLAGS)
 ALL_ASFLAGS = -mmcu=$(MCU) -I. -x assembler-with-cpp $(ASFLAGS)
-
-
-
-
 
 # Default target.
 all: begin gccversion sizebefore build sizeafter end
@@ -482,10 +514,20 @@ extcoff: $(TARGET).elf
 	@echo $(MSG_COMPILING) $<
 	$(CC) -c $(ALL_CFLAGS) $< -o $@ 
 
+# Compile: create object files from C source files.
+%.o : %.cpp
+	@echo
+	@echo $(MSG_COMPILING) $<
+	$(CXX) -c $(ALL_CXXFLAGS) $< -o $@ 
+
 
 # Compile: create assembler files from C source files.
 %.s : %.c
 	$(CC) -S $(ALL_CFLAGS) $< -o $@
+
+# Compile: create assembler files from CPP source files.
+%.s : %.cpp
+	$(CXX) -S $(ALL_CXXFLAGS) $< -o $@
 
 
 # Assemble: create object files from assembler source files.
@@ -502,6 +544,8 @@ extcoff: $(TARGET).elf
 # Target: clean project.
 clean: begin clean_list end
 
+# REMOVE doesn't do what you think:
+# https://stackoverflow.com/questions/29442658/makefile-removes-my-cpp-files
 clean_list :
 	@echo
 	@echo $(MSG_CLEANING)
@@ -513,10 +557,13 @@ clean_list :
 	$(REMOVE) $(TARGET).sym
 	$(REMOVE) $(TARGET).lss
 	$(REMOVE) $(OBJ)
-	$(REMOVE) $(LST)
-	$(REMOVE) $(SRC:.c=.s)
-	$(REMOVE) $(SRC:.c=.d)
+#	$(REMOVE) $(LST)
+	$(REMOVE) *.lst
+	$(REMOVE) $(patsubst %,$(OBJDIR)/%.s,$(basename $(SRC)))
+	$(REMOVE) $(patsubst %,$(OBJDIR)/%.d,$(basename $(SRC)))
 	$(REMOVE) .dep/*
+
+
 
 
 

@@ -48,12 +48,19 @@ void Timer0_Init(void)
 
 // --------------------------------------------------------------------------
 
-SIGNAL(TIMER0_OVF_vect)
-{
+// --------------------------------------------------------------------------
+// BREADCRUB:
+// a variable called KHZ_flag was being incremented here
+// this has been moved to our captive wiring.c , where all the 
+// other delay stuff is happening.
+// This code also seems to work only for 16 Mhz systems, which
+// is grotty - consider switching to 'delay'
+//SIGNAL(TIMER0_OVF_vect)
+//{
   /* roughly 1 kHz */
   // 16 000 000 / (256 * 64) = 976.5625
-  KHZ_Flag = 1;
-}
+//  KHZ_Flag = 1;
+//}
 
 // set up timer 2 for pwm on A and B
 void PWM_Init(void)

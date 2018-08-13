@@ -9,11 +9,15 @@
 
 // assumes u2X = 1
 
+// This was hardcoded here before, moving back to makefile, leaving here in case?
+// better to have in the makefile
+#ifndef F_CPU
 #define F_CPU 16000000               		// 16MHz processor
+#endif
 
 
 #if  F_CPU == 20000000               		// 20 MHz processor
-#warning "UART1: using 20 mHz clock"
+//#warning "UART1: using 20 mHz clock"
 #define UART_9600    129
 #define UART_14400   86
 #define UART_19200   64
@@ -25,7 +29,7 @@
 #endif
 
 #if  F_CPU == 18432000               		// 18.4MHz processor
-#warning "UART1: using 18.4 mHz clock"
+//#warning "UART1: using 18.4 mHz clock"
 #define UART_9600    119
 #define UART_14400   79
 #define UART_19200   59
@@ -38,7 +42,7 @@
 
 
 #if  F_CPU == 16000000               		// 16MHz processor
-#warning "UART1: using 16 mHz clock"
+//#warning "UART1: using 16 mHz clock"
 #define UART_9600    103
 #define UART_14400   68
 #define UART_19200   51
@@ -52,7 +56,7 @@
 
 
 #if  F_CPU == 14745000               		// 14.745MHz processor
-#warning "UART1: using 14.754 mHz clock"
+//#warning "UART1: using 14.754 mHz clock"
 #define UART_9600    95
 #define UART_14400   63
 #define UART_19200   47
@@ -65,7 +69,7 @@
 
 
 #if  F_CPU == 8000000               		// 8MHz processor
-#warning "UART1: using 8 mHz clock"
+//#warning "UART1: using 8 mHz clock"
 #define UART_9600    51
 #define UART_14400   34
 #define UART_19200   25
@@ -78,7 +82,7 @@
 
 
 #if  F_CPU == 7372800               		// 7.37MHz processor
-#warning "UART1: using 7.37 mHz clock"
+//#warning "UART1: using 7.37 mHz clock"
 #define UART_9600    47
 #define UART_14400   31
 #define UART_19200   23
@@ -91,7 +95,7 @@
 
 
 #if F_CPU == 3686400               		// 3.69MHz processor
-#warning "UART1: using 3.69 mHz clock"
+//#warning "UART1: using 3.69 mHz clock"
 #define UART_9600    23
 #define UART_14400   15
 #define UART_19200   11
