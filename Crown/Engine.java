@@ -437,6 +437,7 @@ abstract class Engine {
   /* configureChannels */
 
   void setupChannel(final LXChannel channel, boolean noOpWhenNotRunning) {
+
     channel.setFaderTransition(new CrownTransition(lx, channel));
 
     channel.addListener(new LXChannel.AbstractListener() {
@@ -471,6 +472,7 @@ abstract class Engine {
 
   void configureChannels() {
     for (int i = 0; i < Engine.NUM_CHANNELS; ++i) {
+
       LXChannel channel = lx.engine.addChannel(getPatternListForChannels());
       setupChannel(channel, true);
       if (i == 0) {
@@ -607,8 +609,7 @@ abstract class Engine {
       });
     }
 
-    String filename = "data/Burning Man Playlist.json";
-    JsonArray jsonArr = loadSavedSetFile(filename);
+    JsonArray jsonArr = loadSavedSetFile(Config.DEFAULT_PLAYLIST);
     automation[automationSlot.getValuei()].loadJson(jsonArr);
     // slotLabel.setLabel(labels[automationSlot.getValuei()] = filename);
     automation[automationSlot.getValuei()].looping.setValue(true);

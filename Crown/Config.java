@@ -12,4 +12,6 @@ final class Config {
   
   static final String FENCE_STL_FILE = "data/fence.stl";
 
+  static final String DEFAULT_PLAYLIST = "data/Burning Man Playlist.json";
+
 }
