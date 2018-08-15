@@ -57,10 +57,15 @@ abstract class Engine {
   LXListenableNormalizedParameter[] effectKnobParameters;
   final BasicParameter dissolveTime = new BasicParameter("DSLV", 400, 50, 1000);
   final BasicParameter drumpadVelocity = new BasicParameter("DVEL", 1);
+
+  // these exist both here and in Crown.pde, and need to be shared.
+  // these are the ones that get created, the UI reaches over here to grab them.
   final TSAutomationRecorder[] automation = new TSAutomationRecorder[Engine.NUM_AUTOMATION];
   final BooleanParameter[] automationStop = new BooleanParameter[Engine.NUM_AUTOMATION]; 
   final DiscreteParameter automationSlot = new DiscreteParameter("AUTO", Engine.NUM_AUTOMATION);
   final BooleanParameter[] previewChannels = new BooleanParameter[Engine.NUM_CHANNELS];
+
+
   final BasicParameterProxy outputBrightness = new BasicParameterProxy(1);
   final BrightnessScaleEffect masterBrightnessEffect;
 
@@ -75,6 +80,25 @@ abstract class Engine {
   
     lx.engine.addParameter(drumpadVelocity);
 
+    if (Config.enableAPC40 || Config.enableLaunchpad ) {
+      drumpad = new TSDrumpad();
+    }
+
+    // there is probably a better place for this, but I don't know where
+    // needs doing before the UI configures lots of bits
+    for (int i=0; i < Engine.NUM_CHANNELS; i++ ) {
+      previewChannels[i] = new BooleanParameter("PRV");
+    }
+
+    configureChannels();
+    configureTriggerables();
+    configureBMPTool();
+    configureAutomation();
+
+    if (drumpad != null) {
+      drumpad.triggerables = drumpadTriggerables;
+    }
+
     // ordering: these create the 'drumpad' object if neccesary,
     // must be before registration of the triggerables
     if (Config.enableAPC40) {
@@ -84,17 +108,7 @@ abstract class Engine {
       configureMIDI_Launchpad();
     }
 
-    configureChannels();
-
-    configureTriggerables();
-    if (drumpad != null) {
-      drumpad.triggerables = drumpadTriggerables;
-    }
-
     lx.engine.addLoopTask(new ModelTransformTask(model));
-
-    configureBMPTool();
-    configureAutomation();
 
     if (Config.enableOutputBigtree) {
       System.out.println("NDB output enabled");
@@ -655,9 +669,6 @@ abstract class Engine {
   /* configureMIDI */
 
   void configureMIDI_APC40() {
-    if (drumpad == null) {
-      drumpad = new TSDrumpad();
-    }
 
     // MIDI control
     midiEngine_APC = new MidiEngine_APC(lx, effectKnobParameters, drumpad, drumpadVelocity, 
@@ -666,9 +677,6 @@ abstract class Engine {
   }
 
   void configureMIDI_Launchpad() {
-    if (drumpad == null) {
-      drumpad = new TSDrumpad();
-    }
 
     // MIDI control
     midiEngine_LP = new MidiEngine_LP(lx, effectKnobParameters, drumpad, drumpadVelocity, 

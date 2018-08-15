@@ -252,6 +252,7 @@ class UIChannelFaders extends UI2dContext {
   
   UIChannelFaders(final UI ui) {
     super(ui, Crown.this.width/2-WIDTH/2, Crown.this.height-HEIGHT-PADDING, WIDTH, HEIGHT);
+
     setBackgroundColor(#292929);
     setBorderColor(#444444);
     int di = 0;
@@ -261,8 +262,6 @@ class UIChannelFaders extends UI2dContext {
     for (int i = 0; i < Engine.NUM_CHANNELS; i++) {
       final LXChannel channel = lx.engine.getChannel(i);
       float xPos = PADDING + channel.getIndex()*(PADDING+FADER_WIDTH) + SPACER;
-      
-      previewChannels[channel.getIndex()] = new BooleanParameter("PRV");
       
       previewChannels[channel.getIndex()].addListener(new LXParameterListener() {
         public void onParameterChanged(LXParameter parameter) {

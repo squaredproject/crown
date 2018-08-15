@@ -173,6 +173,9 @@ class MidiEngine_APC {
         }
       };
 
+/* Todo. This section doesn't work because Drumpad exists but not Triggerables and 
+   we don't have nfcToggles anyway
+*/
       for (int row = 0; row < drumpad.triggerables.length && row < 6; row++) {
         int midiNumber;
         if (row < 5) {
@@ -190,7 +193,7 @@ class MidiEngine_APC {
           }
         }
       }
-      
+   
       int[] channelIndices = new int[Engine.NUM_CHANNELS];
       for (int i = 0; i < Engine.NUM_CHANNELS; ++i) {
         channelIndices[i] = i;
@@ -272,56 +275,68 @@ class MidiEngine_APC {
     apc40.bindNote(automationStop[automationSlot.getValuei()], 0, APC40.STOP, LXMidiDevice.DIRECT);
   }
   
+// This is theproblem with the APC40 that it requires a special SYSEX to say we're
+// ableton. The Mac requires using this obsolete library, with windows we don't,
+// so we literally have to check the operating system version.
+//
+
   void setAPC40Mode() {
-  	System.out.println(" starting APC40 Mode ");
+
   	boolean sentSysEx = false;
     int i = 0;
+
+    String OsName = System.getProperty("os.name");
+
+    if (OsName.contains("Mac") == true) {
     // Note. This obsolete java library is used on MacOSX because older versions
-    // did not allow SysEx.
-    //for (String info : de.humatic.mmj.MidiSystem.getOutputs()) { 
-    //  if (info.contains("APC40")) {
-    //  	System.out.println(" Found APC40 in humatic - going to send the sysex");
-    //    de.humatic.mmj.MidiSystem.openMidiOutput(i).sendMidi(APC_MODE_SYSEX);
-    //    sentSysEx = true;
-    //    break;
-    //  }
-    //  ++i;
-    //}
-    System.out.println(" APC40 2 Mode ");
-    MidiDevice.Info[] infos = MidiSystem.getMidiDeviceInfo();
-    System.out.println(" length of array is "+infos.length);
+    // did not allow SysEx. Todo: switch to Core4J .
+	    for (String info : de.humatic.mmj.MidiSystem.getOutputs()) { 
+	      if (info.contains("APC40")) {
+	      	System.out.println(" Found APC40 - init");
+	        de.humatic.mmj.MidiSystem.openMidiOutput(i).sendMidi(APC_MODE_SYSEX);
+	        sentSysEx = true;
+	        break;
+	      }
+	      ++i;
+	    }
+	}
+	else {
+	    System.out.println(" APC40 2 Mode --- for non-mac ");
+	    MidiDevice.Info[] infos = MidiSystem.getMidiDeviceInfo();
+	    System.out.println(" length of array is "+infos.length);
 
-    for (MidiDevice.Info info : MidiSystem.getMidiDeviceInfo()) {
+	    for (MidiDevice.Info info : MidiSystem.getMidiDeviceInfo()) {
 
-    	System.out.println(" iterating the midi devices attached "+info.toString());
+	    	System.out.println(" looking for the APC40 "+info.toString());
 
-    	if (info.toString().contains("APC40")) {
+	    	if (info.toString().contains("APC40")) {
 
-    		System.out.println(" Found APC40 in javaMidi - going to send the sysex");
-    		try {
-	    		SysexMessage sysMsg = new SysexMessage(  );
-	    		sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
+	    		System.out.println(" Found APC40 in javaMidi - going to send the sysex");
+	    		try {
+		    		SysexMessage sysMsg = new SysexMessage(  );
+		    		sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
 
-	    		MidiDevice dev = MidiSystem.getMidiDevice(info);
-	    		dev.open();
-	    		Receiver r = dev.getReceiver();
+		    		MidiDevice dev = MidiSystem.getMidiDevice(info);
+		    		dev.open();
+		    		Receiver r = dev.getReceiver();
 
-	    		r.send(sysMsg, -1);
-	    		sentSysEx = true;
-	    		dev.open();
+		    		r.send(sysMsg, -1);
+		    		sentSysEx = true;
+		    		dev.open();
+		    	}
+		    	catch ( InvalidMidiDataException e ) {
+					System.out.println("InvalidMidiDataException: " + e.getMessage());
+		    	}
+		    	catch ( MidiUnavailableException e ) {
+					System.out.println("MidiUnavailableException: " + e.getMessage());
+		    	}
+
+	        	break;
 	    	}
-	    	catch ( InvalidMidiDataException e ) {
-				System.out.println("InvalidMidiDataException: " + e.getMessage());
-	    	}
-	    	catch ( MidiUnavailableException e ) {
-				System.out.println("MidiUnavailableException: " + e.getMessage());
-	    	}
-
-        	break;
-    	}
-    	i++;
-    }
-  }
+	    	i++;
+	    }
+	  }
+	}
 
 
   int focusedChannel() {
