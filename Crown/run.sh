@@ -1,4 +1,5 @@
 #!/bin/sh
 
 cd "$( dirname "$0" )"
-exec java -Xms256m -Xmx1g -cp "build-tmp:code/*" RunHeadless "${PWD}"
+echo java -Xms256m -Xmx1g -cp "build/classes/main:code/*" RunHeadless "${PWD}"
+exec java -Xms256m -Xmx1g -cp "build/classes/java/main:code/*" RunHeadless "${PWD}"
