@@ -2,6 +2,39 @@
 
 Sets for live play, the details of the color map, lessons learned
 
+## Requirements
+Java 8, 9, or 10
+Gradle
+Processing 3.0
+git
+
+## How to Run
+You can either run through the Processing  or run the app headlessly.  Use the Processing application when you want to use the UI and DJ patterns.  headless mode is only for when the crown app is running continuously on an odroid without a screen (showtime)
+
+### HOWTO Run Interactively with Processing
+1.  Download Crown repo
+    - git clone https://github.com/squaredproject/crown.git
+2.  Open Processing 3.0
+    - click File->Open
+    - navigate to Crown directory
+    - click on Crown.pde 
+    - click on the arrow button to Run
+3.  Once Processing has loaded the app, it should show you the Crown software and you can start making patterns
+
+### HOWTO Run Headlessly
+1.  Download Crown repo from github
+    - git clone https://github.com/squaredproject/crown.git
+2.  Open terminal and navigate to repo directory
+    - eg. cd ~/crown/Crown
+3.  Compile java application using gradle
+    - gradle build
+4.  Excute shell script to run headlessly
+    - ./run.sh
+    - confirm script out says "LX Engine Started" at the end
+5.  Optional: configure machine to run crown on startup using crown.servoce
+
+
+
 ## SAVING SETS FOR LIVE PLAY
 
 ### READ THIS
@@ -114,4 +147,5 @@ We are using a library LP4J which seems to work absolutely a treat. On Linux, it
 You can validate that the kernel portions are working by first doing an 'lsusb' to validate that
 the device is showing up in USb, then doing ALSA commands to see it in hte list of Alsa midi,
 then it should show up in the java iterators.
+
 
