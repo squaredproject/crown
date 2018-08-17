@@ -59,10 +59,10 @@ class MidiEngine_LP {
     public void onPadPressed(Pad pad, long timestamp) {
       int x = pad.getX();
       int y = pad.getY();
-        System.out.printf(" onPadPressed X %d Y %d velocity %f\n",x,y,drumpadVelocity.getValuef() );
+        // System.out.printf(" onPadPressed X %d Y %d velocity %f\n",x,y,drumpadVelocity.getValuef() );
         client.setPadLight(pad, Color.YELLOW, BackBufferOperation.NONE);
 
-        drumpad.padTriggered(x, y, drumpadVelocity.getValuef() );
+        drumpad.padTriggered(y, x, drumpadVelocity.getValuef() );
 
     }
 
@@ -70,16 +70,16 @@ class MidiEngine_LP {
     public void onPadReleased(Pad pad, long timestamp) {
       int x = pad.getX();
       int y = pad.getY();
-      System.out.printf(" onPadReleased X %d Y %d velocity %f\n",pad.getX(), pad.getY(),drumpadVelocity.getValuef() );
+      // System.out.printf(" onPadReleased X %d Y %d velocity %f\n",pad.getX(), pad.getY(),drumpadVelocity.getValuef() );
       client.setPadLight(pad, Color.BLACK, BackBufferOperation.NONE);
 
-      drumpad.padReleased(x, y);
+      drumpad.padReleased(y, x);
 
     }
 
     @Override
     public void onButtonReleased(Button button, long timestamp) {
-      System.out.printf(" onButtonReleased coord %d istop %d isright %d\n",button.getCoordinate(), button.isTopButton() ? 1 : 0, button.isRightButton() ? 1 : 0);
+      // System.out.printf(" onButtonReleased coord %d istop %d isright %d\n",button.getCoordinate(), button.isTopButton() ? 1 : 0, button.isRightButton() ? 1 : 0);
       client.setButtonLight(button, Color.BLACK, BackBufferOperation.NONE);
     }
 
