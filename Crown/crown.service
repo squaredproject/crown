@@ -1,0 +1,10 @@
+[Unit]
+Description=crown
+
+[Service]
+ExecStart=/home/odroid/crown/Crown/run.sh
+ExecStop=/bin/pkill java
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
