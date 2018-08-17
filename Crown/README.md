@@ -34,6 +34,13 @@ You can either run through the Processing  or run the app headlessly.  Use the P
 5.  Optional: configure machine to run crown on startup using crown.servoce
 
 
+### How to change NDP IP addresses
+The IP address for every NDB is saved in a config file called data/crown_clusters.json
+If you change the NDBs conncted to the sculpture, you will need to:
+1.  Edit data/crown_clusters.json and add your specific NDP IP address in the right location
+2.  Recompile code using ./compile.sh OR restart Processing
+2a. Optional - restart NDB by temporarily unplugging it from the power
+3.  Confirm new NDB LEDS are receiving data and LEDs are turning on as expected
 
 ## SAVING SETS FOR LIVE PLAY
 
