@@ -17,6 +17,8 @@ class RunHeadless {
     
     PureJavaEngine engine = new PureJavaEngine(rootDirectory);
     engine.start();
+    // headless always has output enabled, which means it sends packets, otherwise why run it at all?
+    engine.output.enabled.setValue(true);
   }
 }
 
