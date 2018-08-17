@@ -8,6 +8,9 @@ final class Config {
 
   static final boolean enableOutputBigtree = true;
 
+  // when it comes up default, should it output packets?
+  static final boolean enableLiveOutput = true;
+
   static final String CLUSTER_CONFIG_FILE = "data/crown_clusters.json";
   
   static final String FENCE_STL_FILE = "data/fence.stl";

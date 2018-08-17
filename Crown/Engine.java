@@ -96,6 +96,7 @@ abstract class Engine {
     configureAutomation();
 
     if (drumpad != null) {
+      System.out.println(" setting drumpad triggerables ");
       drumpad.triggerables = drumpadTriggerables;
     }
 
@@ -302,7 +303,6 @@ abstract class Engine {
     registerPattern(new IceCrystals(lx), 5);
     registerPattern(new Fire(lx), 5); // Make red
     
-    // registerPattern(new DoubleHelix(lx), "");
     registerPattern(new AcidTrip(lx));
     registerPattern(new Rain(lx));
 
@@ -696,7 +696,7 @@ abstract class Engine {
         output.addDatagram(datagrams[ci++] = Output.clusterDatagram(cluster).setAddress(cluster.getIpAddress()));
       }
       outputBrightness.parameters.add(output.brightness);
-      output.enabled.setValue(false);
+      output.enabled.setValue(Config.enableLiveOutput);
       lx.addOutput(output);
       output.start();
     } catch (Exception x) {
