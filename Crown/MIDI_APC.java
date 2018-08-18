@@ -1,13 +1,7 @@
 import heronarts.lx.LX;
 import heronarts.lx.LXAutomationRecorder;
 import heronarts.lx.LXChannel;
-import heronarts.lx.midi.LXAbstractMidiListener;
-import heronarts.lx.midi.LXMidiControlChange;
-import heronarts.lx.midi.LXMidiDevice;
-import heronarts.lx.midi.LXMidiInput;
-import heronarts.lx.midi.LXMidiNoteOff;
-import heronarts.lx.midi.LXMidiNoteOn;
-import heronarts.lx.midi.LXMidiOutput;
+import heronarts.lx.midi.*;
 import heronarts.lx.midi.device.APC40;
 import heronarts.lx.output.LXDatagramOutput;
 import heronarts.lx.parameter.BasicParameter;
@@ -75,6 +69,8 @@ class MidiEngine_APC {
         public void noteOnReceived(LXMidiNoteOn note) {
           int channel = note.getChannel();
           int pitch = note.getPitch();
+          //System.out.printf(" Got APC40::: noteOffReceived %d %d\n",channel,pitch);
+
           switch (pitch) {
           case APC40.CLIP_LAUNCH:
           case APC40.CLIP_LAUNCH+1:
@@ -99,9 +95,12 @@ class MidiEngine_APC {
           }
         }
         
-        public void noteOffReceived(LXMidiNoteOff note) {
+        public void noteOffReceived(LXMidiNote note) {
+          //System.out.printf(" Got APC40::: noteOffReceived \n");
+
           int channel = note.getChannel();
           int pitch = note.getPitch();
+
           switch (pitch) {
           case APC40.CLIP_LAUNCH:
           case APC40.CLIP_LAUNCH+1:
@@ -138,12 +137,12 @@ class MidiEngine_APC {
             }
             break;
                         
-          case APC40.SEND_A:
-            bpmTool.beatType.increment();
-            break;
-          case APC40.SEND_B:
-            bpmTool.tempoLfoType.increment();
-            break;
+          //case APC40.SEND_A:
+          //  bpmTool.beatType.increment();
+          //  break;
+          //case APC40.SEND_B:
+          //  bpmTool.tempoLfoType.increment();
+          //  break;
             
           case APC40.MASTER_TRACK:
           case APC40.SHIFT:
@@ -173,9 +172,6 @@ class MidiEngine_APC {
         }
       };
 
-/* Todo. This section doesn't work because Drumpad exists but not Triggerables and 
-   we don't have nfcToggles anyway
-*/
       for (int row = 0; row < drumpad.triggerables.length && row < 6; row++) {
         int midiNumber;
         if (row < 5) {
@@ -241,11 +237,11 @@ class MidiEngine_APC {
       // Tap Tempo
       apc40.bindNote(new BooleanParameter("ANON", false), 0, APC40.SEND_A, APC40.DIRECT);
       apc40.bindNote(new BooleanParameter("ANON", false), 0, APC40.SEND_B, APC40.DIRECT);
-      apc40.bindNote(bpmTool.addTempoLfo, 0, APC40.PAN, APC40.DIRECT);
-      apc40.bindNote(bpmTool.clearAllTempoLfos, 0, APC40.SEND_C, APC40.DIRECT);
-      apc40.bindNote(bpmTool.tapTempo, 0, APC40.TAP_TEMPO, APC40.DIRECT);
-      apc40.bindNote(bpmTool.nudgeUpTempo, 0, APC40.NUDGE_PLUS, APC40.DIRECT);
-      apc40.bindNote(bpmTool.nudgeDownTempo, 0, APC40.NUDGE_MINUS, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.addTempoLfo, 0, APC40.PAN, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.clearAllTempoLfos, 0, APC40.SEND_C, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.tapTempo, 0, APC40.TAP_TEMPO, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.nudgeUpTempo, 0, APC40.NUDGE_PLUS, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.nudgeDownTempo, 0, APC40.NUDGE_MINUS, APC40.DIRECT);
       
       apc40.bindNotes(
         getFaderTransition(lx.engine.getFocusedChannel()).blendMode,
@@ -264,8 +260,7 @@ class MidiEngine_APC {
       });
       setAutomation(apc40);
     }
-   //launchpad attempt
-   //lx.engine.midiEngine.addListener(new LXAbstractMidiListener() { 
+
   }
   
   void setAutomation(APC40 apc40) {
@@ -296,7 +291,7 @@ class MidiEngine_APC {
 
     	if (info.toString().contains("APC40")) {
 
-    		System.out.println(" Found APC40 in javaMidi - going to send the sysex");
+    		System.out.println(" Found APC40 - send sysex");
     		try {
 	    		SysexMessage sysMsg = new SysexMessage(  );
 	    		sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
@@ -310,10 +305,10 @@ class MidiEngine_APC {
 	    		dev.open();
 	    	}
 	    	catch ( InvalidMidiDataException e ) {
-				System.out.println("InvalidMidiDataException: " + e.getMessage());
+				System.out.println("InvalidMidiDataException: sysex send " + e.getMessage());
 	    	}
 	    	catch ( MidiUnavailableException e ) {
-				System.out.println("MidiUnavailableException: " + e.getMessage());
+				System.out.println("MidiUnavailableException: sysex send " + e.getMessage());
 	    	}
 
         	break;
@@ -322,6 +317,7 @@ class MidiEngine_APC {
     }
   }
 
+ 
 
   int focusedChannel() {
     return lx.engine.focusedChannel.getValuei();
