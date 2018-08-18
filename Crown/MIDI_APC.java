@@ -285,58 +285,42 @@ class MidiEngine_APC {
   	boolean sentSysEx = false;
     int i = 0;
 
-    String OsName = System.getProperty("os.name");
 
-    if (OsName.contains("Mac") == true) {
-    // Note. This obsolete java library is used on MacOSX because older versions
-    // did not allow SysEx. Todo: switch to Core4J .
-	    for (String info : de.humatic.mmj.MidiSystem.getOutputs()) { 
-	      if (info.contains("APC40")) {
-	      	System.out.println(" Found APC40 - init");
-	        de.humatic.mmj.MidiSystem.openMidiOutput(i).sendMidi(APC_MODE_SYSEX);
-	        sentSysEx = true;
-	        break;
-	      }
-	      ++i;
-	    }
-	}
-	else {
-	    System.out.println(" APC40 2 Mode --- for non-mac ");
-	    MidiDevice.Info[] infos = MidiSystem.getMidiDeviceInfo();
-	    System.out.println(" length of array is "+infos.length);
+    //System.out.println(" APC40 2 Mode --- for non-mac ");
+    MidiDevice.Info[] infos = MidiSystem.getMidiDeviceInfo();
+    //System.out.println(" length of array is "+infos.length);
 
-	    for (MidiDevice.Info info : MidiSystem.getMidiDeviceInfo()) {
+    for (MidiDevice.Info info : MidiSystem.getMidiDeviceInfo()) {
 
-	    	System.out.println(" looking for the APC40 "+info.toString());
+    	System.out.println(" looking for the APC40 "+info.toString());
 
-	    	if (info.toString().contains("APC40")) {
+    	if (info.toString().contains("APC40")) {
 
-	    		System.out.println(" Found APC40 in javaMidi - going to send the sysex");
-	    		try {
-		    		SysexMessage sysMsg = new SysexMessage(  );
-		    		sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
+    		System.out.println(" Found APC40 in javaMidi - going to send the sysex");
+    		try {
+	    		SysexMessage sysMsg = new SysexMessage(  );
+	    		sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
 
-		    		MidiDevice dev = MidiSystem.getMidiDevice(info);
-		    		dev.open();
-		    		Receiver r = dev.getReceiver();
+	    		MidiDevice dev = MidiSystem.getMidiDevice(info);
+	    		dev.open();
+	    		Receiver r = dev.getReceiver();
 
-		    		r.send(sysMsg, -1);
-		    		sentSysEx = true;
-		    		dev.open();
-		    	}
-		    	catch ( InvalidMidiDataException e ) {
-					System.out.println("InvalidMidiDataException: " + e.getMessage());
-		    	}
-		    	catch ( MidiUnavailableException e ) {
-					System.out.println("MidiUnavailableException: " + e.getMessage());
-		    	}
-
-	        	break;
+	    		r.send(sysMsg, -1);
+	    		sentSysEx = true;
+	    		dev.open();
 	    	}
-	    	i++;
-	    }
-	  }
-	}
+	    	catch ( InvalidMidiDataException e ) {
+				System.out.println("InvalidMidiDataException: " + e.getMessage());
+	    	}
+	    	catch ( MidiUnavailableException e ) {
+				System.out.println("MidiUnavailableException: " + e.getMessage());
+	    	}
+
+        	break;
+    	}
+    	i++;
+    }
+  }
 
 
   int focusedChannel() {
