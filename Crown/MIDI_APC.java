@@ -275,6 +275,7 @@ class MidiEngine_APC {
 // so we literally have to check the operating system version.
 //
 
+
   void setAPC40Mode() {
 
   	boolean sentSysEx = false;
@@ -287,31 +288,35 @@ class MidiEngine_APC {
 
     for (MidiDevice.Info info : MidiSystem.getMidiDeviceInfo()) {
 
-    	System.out.println(" looking for the APC40 "+info.toString());
+    	//System.out.println(" looking for the APC40:: "+info.toString());
 
+      // Note: on Macs, there are often multiple devices that will claim to be 
+      // APC40, but some will have receivers and some will not. Only try
+      // to send on the ones that have receivers.
     	if (info.toString().contains("APC40")) {
 
-    		System.out.println(" Found APC40 - send sysex");
+    		//System.out.println(" Found APC40 - try to send send sysex");
     		try {
-	    		SysexMessage sysMsg = new SysexMessage(  );
-	    		sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
+         SysexMessage sysMsg = new SysexMessage(  );
+         sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
 
-	    		MidiDevice dev = MidiSystem.getMidiDevice(info);
-	    		dev.open();
-	    		Receiver r = dev.getReceiver();
+         MidiDevice dev = MidiSystem.getMidiDevice(info);
 
-	    		r.send(sysMsg, -1);
-	    		sentSysEx = true;
-	    		dev.open();
+           dev.open();
+           Receiver r = dev.getReceiver();
+
+           r.send(sysMsg, -1);
+           sentSysEx = true;
+           dev.close();
 	    	}
 	    	catch ( InvalidMidiDataException e ) {
-				System.out.println("InvalidMidiDataException: sysex send " + e.getMessage());
+				  //System.out.println("InvalidMidiDataException: sysex send " + e.getMessage());
 	    	}
 	    	catch ( MidiUnavailableException e ) {
-				System.out.println("MidiUnavailableException: sysex send " + e.getMessage());
+				  //System.out.println("MidiUnavailableException: sysex send " + e.getMessage());
 	    	}
 
-        	break;
+      // just send to all of them
     	}
     	i++;
     }
