@@ -117,10 +117,11 @@ abstract class Engine {
       configureExternalOutput();
     }
 
-    postCreateLX();
-
     lx.addEffect(masterBrightnessEffect);
 
+    configureEffects();
+
+    postCreateLX();
 
     
     // bad code I know
@@ -581,6 +582,12 @@ abstract class Engine {
     TSEffectController effectController = new TSEffectController(name, effect, triggerable);
 
     engineController.effectControllers.add(effectController);
+  }
+
+  void configureEffects() {
+    for (LXEffect effect : lx.getEffects()) {
+      effect.enabled.setValue(true);
+    }
   }
 
   /* configureBMPTool */
