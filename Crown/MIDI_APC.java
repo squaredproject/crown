@@ -18,8 +18,6 @@ import javax.sound.midi.Receiver;
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiUnavailableException;
 
-
-
 class MidiEngine_APC {
   // This SYSEX puts an APC40 into ableton mode so we can use it
   // this causes craziness because of mac sysex problems
