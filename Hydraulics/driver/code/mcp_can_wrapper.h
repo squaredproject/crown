@@ -8,6 +8,9 @@
   Contributor:
 
   bbulkow
+  carolyn wales
+  
+  This is a C wrapper for Corey J Fowler's Arduino CAN bus library
 
   The MIT License (MIT)
 
@@ -34,17 +37,53 @@
 #ifndef _MCP_CAN_WRAP_H_
 #define _MCP_CAN_WRAP_H_
 
-#include "mcp_can.h"
-#include "mcp_can_dfs.h"
+#define SPI_CS_PIN  53
 
+// redefines from mcp_can_defs.h, which we need but can't include
 
+#define CAN_WRAPPER_4K096BPS 0
+#define CAN_WRAPPER_5KBPS    1
+#define CAN_WRAPPER_10KBPS   2
+#define CAN_WRAPPER_20KBPS   3
+#define CAN_WRAPPER_31K25BPS 4
+#define CAN_WRAPPER_33K3BPS  5
+#define CAN_WRAPPER_40KBPS   6
+#define CAN_WRAPPER_50KBPS   7
+#define CAN_WRAPPER_80KBPS   8
+#define CAN_WRAPPER_100KBPS  9
+#define CAN_WRAPPER_125KBPS  10
+#define CAN_WRAPPER_200KBPS  11
+#define CAN_WRAPPER_250KBPS  12
+#define CAN_WRAPPER_500KBPS  13
+#define CAN_WRAPPER_1000KBPS 14
+
+#define CAN_WRAPPER_OK              (0)
+#define CAN_WRAPPER_FAILINIT        (1)
+#define CAN_WRAPPER_FAILTX          (2)
+#define CAN_WRAPPER_MSGAVAIL        (3)
+#define CAN_WRAPPER_NOMSG           (4)
+#define CAN_WRAPPER_CTRLERROR       (5)
+
+#define CAN_WRAPPER_MODE_NORMAL     0x00
+#define CAN_WRAPPER_MODE_SLEEP      0x20
+#define CAN_WRAPPER_MODE_LOOPBACK   0x40
+#define CAN_WRAPPER_MODE_LISTENONLY 0x60
+
+#ifdef __cplusplus
 extern "C" {
+#endif
 
-byte mcp_can_begin(byte speedset);   // does not expose underlying clockset - assumes 16Mhz
-byte mcp_can_check_receive(void);
-unsigned long mcp_can_get_can_id(void);
+unsigned char mcp_can_begin(unsigned char speedset, unsigned char pin);   // does not expose underlying clockset - assumes 16Mhz
+unsigned char mcp_can_check_receive(void);
+unsigned char mcp_can_receive(unsigned long *id, unsigned char *len, unsigned char *buf);
+unsigned char mcp_can_send(unsigned long id, unsigned char ext, unsigned char len, unsigned char * buf);
+unsigned char mcp_can_check_error(void);
+unsigned char mcp_can_set_mode(unsigned char mode);
 
+#ifdef __cplusplus
 }
+#endif
+
 
 #endif // MCP_CAN_WRAPPER
 /*********************************************************************************************************

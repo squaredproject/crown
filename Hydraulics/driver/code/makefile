@@ -61,8 +61,8 @@ AVRDUDE_PORT = U
 
 
 # MCU name
-MCU = atmega2560
-#MCU = atmega1280
+#MCU = atmega2560
+MCU = atmega1280
 
 
 # Processor frequency.
@@ -83,7 +83,7 @@ TARGET = WAVE
 
 # List C source files here. (C dependencies are automatically generated.)
 #SRC = $(TARGET).c UART.c putstr.c parser.c timer.c a2d.c AD7376.c jointPID.c
-C_SRC = $(TARGET).c UARTS.c putstr.c parser.c timer.c a2d.c AD7376.c jointPID.c wiring_digital.c wiring.c
+C_SRC = $(TARGET).c UARTS.c putstr.c parser.c timer.c a2d.c AD7376.c jointPID.c wiring_digital.c wiring.c CAN_message.c
 CXX_SRC = mcp_can.cpp mcp_can_wrapper.cpp SPI.cpp 
 
 
@@ -102,10 +102,10 @@ ASRC =
 # I am using Windows WSL ( 2018 ) so my path looks odd, you'll have to track
 # down your Arduino environment and change this
 
-ARDUINO_ROOT = /mnt/c/Users/bbulk/dev/Arduino
-ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/arduino/avr/cores/arduino
+ARDUINO_ROOT = /Users/carolyn/Library/Arduino15/packages/arduino
+ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.6.14/cores/arduino
 ARDUINO_VARIANT = mega
-ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/arduino/avr/variants/$(ARDUINO_VARIANT)
+ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.6.14/variants/$(ARDUINO_VARIANT)
 
 
 # Optimization level, can be [0, 1, 2, 3, s]. 
@@ -222,7 +222,6 @@ MATH_LIB = -lm
 #MATH_LIB = 
 
 
-
 #---------------- External Memory Options ----------------
 
 # 64 KB of external RAM, starting after internal RAM (ATmega128!),
@@ -243,7 +242,7 @@ EXTMEMOPTS =
 #    --cref:    add cross reference to  map file
 LDFLAGS = -Wl,-Map=$(TARGET).map,--cref
 LDFLAGS += $(EXTMEMOPTS)
-LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
+LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB) 
 
 
 

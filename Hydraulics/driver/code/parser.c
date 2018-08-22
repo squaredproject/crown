@@ -63,11 +63,12 @@ void Print_Counts(void) {
 
 
 void parseCommand(uint8_t ptr){
-  int16_t intData=0;    /* holds numerical value of parsed data */
+  int16_t intData[5] = {0,0,0,0,0};    /* holds numerical value of parsed data */
   uint8_t joint_num =0; /* if there's a joint specified, this is the num */
   uint8_t charPos=1;    /* start with first char past the "<" */
   uint8_t c;            /* next char to parse */
   uint8_t val;          /* temp val */
+  uint8_t nArguments = 0;  /* number of arguments to command */
 
   uint8_t *cmd_str;
   uint8_t cmd_len;
@@ -125,12 +126,19 @@ void parseCommand(uint8_t ptr){
   /* OK, they are talking to us: get the rest of the command */
   /* if there's a number in the command, it follows the next (command) byte*/
   /* grab it now*/
-  if(isdigit(cmd_str[charPos+1]))  // check for end of string 
-    intData = parseInteger(cmd_str,charPos+1);
-  else if(cmd_str[charPos+1] == '-')  // check for end of string 
-    intData = parseInteger(cmd_str,charPos+1);
-  else 
-    intData = 0;
+  if(isdigit(cmd_str[charPos+1]) || 
+             (cmd_str[charPos+1] == '-')){ 
+    char *argPtr;
+    argPtr = strtok((char *)&cmd_str[charPos+1], ",");
+    while(argPtr != NULL && nArguments < 5) { 
+        intData[nArguments] = parseInteger((uint8_t*)argPtr, 0);
+        nArguments++;
+        argPtr = strtok(NULL, ",");
+    }
+  } else {
+    intData[0] = 0;
+    nArguments = 0;
+  }
   
   /* this is the command char byte */
   c = cmd_str[charPos];
@@ -141,10 +149,10 @@ void parseCommand(uint8_t ptr){
     if (joint_num) {            /* if we specified one */
       if (debug_out) {
         putstr("\r\nh: ");
-        intData &= 0x3F;
-        putint(intData);
+        intData[0] &= 0x3F;
+        putint(intData[0]);
       }
-      jcb[joint_num - 1]->homespeed = (uint8_t)intData;
+      jcb[joint_num - 1]->homespeed = (uint8_t)intData[0];
     }
     break;
  
@@ -152,30 +160,35 @@ void parseCommand(uint8_t ptr){
 
   case 't': /* API  joint target value */
     if (joint_num) {            /* if we specified one */
-      jcb[joint_num - 1]->targetPos = intData;
+      jcb[joint_num - 1]->targetPos = intData[0];
+    } else if (nArguments >= 3) {
+      jcb[0]->targetPos = intData[0];
+      jcb[1]->targetPos = intData[1];
+      jcb[2]->targetPos = intData[2];
     }
     break;
 
   case 'i': /* API  immediate raw valve output, 0 < val < 127 */
     if (joint_num) {            /* if we specified one */
       putstr("\r\ni: ");
-      putint(intData);
-      jcb[joint_num-1]->drive = intData;
-      DP_SendValue((uint8_t) intData,joint_num -1);   
+      putint(intData[0]);
+      jcb[joint_num-1]->drive = intData[0];
+      DP_SendValue((uint8_t) intData[0],joint_num -1);   
     }
     break;
 
   case 'x': /* API dead band 0 < val < 127 */
     if (joint_num) {            /* if we specified one */
       putstr("\r\nx: ");
-      putint(intData);
-      jcb[joint_num - 1]->dead_band = intData;  }
+      putint(intData[0]);
+      jcb[joint_num - 1]->dead_band = intData[0];
+    }
     break;
 
   case 'S': /* API print joint status value */
     if(joint_num) {
       Print_Joint_Status(jcb[joint_num - 1]);
-      if (intData & 0x01) Dump_JCB(jcb[joint_num - 1]);
+      if (intData[0] & 0x01) Dump_JCB(jcb[joint_num - 1]);
     }
     break;
 
@@ -188,8 +201,8 @@ void parseCommand(uint8_t ptr){
       Home_Joint(jcb[joint_num - 1]);
     break;
     
-  case 'L': /* API set drive limit */
-    val = (uint8_t) intData & 0x7F; /* limit value to 0-63 */
+  case 'D': /* API set drive limit */
+    val = (uint8_t) intData[0] & 0x7F; /* limit value to 0-63 */
     if(joint_num) {
       jcb[joint_num - 1]->dmin = 63 - val;
       jcb[joint_num - 1]->dmax = 63 + val;
@@ -198,26 +211,27 @@ void parseCommand(uint8_t ptr){
 
   case 'C': /* API set joint center value BEST DONE VIA HOME COMMAND*/
     if(joint_num)
-      jcb[joint_num - 1]->center = intData;
+      jcb[joint_num - 1]->center = intData[0];
     break;
 
-  case 'D': /* API direction flag, set to invert sense of PID */
+/*
+  case 'D': // API direction flag, set to invert sense of PID  nb - 'D' now used by drive limit
     if(joint_num)
       if (debug_out) {
         putstr("\r\nD: ");
-        putint(intData);
+        putint(intData[0]);
       }
-      jcb[joint_num - 1]->direction = (uint8_t) intData;
+      jcb[joint_num - 1]->direction = (uint8_t) intData[0];
     break;
-
+*/
 
   case 'P': /* API  joint PID P value */
     if (joint_num) {            /* if we specified one */
       if (debug_out) {
         putstr("\r\nP: ");
-        putint(intData);
+        putint(intData[0]);
       }
-      jcb[joint_num - 1]->Kp = intData;
+      jcb[joint_num - 1]->Kp = intData[0];
     }
     break;
 
@@ -225,28 +239,46 @@ void parseCommand(uint8_t ptr){
     if (joint_num) {            /* if we specified one */
       if (debug_out) {
         putstr("\r\nP: ");
-        putint(intData);
+        putint(intData[0]);
       }
-      jcb[joint_num - 1]->Ki = intData;
+      jcb[joint_num - 1]->Ki = intData[0];
     }
     break;
 
   case 'T': /* API  joint PID trace value */
     if (joint_num) {            /* if we specified one */
       putstr("\r\nT: ");
-      putint(intData);
-      jcb[joint_num - 1]->trace = intData;
+      putint(intData[0]);
+      jcb[joint_num - 1]->trace = intData[0];
     }
     break;
     
   case 'm': /* Set joint minimum position */
     if(joint_num)
-      jcb[joint_num - 1]->minpos = intData;
+      jcb[joint_num - 1]->minpos = intData[0];
     break;
     
   case 'M': /* Set joint maximum position */
     if(joint_num)
-      jcb[joint_num - 1]->maxpos = intData;
+      jcb[joint_num - 1]->maxpos = intData[0];
+    break;
+    
+  case 'L': /* set joint limits - min, max, and center */
+     if (joint_num && nArguments >= 3) {
+        jcb[joint_num - 1]->minpos = intData[0];
+        jcb[joint_num - 1]->maxpos = intData[1];
+        jcb[joint_num - 1]->center = intData[2];
+     }
+     break;
+  case 'r':
+    if (nArguments > 0) {
+        setRunning(intData[0]);
+    }
+    break;
+  case 'w':
+    if (joint_num && nArguments > 0) {
+        jcb[joint_num-1]->homed = intData[0]?TRUE:FALSE;
+    }
     break;
     
   case 'd': /* toggle debug */
@@ -329,10 +361,13 @@ uint8_t accumulateCommandString0(uint8_t c){
      return 0;
   }
   
-  if (cmd0_len != 0){	 // string in progress, accumulate next char
+  if (cmd0_len != 0){  // string in progress, accumulate next char
     
-    if (cmd0_len < MAX_COMMAND_LENGTH) 
+    if (cmd0_len < MAX_COMMAND_LENGTH) { 
       cmd0_str[cmd0_len++] = c;
+    } else {
+        putstr("Error - max command length reached\n");
+    }
     if (c == '>') {
         char buf[128];
         memcpy(buf, cmd0_str, cmd0_len);
@@ -358,11 +393,11 @@ uint8_t accumulateCommandString1(uint8_t c){
       cmd1_str[cmd1_len++] = c;
     
     if (c == '>') {
-	char buf[128];
-	memcpy(buf, cmd1_str, cmd1_len);
-	buf[cmd1_len] = '\0';
-	//putstr(buf);
-	return 1;
+        char buf[128];
+        memcpy(buf, cmd1_str, cmd1_len);
+        buf[cmd1_len] = '\0';
+        putstr(buf);
+        return 1;
     }
   }
   return 0;

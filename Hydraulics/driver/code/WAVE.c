@@ -13,6 +13,9 @@
 #include "WAVE.h"
 #include "sine.h"  
 #include "jointPID.h"
+#include "mcp_can_wrapper.h"
+#include "CAN_message.h"
+//#include "mcp_can_dfs.h"
 
 // needs F_CPU def from WAVE.h
 #include <util/delay.h>
@@ -63,6 +66,7 @@ pins A8-A10.
 
 //sineval = (uint16_t)pgm_read_byte(&stab[phase]);
 
+static void parseCAN(uint8_t *buf, int len);
 
 
 // PORT ASSIGNMENTS:
@@ -237,18 +241,37 @@ void pause_error(uint8_t code) {
 
 }
 
+#define SPI_CS_PIN 53
+void CAN_Init(uint8_t driverAddr)
+{
+    while (CAN_WRAPPER_OK != mcp_can_begin(CAN_WRAPPER_500KBPS, SPI_CS_PIN)) {
+        putstr("CAN BUS Module Failed to Initialized\n");
+        putstr("Retrying....\n");
+        _delay_ms(200); 
+    }
+
+    while (CAN_WRAPPER_OK != mcp_can_set_mode(CAN_WRAPPER_MODE_NORMAL)) {
+        putstr("CAN Bus could not set mode back to Normal\n");
+        putstr("Retrying....\n");
+        _delay_ms(200); 
+    }    
+
+    CAN_setTxId(CAN_getTowerTxId(driverAddr));
+}
+
+
 int main( void ){
   
-  uint8_t cData; 		/* byte to read from UART */
+  uint8_t cData; 		        /* byte to read from UART */
   uint8_t i;					/* loop counter */
   uint16_t heartcount = 0; 		/* counter for heartbeat led */
-  uint8_t tenhz_count = 0; 		/* counter for 10hz loop */
+  uint16_t tenhz_count = 0; 		/* counter for 10hz loop */
   uint8_t toggle = 0;
   uint8_t button_state = 0;
-  int16_t target = 0; 		/* dc value read from ADC */
-  uint8_t enable = 0; 				/* Which joints are enabled */
-  uint8_t drive = 0; 				/* temp value */
-  uint8_t bAtLimit = FALSE;    /* Whether we've hit a limit switch or not*/
+  int16_t target = 0; 		    /* dc value read from ADC */
+  uint8_t enable = 0; 		    /* Which joints are enabled */
+  uint8_t drive = 0; 			/* temp value */
+  uint8_t bAtLimit = FALSE;     /* Whether we've hit a limit switch or not*/
   /* CSB  on PD6 (output) */
   /* DRDY on PD7 (input) */
 
@@ -264,8 +287,8 @@ int main( void ){
   PORTB = 0x70;
   
   //UART_Init(UART_9600); 
-  UART0_Init(UART_115200); 
-  UART1_Init(UART_115200); 
+  UART0_Init(UART_115200);   // USB Serial
+  UART1_Init(UART_115200);   // RS 485
   
   Timer0_Init();		/* Init Timer 0 for tick interrupt */
   PWM_Init();
@@ -296,7 +319,7 @@ int main( void ){
   set_status_LEDs(0); 			/* start with status LEDS off */
 
   
-  sei();
+  sei(); //XXX why are there two of these?
   
   // start with no power to the drives
   DP_SendValue(63,0);
@@ -304,14 +327,16 @@ int main( void ){
   DP_SendValue(63,2);
 
   _delay_ms(100);
-  
-  _delay_ms(100);
+
   
   /* determine address from jumpers on PB4 (10), PB5(11),PB6(12),PB7(13) */
   /* Note that this needs to go below the delay - there appears to be a race condition
      on read that affects some (but not all) boards */
   addr = (~PINB & 0x70) >> 4;
 
+  CAN_Init(addr);
+  
+  _delay_ms(100);
 
   if(1){
     putstr("WAVE v0.10_CSW\r\n");
@@ -323,16 +348,23 @@ int main( void ){
   // start main loop =======================================================
   for(;;)    {
 
-    A2D_poll_adc(); // check if adc conversion is done
+    //A2D_poll_adc(); // check if adc conversion is done
     
     // Parser for data from the USB
+    
     if (UART0_data_in_ring_buf()) { // check for waiting UART data from SPU
+      char outBuf[64];
       cData = UART0_ring_buf_byte(); // get next char from ring buffer... 
+      sprintf(outBuf, "Char in ring buf %c\n", cData);
+      putstr(outBuf);
+      
       if(accumulateCommandString0(cData) ){ // ... and add to command string
         // if we are here we have a complete command; parse it
         parseCommand(0); // parse and execute commands
       }
     }
+    
+
 
     // Parser for data on the 485 bus
     if (UART1_data_in_ring_buf()) { // check for waiting UART data from SPU
@@ -345,15 +377,45 @@ int main( void ){
 		    parseCommand(1); // parse and execute commands
       }
     }
-    
+
+
+    // and on the CAN bus
+    while (CAN_WRAPPER_MSGAVAIL == mcp_can_check_receive()){
+        uint8_t len;
+        uint8_t buf[64];
+        char outBuf[64];
+        unsigned long txId;
+        
+        putstr("data on CAN!!\n");
+        
+        if (CAN_WRAPPER_OK == mcp_can_receive(&txId, &len, buf)) {
+            txId = txId & 0x1FFFFFFF; 
+            sprintf(outBuf, "TX id is %lu\n", txId);
+            putstr(outBuf);
+        
+            if (txId == MAQUETTE_TX_ID) {
+                putstr("Parse can data!\n");
+                parseCAN(buf, len);
+            }
+        } else {
+            putstr("Error receiving on CAN bus\n");
+            _delay_ms(20);
+        }
+    }
+
     
 	  /* roughly 976 hz at 16Mhz clock */
     if (KHZ_Flag) {	
       KHZ_Flag = 0;
+      char outBuf[128];
+      //sprintf(outBuf, "Sanity ... %d\n", tenhz_count);
+      
       
       Poll_Limit_Switches();
 
-      if(tenhz_count++ > 98) {/* main loop at ~ten hz */
+//      if(tenhz_count++ > 98) {/* main loop at ~ten hz */
+      if(tenhz_count++ > 980) {/* main loop at ~ten hz */
+        putstr("sec...\n");
         tenhz_count = 0;
 
         if (!isRunning) {
@@ -525,5 +587,95 @@ void setRunning(uint8_t bRunning) {
     isRunning = (bRunning == TRUE);
 }
 
+// and the CAN stuff
+static void sendStatus(void) {
+    int ret;
+    char outBuf[64];
+    uint8_t enable = ~PINK;
+    CAN_StatusStruct status;
+    status.runState = isRunning;
+    status.state = state;
+    for (int i=0; i<3; i++) {
+        status.homed[i] = jcb[i]->homed;
+        status.sw[i] = jcb[i]->switches;
+        status.jointEnable[i] = enable & _BV(i);
+    }
+    putstr("About to send general status!\n");
+    ret = CAN_SendGeneralStatus(&status);
+    sprintf(outBuf, "General Status send returns %d\n", ret);
+}
+
+// XXX - check for all indexing on joint and tower! I know I've got it fucked up somewhere!!!
+static void sendPosition(void) {
+    CAN_SendPosition(jcb[0]->currentPos, jcb[1]->currentPos, jcb[2]->currentPos);
+}
+
+static void sendJointLimits(uint8_t jointId) {
+    CAN_SendJointLimits(jointId, jcb[jointId]->minpos, jcb[jointId]->maxpos, jcb[jointId]->center);
+}
+
+static void sendValves(void) {
+    CAN_SendValves(jcb[0]->drive, jcb[1]->drive, jcb[2]->drive);
+}
+
+static void sendJointStatus(uint8_t jointId) { // XXX check indexing on jointid
+    uint8_t enable = ~PINK;
+    CAN_SendJointStatus(jointId, jcb[jointId]->currentPos, jcb[jointId]->drive, jcb[jointId]->switches, jcb[jointId]->homed, enable & _BV(jointId));
+}
+
+static void sendExtendedStatus(void) {
+    CAN_SendExtendedStatus(addr, 0, jcb[0]->homespeed, jcb[1]->homespeed, jcb[2]->homespeed); // XXX no global debug level!
+}
+
+static void sendPIDValues(void) {
+    CAN_SendPIDValues(jcb[0]->Kp, jcb[1]->Kp, jcb[2]->Kp, jcb[0]->Ki, jcb[1]->Ki, jcb[2]->Ki);
+}
+
+static void parseCAN(uint8_t *buf, int len)
+{
+    char outBuf[128];
+    uint8_t command = buf[0];
+    uint8_t towerId = ((buf[1] & 0xFC) >> CAN_TOWER_SHIFT);
+    uint8_t jointId = (buf[1] & 0x03);
+
+    sprintf(outBuf, "Command is %d, buf[1] is %d, tower is %d, I am %d\n", command, buf[1], towerId, addr);
+    putstr(outBuf);
+  
+    if (towerId != addr) {
+        // this is not for me. Ignore
+        return;
+    }
+    
+    switch (command) {
+    case CAN_CMD_GET_GEN_STATUS:
+        putstr("Attempt to get general status!\n");
+        sendStatus();
+        break;
+    case CAN_CMD_GET_POSITION:
+        sendPosition();
+        break;
+    case CAN_CMD_GET_JOINT_LIMITS:
+        if (jointId < 0 || jointId > 3) {
+            break;
+        }
+        sendJointLimits(jointId);
+        break;
+    case CAN_CMD_GET_VALVES:
+        sendValves();
+        break;
+    case CAN_CMD_GET_JOINT_STATUS:
+        sendJointStatus(jointId);
+        break;
+    case CAN_CMD_GET_EXT_STATUS:
+        sendExtendedStatus();
+        break;
+    case CAN_CMD_GET_PID_VALUES:
+        sendPIDValues();
+    default:
+        break;
+    }
+}
+
+// XXX might like to have CAN error ack (nack)
 
 
