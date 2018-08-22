@@ -1,13 +1,7 @@
 import heronarts.lx.LX;
 import heronarts.lx.LXAutomationRecorder;
 import heronarts.lx.LXChannel;
-import heronarts.lx.midi.LXAbstractMidiListener;
-import heronarts.lx.midi.LXMidiControlChange;
-import heronarts.lx.midi.LXMidiDevice;
-import heronarts.lx.midi.LXMidiInput;
-import heronarts.lx.midi.LXMidiNoteOff;
-import heronarts.lx.midi.LXMidiNoteOn;
-import heronarts.lx.midi.LXMidiOutput;
+import heronarts.lx.midi.*;
 import heronarts.lx.midi.device.APC40;
 import heronarts.lx.output.LXDatagramOutput;
 import heronarts.lx.parameter.BasicParameter;
@@ -23,8 +17,6 @@ import javax.sound.midi.SysexMessage;
 import javax.sound.midi.Receiver;
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiUnavailableException;
-
-
 
 class MidiEngine_APC {
   // This SYSEX puts an APC40 into ableton mode so we can use it
@@ -75,6 +67,8 @@ class MidiEngine_APC {
         public void noteOnReceived(LXMidiNoteOn note) {
           int channel = note.getChannel();
           int pitch = note.getPitch();
+          //System.out.printf(" Got APC40::: noteOffReceived %d %d\n",channel,pitch);
+
           switch (pitch) {
           case APC40.CLIP_LAUNCH:
           case APC40.CLIP_LAUNCH+1:
@@ -99,9 +93,12 @@ class MidiEngine_APC {
           }
         }
         
-        public void noteOffReceived(LXMidiNoteOff note) {
+        public void noteOffReceived(LXMidiNote note) {
+          //System.out.printf(" Got APC40::: noteOffReceived \n");
+
           int channel = note.getChannel();
           int pitch = note.getPitch();
+
           switch (pitch) {
           case APC40.CLIP_LAUNCH:
           case APC40.CLIP_LAUNCH+1:
@@ -138,12 +135,12 @@ class MidiEngine_APC {
             }
             break;
                         
-          case APC40.SEND_A:
-            bpmTool.beatType.increment();
-            break;
-          case APC40.SEND_B:
-            bpmTool.tempoLfoType.increment();
-            break;
+          //case APC40.SEND_A:
+          //  bpmTool.beatType.increment();
+          //  break;
+          //case APC40.SEND_B:
+          //  bpmTool.tempoLfoType.increment();
+          //  break;
             
           case APC40.MASTER_TRACK:
           case APC40.SHIFT:
@@ -190,7 +187,7 @@ class MidiEngine_APC {
           }
         }
       }
-      
+   
       int[] channelIndices = new int[Engine.NUM_CHANNELS];
       for (int i = 0; i < Engine.NUM_CHANNELS; ++i) {
         channelIndices[i] = i;
@@ -238,11 +235,11 @@ class MidiEngine_APC {
       // Tap Tempo
       apc40.bindNote(new BooleanParameter("ANON", false), 0, APC40.SEND_A, APC40.DIRECT);
       apc40.bindNote(new BooleanParameter("ANON", false), 0, APC40.SEND_B, APC40.DIRECT);
-      apc40.bindNote(bpmTool.addTempoLfo, 0, APC40.PAN, APC40.DIRECT);
-      apc40.bindNote(bpmTool.clearAllTempoLfos, 0, APC40.SEND_C, APC40.DIRECT);
-      apc40.bindNote(bpmTool.tapTempo, 0, APC40.TAP_TEMPO, APC40.DIRECT);
-      apc40.bindNote(bpmTool.nudgeUpTempo, 0, APC40.NUDGE_PLUS, APC40.DIRECT);
-      apc40.bindNote(bpmTool.nudgeDownTempo, 0, APC40.NUDGE_MINUS, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.addTempoLfo, 0, APC40.PAN, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.clearAllTempoLfos, 0, APC40.SEND_C, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.tapTempo, 0, APC40.TAP_TEMPO, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.nudgeUpTempo, 0, APC40.NUDGE_PLUS, APC40.DIRECT);
+      //apc40.bindNote(bpmTool.nudgeDownTempo, 0, APC40.NUDGE_MINUS, APC40.DIRECT);
       
       apc40.bindNotes(
         getFaderTransition(lx.engine.getFocusedChannel()).blendMode,
@@ -261,8 +258,7 @@ class MidiEngine_APC {
       });
       setAutomation(apc40);
     }
-   //launchpad attempt
-   //lx.engine.midiEngine.addListener(new LXAbstractMidiListener() { 
+
   }
   
   void setAutomation(APC40 apc40) {
@@ -272,57 +268,59 @@ class MidiEngine_APC {
     apc40.bindNote(automationStop[automationSlot.getValuei()], 0, APC40.STOP, LXMidiDevice.DIRECT);
   }
   
+// This is theproblem with the APC40 that it requires a special SYSEX to say we're
+// ableton. The Mac requires using this obsolete library, with windows we don't,
+// so we literally have to check the operating system version.
+//
+
+
   void setAPC40Mode() {
-  	System.out.println(" starting APC40 Mode ");
+
   	boolean sentSysEx = false;
     int i = 0;
-    // Note. This obsolete java library is used on MacOSX because older versions
-    // did not allow SysEx.
-    //for (String info : de.humatic.mmj.MidiSystem.getOutputs()) { 
-    //  if (info.contains("APC40")) {
-    //  	System.out.println(" Found APC40 in humatic - going to send the sysex");
-    //    de.humatic.mmj.MidiSystem.openMidiOutput(i).sendMidi(APC_MODE_SYSEX);
-    //    sentSysEx = true;
-    //    break;
-    //  }
-    //  ++i;
-    //}
-    System.out.println(" APC40 2 Mode ");
+
+
+    //System.out.println(" APC40 2 Mode --- for non-mac ");
     MidiDevice.Info[] infos = MidiSystem.getMidiDeviceInfo();
-    System.out.println(" length of array is "+infos.length);
+    //System.out.println(" length of array is "+infos.length);
 
     for (MidiDevice.Info info : MidiSystem.getMidiDeviceInfo()) {
 
-    	System.out.println(" iterating the midi devices attached "+info.toString());
+    	//System.out.println(" looking for the APC40:: "+info.toString());
 
+      // Note: on Macs, there are often multiple devices that will claim to be 
+      // APC40, but some will have receivers and some will not. Only try
+      // to send on the ones that have receivers.
     	if (info.toString().contains("APC40")) {
 
-    		System.out.println(" Found APC40 in javaMidi - going to send the sysex");
+    		//System.out.println(" Found APC40 - try to send send sysex");
     		try {
-	    		SysexMessage sysMsg = new SysexMessage(  );
-	    		sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
+         SysexMessage sysMsg = new SysexMessage(  );
+         sysMsg.setMessage(APC_MODE_SYSEX, APC_MODE_SYSEX.length);
 
-	    		MidiDevice dev = MidiSystem.getMidiDevice(info);
-	    		dev.open();
-	    		Receiver r = dev.getReceiver();
+         MidiDevice dev = MidiSystem.getMidiDevice(info);
 
-	    		r.send(sysMsg, -1);
-	    		sentSysEx = true;
-	    		dev.open();
+           dev.open();
+           Receiver r = dev.getReceiver();
+
+           r.send(sysMsg, -1);
+           sentSysEx = true;
+           dev.close();
 	    	}
 	    	catch ( InvalidMidiDataException e ) {
-				System.out.println("InvalidMidiDataException: " + e.getMessage());
+				  //System.out.println("InvalidMidiDataException: sysex send " + e.getMessage());
 	    	}
 	    	catch ( MidiUnavailableException e ) {
-				System.out.println("MidiUnavailableException: " + e.getMessage());
+				  //System.out.println("MidiUnavailableException: sysex send " + e.getMessage());
 	    	}
 
-        	break;
+      // just send to all of them
     	}
     	i++;
     }
   }
 
+ 
 
   int focusedChannel() {
     return lx.engine.focusedChannel.getValuei();

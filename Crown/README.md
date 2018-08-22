@@ -1,6 +1,26 @@
 # README
 
-Two sections, basic tips learned, and the details of the color map
+Sets for live play, the details of the color map, lessons learned
+
+## SAVING SETS FOR LIVE PLAY
+
+### READ THIS
+
+If you don't follow these instructions, Processing will crash.
+
+The key sequence for recording a "set" using the automation system is as follows:
+
+In the lower right corner:
+- stop any previous automation using stop
+- get ready to start by pressing ARM
+- press PLAY then start your set
+- press STOP to stop your set
+- press SAVE to save it
+
+There are other key sequences that crash the system, and we don't have time to figure them
+out now ( well, we tried, and couldn't figure it out :-) ). 
+
+Such as: ARM - SAVE, that crashes.
 
 ## LED Map
 

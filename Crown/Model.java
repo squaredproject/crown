@@ -305,60 +305,64 @@ class Fence extends LXModel  {
     this.ry = 0.0f;
     
     this.id = 0; // happens to be only one
-    
-    List<Triangle> rawSTL = null;
-    
-    // Load the fence triangles - TODO: move this to it's own class, since we also
-    // need the STL loader for the Tower components
-    try {
-        rawSTL = STLParser.parseSTLFile(Paths.get(dataPath +"fence.stl") );
-    } catch (IOException ex) {
-        System.out.println( ex.toString() );
-        System.out.println("Could not find fence STL file");
-    }
-    System.out.println("Loaded fence Ntriangles "+ ( rawSTL != null ? rawSTL.size() : 0 ) );
-    
-    // Find out the size. Then we will zero the coordinates.
-    double maxX= - Double.MAX_VALUE, minX= Double.MAX_VALUE;
-    double maxY= - Double.MAX_VALUE, minY= Double.MAX_VALUE;
-    double maxZ= - Double.MAX_VALUE, minZ= Double.MAX_VALUE;
-    for (Triangle t : rawSTL ) {
-        Vec3d v[] = t.getVertices();
-        for (int i=0;i<3;i++) {
-            if (maxX < v[i].x) maxX = v[i].x;
-            if (maxY < v[i].y) maxY = v[i].y;
-            if (maxZ < v[i].z) maxZ = v[i].z;
-            
-            if (minX > v[i].x) minX = v[i].x;
-            if (minY > v[i].y) minY = v[i].y;
-            if (minZ > v[i].z) minZ = v[i].z;
-        }
-    }
-    //System.out.printf("Size of fence object: x: %f %f , y: %f %f, z: %f %f\n",
-    //    minX, maxX, minY, maxY, minZ, maxZ );
-    
-    // Copy into the Toxi structures someone liked at some time
-    // CONVERT MM TO INCHES
-    fenceSTL = new ArrayList<>();
-    
-    float xDelta = - (float)maxX;
-    float yDelta = - (float)minY;
-    float zDelta = - (float)minZ;
-    float scale = 1.0f / geometry.MMS_INCHES;
-    for (Triangle t : rawSTL ) {
-        Vec3d v[] = t.getVertices();
-        Vec3D a = new Vec3D( ((float)v[0].x + xDelta) * scale, 
-                             ((float)v[0].y + yDelta) * scale, 
-                             ((float)v[0].z + zDelta) * scale );
-        Vec3D b = new Vec3D(  ((float)v[1].x + xDelta) * scale,  
-                               ((float)v[1].y + yDelta) * scale,
-                               ((float) v[1].z + zDelta) * scale );
-        Vec3D c = new Vec3D( ((float)v[2].x + xDelta) * scale,  
-                             ((float)v[2].y + yDelta) * scale, 
-                             ((float) v[2].z + zDelta) * scale );
-        fenceSTL.add ( new Triangle3D( a, b, c ) );
-    }
-    
+
+    // If you want to see the cool overlay of STLs, turn this on,
+    // otherwise, you get more speed
+    if (Config.enableSTLDisplay) {
+      
+      List<Triangle> rawSTL = null;
+      
+      // Load the fence triangles - TODO: move this to it's own class, since we also
+      // need the STL loader for the Tower components
+      try {
+          rawSTL = STLParser.parseSTLFile(Paths.get(dataPath +"fence.stl") );
+      } catch (IOException ex) {
+          System.out.println( ex.toString() );
+          System.out.println("Could not find fence STL file");
+      }
+      System.out.println("Loaded fence Ntriangles "+ ( rawSTL != null ? rawSTL.size() : 0 ) );
+      
+      // Find out the size. Then we will zero the coordinates.
+      double maxX= - Double.MAX_VALUE, minX= Double.MAX_VALUE;
+      double maxY= - Double.MAX_VALUE, minY= Double.MAX_VALUE;
+      double maxZ= - Double.MAX_VALUE, minZ= Double.MAX_VALUE;
+      for (Triangle t : rawSTL ) {
+          Vec3d v[] = t.getVertices();
+          for (int i=0;i<3;i++) {
+              if (maxX < v[i].x) maxX = v[i].x;
+              if (maxY < v[i].y) maxY = v[i].y;
+              if (maxZ < v[i].z) maxZ = v[i].z;
+              
+              if (minX > v[i].x) minX = v[i].x;
+              if (minY > v[i].y) minY = v[i].y;
+              if (minZ > v[i].z) minZ = v[i].z;
+          }
+      }
+      //System.out.printf("Size of fence object: x: %f %f , y: %f %f, z: %f %f\n",
+      //    minX, maxX, minY, maxY, minZ, maxZ );
+      
+      // Copy into the Toxi structures someone liked at some time
+      // CONVERT MM TO INCHES
+      fenceSTL = new ArrayList<>();
+      
+      float xDelta = - (float)maxX;
+      float yDelta = - (float)minY;
+      float zDelta = - (float)minZ;
+      float scale = 1.0f / geometry.MMS_INCHES;
+      for (Triangle t : rawSTL ) {
+          Vec3d v[] = t.getVertices();
+          Vec3D a = new Vec3D( ((float)v[0].x + xDelta) * scale, 
+                               ((float)v[0].y + yDelta) * scale, 
+                               ((float)v[0].z + zDelta) * scale );
+          Vec3D b = new Vec3D(  ((float)v[1].x + xDelta) * scale,  
+                                 ((float)v[1].y + yDelta) * scale,
+                                 ((float) v[1].z + zDelta) * scale );
+          Vec3D c = new Vec3D( ((float)v[2].x + xDelta) * scale,  
+                               ((float)v[2].y + yDelta) * scale, 
+                               ((float) v[2].z + zDelta) * scale );
+          fenceSTL.add ( new Triangle3D( a, b, c ) );
+      }
+    }    
   }
   
   public static class FenceCluster implements Cluster {

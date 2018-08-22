@@ -116,26 +116,28 @@ class UICrown extends UI3dComponent {
     Geometry g = model.geometry;
   
     // FenceSTL is one wall, rotate and draw all four
-    for (int i=0; i<4; i++) {
+    if (model.fence.fenceSTL != null ) {
+      for (int i=0; i<4; i++) {
+          
+          pushMatrix();
+          
+          translate(g.FENCE_TRANSFORM[i][0], g.FENCE_TRANSFORM[i][1], g.FENCE_TRANSFORM[i][2]);
+          rotateY( fenceRotate );
+          fenceRotate -= PI/2;
         
-        pushMatrix();
-        
-        translate(g.FENCE_TRANSFORM[i][0], g.FENCE_TRANSFORM[i][1], g.FENCE_TRANSFORM[i][2]);
-        rotateY( fenceRotate );
-        fenceRotate -= PI/2;
-      
-        for (Triangle3D t : model.fence.fenceSTL ) {
-           noStroke();
-           fill(#191919);
-           beginShape(TRIANGLES);
-           vertex(t.a.x, t.a.y, t.a.z);
-           vertex(t.b.x, t.b.y, t.b.z);
-           vertex(t.c.x, t.c.y, t.c.z);
-           endShape(CLOSE);     
-        }
-        
-        popMatrix();
-    }   
+          for (Triangle3D t : model.fence.fenceSTL ) {
+             noStroke();
+             fill(#191919);
+             beginShape(TRIANGLES);
+             vertex(t.a.x, t.a.y, t.a.z);
+             vertex(t.b.x, t.b.y, t.b.z);
+             vertex(t.c.x, t.c.y, t.c.z);
+             endShape(CLOSE);     
+          }
+          
+          popMatrix();
+      }   
+    }
   }
 }
 
@@ -252,6 +254,7 @@ class UIChannelFaders extends UI2dContext {
   
   UIChannelFaders(final UI ui) {
     super(ui, Crown.this.width/2-WIDTH/2, Crown.this.height-HEIGHT-PADDING, WIDTH, HEIGHT);
+
     setBackgroundColor(#292929);
     setBorderColor(#444444);
     int di = 0;
@@ -261,8 +264,6 @@ class UIChannelFaders extends UI2dContext {
     for (int i = 0; i < Engine.NUM_CHANNELS; i++) {
       final LXChannel channel = lx.engine.getChannel(i);
       float xPos = PADDING + channel.getIndex()*(PADDING+FADER_WIDTH) + SPACER;
-      
-      previewChannels[channel.getIndex()] = new BooleanParameter("PRV");
       
       previewChannels[channel.getIndex()].addListener(new LXParameterListener() {
         public void onParameterChanged(LXParameter parameter) {
