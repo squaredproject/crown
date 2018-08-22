@@ -462,3 +462,53 @@ class ColorEffect2 extends ColorEffect {
     super(lx);
   }
 }
+
+/*
+** BrianB wrote this very speicifc for Crown.
+** Since crown has 4 towers, we should be able to rotate among the four.
+*/
+
+class RotateTower extends TSPattern {
+
+  // towers and fences have a different number of bulbs per channel
+  final int TOWERS = 4;
+
+  
+  final BasicParameter period = new BasicParameter("RATE", 2000, 10, 4000);
+  final SawLFO towerIndex = new SawLFO(0, TOWERS, period);
+  
+  RotateTower(LX lx) {
+    super(lx);
+    addModulator(towerIndex).start();
+    addParameter(period);
+  }
+  
+  public void run(double deltaMs) {
+    if (getChannel().getFader().getNormalized() == 0) return;
+
+    //System.out.println(" tower index is: "+towerIndex.getValuef() );
+    
+//    System.out.printf("Making Test Pattern: fence BI %f tower BI %f \n",
+//        fenceBulbIndex.getValuef(),towerBulbIndex.getValuef());
+
+    for (Bulb bulb : model.bulbs) {
+      if (bulb.modelType.equals("tower")) {
+      	int b;
+      	// selected tower?
+      	if (bulb.modelID == (int)towerIndex.getValuef()) {
+      		b = 100;
+      	}
+      	else {
+      		b = 0;
+      	}
+        setColor(bulb.index, lx.hsb(
+            0,
+            0,
+            b
+         ));
+      }
+
+    }
+  }
+}
+
