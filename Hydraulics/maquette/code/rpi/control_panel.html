@@ -1,0 +1,142 @@
+<!doctype html>
+  
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Crown Control</title>
+  <meta name="description" content="Control Panel for Crown Sculpture">
+
+<!--  <link rel="stylesheet" type="text/css" href="jquery-ui-min-1.8.24.css"> -->
+
+  <!--[if lt IE 9]
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
+  [endif]-->
+
+
+<script>
+
+function makeTower() {
+    var tower = {};
+    tower.running = "N/A";
+    tower.error = "N/A";
+    tower.joints = [];
+    for (var i=0; i<3; i++) {
+        var joint = {};
+        joint.pos = 0;
+        joint.target = 0;
+        joint.drive = 0;
+        joint.min = 0;
+        joint.max = 0;
+        joint.center = 0;
+        joint.homed = "N/A";
+        joint.p = 0;
+        joint.i = 0;
+        joint.enabled = false;
+        tower.joints[i] = joint;
+    }
+    return tower;
+}
+
+gTowers = [];
+function init() {
+    for (var i=0; i<4; i++) {
+        gTowers[i] = makeTower();
+    }
+    XMLHttpRequest("GET", "/crown/sculpture");
+}
+
+function getSculptureHandler(towers) {  // obviously, this takes parameters...
+    for (var i=0; i<4; i++) {
+        renderTower(i, towers[i]);   
+    }
+}
+
+function renderTower(idx, tower) {
+    $["t" + idx + Status].running = (tower.running == true ? "Running": "Off");
+    .joint_enabled = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled;
+    .homing_status = "[" + tower.joints[0].homed + "," + tower.joints[1].homed + "," + tower.joints[2].homed;
+    .current_position = "[" + tower.joints[0].pos + "," + tower.joints[1].pos + "," + tower.joints[2].pos
+    .limts = // XXX - get for each joint
+}
+// onselect - send to change mode
+// XXX - target position would be nice to know as well. I'm not sure I pull that out anywhere
+
+function homeTower(tid, jid) {
+    // POST /crown/sculpture/tower/[tid]/joints/[jid]/home
+}
+
+function getHomingStatus(tid, jid) {
+    // GET /crown/sculpture/tower/[id]/joints/[id]/homingStatus
+}
+
+function setLimits(tid, jid, min, max, center) {
+    // PUT /crown/sculpture/tower/[tid]/joints/[jid]/limits
+}
+
+function enable(tid, tf) {
+    // PUT /crown/sculpture/tower/[tid]/running
+}
+
+function setHomeState(tid, tf) {
+    // PUT /crown/sculpture/tower/[tid]/homed
+}
+
+function setPosition(tid, j1, j2, j3) {
+    // PUT /crown/sculpture/tower/[tid]/position
+}
+// XXX cross site scripting accept in the main code
+</script>
+</head>
+<body>
+<div id="maquette">
+    Maquette Mode:
+    <select>
+        <option value="off" selected="selected">OFF</option>
+        <option value="pose">pose</option>
+        <option value="immediate" disabled>copy</option>
+        <option value="playback" disabled>playback</option>
+    </select>
+</div>
+<div id="sculpture">
+<div id="tower 1">
+    <div id="t1Status">
+        Status: <br>
+        Running: <span id="running"></span><br>
+        Joint Enable: <span id="joint_enabled"></span><br>
+        Homing Status: <span id="homing_status"></span><br>
+        Current Position: <span id="current_position"></span><br>
+        PID Values: <span id="PID_values"></span><br>
+        Limits: <span id="limits"></span><br>
+        <input type="button" value="Update Tower Status"><br>   
+    </div>
+    <div id="t1Control">
+        Home Joints:<br>
+        <input type="button" value="Home J1">
+        <input type="button" value="Home J2">
+        <input type="button" value="Home J3"><br>
+        Set Position:<br>
+        J1: <input type="text">  
+        J2: <input type="text">
+        J3: <input type="text"><br>
+        <input type="button" value="Set Position"><br>
+        Neuter:<br>
+        <input type="button" value="Neuter J1">
+        <input type="button" value="Neuter J2">
+        <input type="button" value="Neuter J3"><br>
+        Set Limits: <br>
+        J1:  min: <input type="text">, max: <input type="text">, center: <input type="text"> <input type="button" value="Set J1 Limits"><br>
+        J2:  min: <input type="text">, max: <input type="text">, center: <input type="text"> <input type="button" value="Set J1 Limits"><br>
+        J3:  min: <input type="text">, max: <input type="text">, center: <input type="text"> <input type="button" value="Set J1 Limits"><br>
+    </div>
+
+</div>
+<div id="tower 2">
+</div>
+<div id="tower 3">
+</div>
+<div id="tower 4">
+</div>
+</div>
+</body>
+</html>

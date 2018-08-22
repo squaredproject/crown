@@ -8,7 +8,6 @@
   Contributor:
 
   Brian Bulkowski
-  Carolyn Wales
 
   The MIT License (MIT)
 
@@ -37,30 +36,44 @@
 // Debugging for this project...
 //#include "putstr.h"
 
+MCP_CAN *CAN = NULL;
 
-MCP_CAN CAN(SPI_CS_PIN);
+//MCP_CAN CAN(SPI_CS_PIN);
 
 
 byte mcp_can_begin(byte speedset, byte pin) {
-  return( CAN.begin(MCP_ANY, speedset, MCP_8MHZ) );
+  if (!CAN) {
+    CAN = new MCP_CAN(pin);
+  }
+  return( CAN->begin(MCP_ANY, speedset, MCP_8MHZ) );  // Usig 8MHz here because that's the crystal speed on the boards I'm using...
 }
 
 byte mcp_can_check_receive(void) {
-  return( CAN.checkReceive() );
+  return( CAN->checkReceive() );
 }
 
-byte mcp_can_send(unsigned long id, byte ext, byte len, byte * buf) {
-  return( CAN.sendMsgBuf(id,ext,len,buf) );
+/*
+unsigned long mcp_can_get_can_id(void) {
+  return( CAN->getCanId() );
+}
+*/
+
+byte mcp_can_send(unsigned long id, byte ext, byte len, const byte * buf) {
+  return( CAN->sendMsgBuf(id,ext,len,buf) );
 }
 
 byte mcp_can_receive(unsigned long *id, unsigned char *len, byte *buf){
-  return( CAN.readMsgBuf(id, len, buf) );
+  return( CAN->readMsgBuf(id, len, buf) );
 }
 
 byte mcp_can_check_error(void){
-  return( CAN.checkError());
+  return( CAN->checkError());
 }
 
 byte mcp_can_set_mode(unsigned char mode) {
-  return (CAN.setMode(mode));
+  return( CAN->setMode(mode));
 }
+
+
+
+

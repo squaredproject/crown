@@ -14,6 +14,7 @@
 #include "putstr.h"
 #include "jointPID.h"
 #include "WAVE.h"
+#include "CAN_message.h"
 
 // needs F_CPU def from WAVE.h
 #include <util/delay.h>
@@ -156,6 +157,7 @@ void Home_Joint(joint_control_block *j) {
       (numLimits <= MAX_LIMITS_IN_HOME) && (numStalls <= MAX_STALLS_IN_HOME)){
     
     if (ESTOP_PORT & _BV(ESTOP_PIN)) {
+      CAN_SendHomingResult(j->id+1, 0, HOMING_RESULT_ESTOP, limit_mask);
       pause_error(ESTOP_ERROR);
       return;
     }
@@ -163,6 +165,7 @@ void Home_Joint(joint_control_block *j) {
     // manual override to allow us to break out of the home loop
     uint8_t button_state = get_Fbuttons(0);
     if (button_state &  SPF3_SW ){ 
+      CAN_SendHomingResult(j->id+1, 0, HOMING_RESULT_CLEAR, limit_mask);
       putstr("\r\nCLEAR called, break out of Home loop!");
       return;
     }
@@ -220,6 +223,8 @@ void Home_Joint(joint_control_block *j) {
       puthex(limit_mask);
       putstr(" stalls: ");
       putint(numStalls);
+      
+      CAN_SendHomingStatus(j->id+1, counts[j->id], j->switches, limit_mask, numStalls);
     }	
 
     /* set valve command to speed*/
@@ -241,16 +246,17 @@ void Home_Joint(joint_control_block *j) {
   if (numStalls > MAX_STALLS_IN_HOME) {
     /*  Hydraulics stalled out - could not get to limits! */
     putstr("\r\n HOME failed. Stall error");
+    CAN_SendHomingResult(j->id+1, 0, HOMING_RESULT_STALL, limit_mask);
     pause_error(HOME_ERROR);
   } else if (numLimits > MAX_LIMITS_IN_HOME) {
-    /* went back and forth a few times without triggering the home button */
-    putstr("\r\n HOME failed. Home button does not trigger. Will set to median of min/max");
+    /* went back and forth a few times without triggering the center switch. Provisional pass */
+    putstr("\r\n HOME failed. Center limit does not trigger. Will set to median of min/max");
+    CAN_SendHomingResult(j->id+1, 1, HOMING_RESULT_CENTER_NOT_FOUND, limit_mask);
     finishHomingSetup(j, minpos_raw, maxpos_raw, (minpos_raw + maxpos_raw)/2);
   } else {
     /* if we get here, we are homed */
+    CAN_SendHomingResult(j->id+1, 1, HOMING_RESULT_OK, 0);
     finishHomingSetup(j, minpos_raw, maxpos_raw, counts[j->id]);
-    
-
   }
 }
 
