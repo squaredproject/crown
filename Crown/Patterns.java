@@ -512,3 +512,49 @@ class RotateTower extends TSPattern {
   }
 }
 
+class ThrobTower extends TSPattern {
+
+  // towers and fences have a different number of bulbs per channel
+  final int TOWERS = 4;
+
+  
+  final BasicParameter period = new BasicParameter("RATE", 2000, 10, 4000);
+  final BasicParameter hue = new BasicParameter("HUE",0,0,100);
+  final BasicParameter sat = new BasicParameter("SAT",0,0,100);
+  final SawLFO towerIndex = new SawLFO(0, TOWERS, period);
+  
+  ThrobTower(LX lx) {
+    super(lx);
+    addModulator(towerIndex).start();
+    addParameter(period);
+    addParameter(hue);
+    addParameter(sat);
+  }
+  
+  public void run(double deltaMs) {
+    if (getChannel().getFader().getNormalized() == 0) return;
+
+    //System.out.println(" tower index is: "+towerIndex.getValuef() );
+    
+
+   float b = towerIndex.getValuef();
+   b = (b % 1);
+   if ( b > 0.5f ) {
+   	 b = 1.0f - b;
+   }
+   b = b * 100.0f;
+
+    for (Bulb bulb : model.bulbs) {
+      if (bulb.modelType.equals("tower")) {
+
+        setColor(bulb.index, lx.hsb(
+            hue.getValuef(),
+            sat.getValuef(),
+            (bulb.modelID == (int)towerIndex.getValuef()) ? b : 0 )
+         );
+      }
+
+    }
+  }
+}
+
