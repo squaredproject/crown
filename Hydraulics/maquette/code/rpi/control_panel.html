@@ -38,32 +38,121 @@ function makeTower() {
     return tower;
 }
 
+// nb - towerid (or joint id) is 1 based
+// towerIdx (or joint idx) is 0 based
+
+var CROWN_SCULPTURE_BASE = "/crown/sculpture";
+
+function towerResponseToTower(towerJson, towerIdx)
+{
+    var tower = gTowers[towerIdx]
+    tower.running = towerJson.running;
+    tower.error   = towerJson.error;
+    for (var i=0; i<3; i++) {
+        tower.joints[i].pos = towerJson.joints[i].pos;
+        tower.joints[i].min = towerJson.joints[i].min;
+        tower.joints[i].max = towerJson.joints[i].max;
+        tower.joints[i].center = towerJson.joints[i].center;
+        tower.joints[i].homed  = towerJson.joints[i].homed;
+        tower.joints[i].enabled = towerJson.joints[i].enabled;
+    }
+}
+
+function getTowerByIdx(towerIdx){
+    if (towerId < 0 || towerId > 3) {
+        console.log("Bad input to get tower");
+        return;
+    }
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4) {  // transaction complete
+            if (xmlHttp.status == 200) {
+                console.log("success receiving information about tower " + (towerIdx+1));
+                var towerJson = JSON.parse(xmlHttp.responseText);
+                towerResponseToTower(towerJson, towerIdx);
+                renderTowerInfo(towerIdx)
+            } else {
+                console.log("Call to get info for tower " + towerId + "fails, error " + xmlHttp.status + " errorText " + xmlHttp.responseText);
+            }
+        }
+    }    
+    xmlHttp.open("GET", CROWN_SCULPTURE_BASE  + "/towers/" + towerId, true); // true for asynchronous
+}
+
 gTowers = [];
 function init() {
     for (var i=0; i<4; i++) {
         gTowers[i] = makeTower();
-    }
-    XMLHttpRequest("GET", "/crown/sculpture");
-}
-
-function getSculptureHandler(towers) {  // obviously, this takes parameters...
-    for (var i=0; i<4; i++) {
-        renderTower(i, towers[i]);   
+        getTowerByIdx(i);
     }
 }
 
-function renderTower(idx, tower) {
-    $["t" + idx + Status].running = (tower.running == true ? "Running": "Off");
-    .joint_enabled = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled;
-    .homing_status = "[" + tower.joints[0].homed + "," + tower.joints[1].homed + "," + tower.joints[2].homed;
-    .current_position = "[" + tower.joints[0].pos + "," + tower.joints[1].pos + "," + tower.joints[2].pos
-    .limts = // XXX - get for each joint
+
+function renderTowerInfo(idx) {
+    var tower = gTowers[idx];
+    $("#t" + idx + "Status[name=running]").text(tower.running);
+    $("#t" + idx + "Status[name=error]").text(tower.error);
+    var jointEnabledText = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled + "]";
+    $("#t" + idx + "Status[name=joint_enabled]").text(jointEnabledText);
+    var homingStatusText =  "[" + tower.joints[0].homed + "," + tower.joints[1].homed + "," + tower.joints[2].homed + "]";
+    $("#t" + idx + "Status[name=homing_status]").text(homingStatusText);
+    var curPosText = "[" + tower.joints[0].pos + "," + tower.joints[1].pos + "," + tower.joints[2].pos + "]";
+    $("#t" + idx + "Status[name=current_position]").text(homingStatusText);
+    $("#t" + idx + "Status[name=j1min]").text(tower.joints[0].limits.min);
+    $("#t" + idx + "Status[name=j1max]").text(tower.joints[0].limits.max);
+    $("#t" + idx + "Status[name=j1center]").text(tower.joints[0].limits.center);
+
+    $("#t" + idx + "Status[name=j2min]").text(tower.joints[1].limits.min);
+    $("#t" + idx + "Status[name=j2max]").text(tower.joints[1].limits.max);
+    $("#t" + idx + "Status[name=j2center]").text(tower.joints[1].limits.center);
+
+    $("#t" + idx + "Status[name=j3min]").text(tower.joints[2].limits.min);
+    $("#t" + idx + "Status[name=j3max]").text(tower.joints[2].limits.max);
+    $("#t" + idx + "Status[name=j3center]").text(tower.joints[2].limits.center);
+    
 }
 // onselect - send to change mode
 // XXX - target position would be nice to know as well. I'm not sure I pull that out anywhere
 
-function homeTower(tid, jid) {
-    // POST /crown/sculpture/tower/[tid]/joints/[jid]/home
+function homeTower(towerIdx, jointIdx) {
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4) {  // transaction complete
+            if (xmlHttp.status == 200 || xmlHttpStatus == 202) {
+                console.log("success requesting home of joint " + jointIdx + " on tower " + towerIdx);
+                listenForHomingStatus(towerIdx, jointIdx);
+            } else {
+                console.log("Call to home joint " + jointId + " on tower" + towerId + "fails, error " + xmlHttp.status + " errorText " + xmlHttp.responseText);
+            }
+        }
+    }    
+    xmlHttp.open("POST", CROWN_SCULPTURE_BASE  + "/towers/" + (towerIdx+1) 
+                                               + "/joints/" + (jointIdx+1) 
+                                               + "/home, true); // true for asynchronous
+    // POST /crown/sculpture/towers/[tid]/joints/[jid]/home
+}
+
+function listenForHomingStatus(towerIdx, jointIdx)
+{
+    // ping twice a second until we get a finished status
+    var homingTimer = setInterval(function(){
+        var xmlHttp = new XMLHttpRequest();
+        xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4) {  // transaction complete
+            if (xmlHttp.status == 200) {
+                console.log("success getting homing status of joint " + jointIdx + " on tower " + towerIdx);
+                var homingStatus = JSON.parse(xmlHttp.responseText);
+                if (homingStatus.status == "DONE") {
+                    clearInterval(homingTimer);
+                }
+            } else {
+                console.log("Call to home joint " + jointId + " on tower" + towerId + "fails, error " + xmlHttp.status + " errorText " + xmlHttp.responseText);
+            }
+        }
+    }    
+    xmlHttp.open("POST", CROWN_SCULPTURE_BASE  + "/towers/" + (towerIdx+1) 
+                                               + "/joints/" + (jointIdx+1) 
+    }, 500);
 }
 
 function getHomingStatus(tid, jid) {
@@ -85,7 +174,7 @@ function setHomeState(tid, tf) {
 function setPosition(tid, j1, j2, j3) {
     // PUT /crown/sculpture/tower/[tid]/position
 }
-// XXX cross site scripting accept in the main code
+
 </script>
 </head>
 <body>
@@ -101,13 +190,13 @@ function setPosition(tid, j1, j2, j3) {
 <div id="sculpture">
 <div id="tower 1">
     <div id="t1Status">
-        Status: <br>
-        Running: <span id="running"></span><br>
-        Joint Enable: <span id="joint_enabled"></span><br>
-        Homing Status: <span id="homing_status"></span><br>
-        Current Position: <span id="current_position"></span><br>
-        PID Values: <span id="PID_values"></span><br>
-        Limits: <span id="limits"></span><br>
+        Status: <span name="status"<br>
+        Running: <span name="running"></span><br>
+        Joint Enable: <span name="joint_enabled"></span><br>
+        Homing Status: <span name="homing_status"></span><br>
+        Current Position: <span name="current_position"></span><br>
+        PID Values: <span name="PID_values"></span><br>
+        Limits: <span name="limits"></span><br>
         <input type="button" value="Update Tower Status"><br>   
     </div>
     <div id="t1Control">
