@@ -66,6 +66,7 @@ enum {
     CAN_CMD_GET_PID_VALUES   = 0x15,
     CAN_CMD_GET_EXT_STATUS = 0x16,
     CAN_CMD_GET_VALVES     = 0x17,
+    CAN_CMD_GET_INTEGRATORS = 0x18,
 };
 
 #define CAN_CMD_BYTE 0
@@ -86,6 +87,7 @@ enum {
     CAN_MSG_VALVES          = 0x07,
     CAN_MSG_HOMING_STATUS   = 0x08,
     CAN_MSG_HOMING_RESULT   = 0x09,
+    CAN_MSG_INTEGRATORS     = 0x0a,
     CAN_MSG_ACK             = 0x10
 };
 
@@ -124,14 +126,16 @@ int CAN_RequestPosition(uint8_t towerId);
 int CAN_RequestPIDValues(uint8_t towerId);
 int CAN_RequestExtendedStatus(uint8_t towerId);
 int CAN_RequestValves(uint8_t towerId);
+int CAN_RequestIntegrators(uint8_t towerId);
 
 int CAN_SendGeneralStatus(CAN_StatusStruct *status);
-int CAN_SendJointStatus(uint8_t jointId, int16_t pos, uint8_t valve, uint8_t sw, uint8_t homed, uint8_t enabled);
-int CAN_SendJointLimits(uint8_t jointId, int16_t maxVal, int16_t minVal, int16_t centerVal);
+int CAN_SendJointStatus(uint8_t jointId, int16_t pos, int16_t target, uint8_t valve, uint8_t sw, uint8_t homed, uint8_t enabled);
+int CAN_SendJointLimits(uint8_t jointId, int16_t minVal, int16_t maxVal, int16_t centerVal);
 int CAN_SendPosition(int16_t j1, int16_t j2, int16_t j3);
 int CAN_SendPIDValues(int8_t p1, int8_t p2, int8_t p3, int8_t i1, int8_t i2, int8_t i3);
 int CAN_SendExtendedStatus(uint8_t addr, uint8_t debugLevel, uint8_t h1, uint8_t h2, uint8_t h3);
 int CAN_SendValves(uint8_t v1, uint8_t v2, uint8_t v3);
+int CAN_SendIntegrators(uint16_t i1, uint16_t i2, uint16_t i3);
 
 int CAN_SendHomingStatus(uint8_t jointId, int16_t pos, uint8_t sw, uint8_t target, uint16_t numStalls);
 int CAN_SendHomingResult(uint8_t jointId, uint8_t success, uint8_t detail, uint8_t target);
@@ -162,6 +166,7 @@ typedef struct {
 
 typedef struct {
   int16_t pos;
+  int16_t target;
   uint8_t valve;
   uint8_t enabled;
   uint8_t homed;
@@ -184,6 +189,12 @@ typedef struct {
   int16_t joint3Pos;
 } CAN_Position;
 
+typedef struct {
+  uint16_t i1;
+  uint16_t i2;
+  uint16_t i3;
+}CAN_Integrators;
+
 void CAN_BufferToPosition(uint8_t *buf, CAN_Position *pos);
 void CAN_BufferToJointLimits(uint8_t *buf, CAN_Limits *limits);
 void CAN_BufferToStatus(uint8_t *buf, CAN_StatusStruct *canStatus);
@@ -193,6 +204,7 @@ void CAN_BufferToPIDValues(uint8_t *buf, CAN_PIDValues *pids);
 void CAN_BufferToExtendedStatus(uint8_t *buf, CAN_ExtendedStatus *status);
 void CAN_BufferToHomingStatus(uint8_t *buf, CAN_Homing *homing);
 void CAN_BufferToHomingResult(uint8_t *buf, CAN_Homing_Result *homing);
+void CAN_BufferToIntegrators(uint8_t *buf, CAN_Integrators *integrators);
 
 
 

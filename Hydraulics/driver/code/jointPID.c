@@ -240,6 +240,22 @@ void Home_Joint(joint_control_block *j) {
        numStalls = 0;
     } else {
        numStalls++;
+       // because our limit switches suck...
+       // If we're stuck going left and the left limit hasn't been met, go right
+       // and arbitrarily set the left limit at 100 off the current position.
+       if ((speed > HOME_SPEED) && (limit_mask & RIGHT_SW)) { // going right, and looking for right switch
+            speed = HOME_SPEED - j->homespeed;
+            limit_mask  &= ~RIGHT_SW;
+            maxpos_raw = counts[j->id] - 100;         
+            numStalls = 0;
+            lastLimit = RIGHT_SW;
+       } else if ((speed < HOME_SPEED) && (limit_mask & LEFT_SW)){ // going left, looking for left switch
+            speed = HOME_SPEED + j->homespeed;
+            limit_mask  &= ~LEFT_SW;
+            minpos_raw = counts[j->id] + 100;         
+            numStalls = 0;
+            lastLimit = LEFT_SW;
+       }
     }
   }
   
@@ -572,9 +588,9 @@ void Print_all_status(joint_control_block *j){
 void Dump_JCB(joint_control_block *j){
   putstr("\r\nJ");
   puthex(j->id);
-  putstr(" ENC raw center ");
+  putstr(" ENC raw, center ");
   putS16((int16_t)counts[j->id]);
-  putstr(" ");
+  putstr(", ");
   putS16(j->center);
   putstr("\r\nPID targ curr ");
   putS16(j->targetPos);
@@ -600,6 +616,15 @@ void Dump_JCB(joint_control_block *j){
 	putstr(" INV");
   }
 }
+
+/* Attempt to stop the joint without stopping the system. Set target to current 
+   position, don't push on the valve, and kill the integration parameter */
+void Neuter_Joint(joint_control_block *j){
+    j->targetPos = counts[counts[j->id]] - j->center;  // set target to current position
+    j->drive = HOME_SPEED;
+    j->integrator = 0;
+}
+
 
 // TODOs -
 // Find a way of reporting back limits, current position!

@@ -102,12 +102,10 @@ extern joint_control_block *jcb[3];
 //#define SPF4_SW (_BV(4))
 
 
-#define NORMAL 0
-#define ERROR  1
-
 
 uint8_t state = NORMAL; 			/* address bits  */
 uint8_t addr = 0; 					/* address bits  */
+
 
 /* preserve this during interrupts if necessary */
 volatile uint16_t pwm=0;
@@ -142,6 +140,17 @@ uint8_t Test_encoder_limits(uint16_t count) {
 uint8_t Test_limits(uint16_t count, int jointIdx) {
   uint8_t limits = 0;
   
+  int16_t currentPos = (int16_t)(count - jcb[jointIdx]->center);
+  
+  if (currentPos <= jcb[jointIdx]->minpos) {
+    limits |= LEFT_SW; 
+  }
+
+  if (currentPos >= jcb[jointIdx]->maxpos) {
+    limits |= RIGHT_SW; 
+  }
+
+/*
   if (jcb[jointIdx]->currentPos <= jcb[jointIdx]->minpos) {
     limits |= LEFT_SW; 
   }
@@ -149,6 +158,7 @@ uint8_t Test_limits(uint16_t count, int jointIdx) {
   if (jcb[jointIdx]->currentPos >= jcb[jointIdx]->maxpos) {
     limits |= RIGHT_SW; 
   }
+*/
   return limits;
 }
 
@@ -209,14 +219,14 @@ void clear_status_LEDs(void) {
 
 
 /* error condition, halt and blink LEDs */
-void pause_error(uint8_t code) {
+void pause_error(uint8_t error_state) {
 
-  state = ERROR;
+  state = error_state;
   /* wait for button press to clear error again */
 
   DP_reset(); // turn off all valves
 
-  switch(code) {
+  switch(error_state) {
 
   case ESTOP_ERROR:
 	putstr("\r\nERROR: ESTOP ");
@@ -490,8 +500,8 @@ int main( void ){
                 
                 /* now figure out whether we're over the limits */
                 uint8_t softLimits = Test_limits(counts[i], i);
-                uint8_t bLeftLimit  = ((softLimits & LEFT_SW)  && (jcb[i]->switches & LEFT_SW));
-                uint8_t bRightLimit = ((softLimits & RIGHT_SW) && (jcb[i]->switches & RIGHT_SW));
+                uint8_t bLeftLimit  = ((softLimits & LEFT_SW)  || (jcb[i]->switches & LEFT_SW));
+                uint8_t bRightLimit = ((softLimits & RIGHT_SW) || (jcb[i]->switches & RIGHT_SW));
                 
                 /* If we're trying to drive the system past its limits, don't */
                 if ((drive < 63 && bLeftLimit) || (drive > 63 && bRightLimit)) { 
@@ -542,20 +552,20 @@ int main( void ){
       }
 
       button_state = get_Fbuttons(0);
-      if (state == ERROR) {
+      if (state != NORMAL) {
         if (button_state &  SPF3_SW ){
-          putstr("\r\n***Clear!***");
-          clear_status_LEDs();
-          state = NORMAL;
-          DP_enable();
+         clearError();
         }
-      } if (button_state & SPF4_SW) {
-        // reset the fucking thing. Watchdog?
-        //wdt_enable(WDTO_30MS);
-        //while(1) {};
-      }
+      } 
     }/* endif 100hz */
   } /* end while(1) */
+}
+
+void clearError(void) {
+  putstr("\r\n***Clear!***");
+  clear_status_LEDs();
+  state = NORMAL;
+  DP_enable();  
 }
 
 void Dump_Status(void) {
@@ -571,7 +581,7 @@ void Dump_Status(void) {
   putstr(buf);
   sprintf(buf, "\r\n  Estop Triggered    : %s",  ((ESTOP_PORT & _BV(ESTOP_PIN)) ? "TRUE" : "FALSE"));
   putstr(buf);
-  sprintf(buf, "\r\n  Error              : %s",  (state == ERROR ? "TRUE" : "FALSE"));
+  sprintf(buf, "\r\n  Error              : %s",  (state != NORMAL ? "TRUE" : "FALSE"));
   putstr(buf);
   for (int i=0; i<3; i++) {
     sprintf(buf, "\r\n  Joint %d Enabled : %s", i, ((enable & _BV(i)) ? "TRUE" : "FALSE"));
@@ -598,7 +608,7 @@ static void sendStatus(void) {
     for (int i=0; i<3; i++) {
         status.homed[i] = jcb[i]->homed;
         status.sw[i] = jcb[i]->switches;
-        status.jointEnable[i] = enable & _BV(i);
+        status.jointEnable[i] = (enable & _BV(i)) ? 1 : 0;
     }
     putstr("About to send general status!\n");
     ret = CAN_SendGeneralStatus(&status);
@@ -607,20 +617,24 @@ static void sendStatus(void) {
 
 // XXX - check for all indexing on joint and tower! I know I've got it fucked up somewhere!!!
 static void sendPosition(void) {
-    CAN_SendPosition(jcb[0]->currentPos, jcb[1]->currentPos, jcb[2]->currentPos);
+    int16_t pos1, pos2, pos3;
+    pos1 = counts[jcb[0]->id] - jcb[0]->center;
+    pos2 = counts[jcb[1]->id] - jcb[1]->center;
+    pos3 = counts[jcb[2]->id] - jcb[2]->center;
+    CAN_SendPosition(pos1, pos2, pos3);
 }
 
 static void sendJointLimits(uint8_t jointId) {
-    CAN_SendJointLimits(jointId, jcb[jointId]->minpos, jcb[jointId]->maxpos, jcb[jointId]->center);
+    CAN_SendJointLimits(jointId+1, jcb[jointId]->minpos, jcb[jointId]->maxpos, jcb[jointId]->center);
 }
 
 static void sendValves(void) {
     CAN_SendValves(jcb[0]->drive, jcb[1]->drive, jcb[2]->drive);
 }
 
-static void sendJointStatus(uint8_t jointId) { // XXX check indexing on jointid
+static void sendJointStatus(uint8_t jointId) {
     uint8_t enable = ~PINK;
-    CAN_SendJointStatus(jointId, jcb[jointId]->currentPos, jcb[jointId]->drive, jcb[jointId]->switches, jcb[jointId]->homed, enable & _BV(jointId));
+    CAN_SendJointStatus(jointId+1, counts[jcb[jointId]->id] - jcb[jointId]->center /*jcb[jointId]->currentPos*/, jcb[jointId]->targetPos, jcb[jointId]->drive, jcb[jointId]->switches, jcb[jointId]->homed, (enable & _BV(jointId)) ? 1:0);
 }
 
 static void sendExtendedStatus(void) {
@@ -629,6 +643,10 @@ static void sendExtendedStatus(void) {
 
 static void sendPIDValues(void) {
     CAN_SendPIDValues(jcb[0]->Kp, jcb[1]->Kp, jcb[2]->Kp, jcb[0]->Ki, jcb[1]->Ki, jcb[2]->Ki);
+}
+
+static void sendIntegrators(void) {
+    CAN_SendIntegrators(jcb[0]->integrator, jcb[1]->integrator, jcb[2]->integrator);
 }
 
 static void parseCAN(uint8_t *buf, int len)
@@ -646,6 +664,8 @@ static void parseCAN(uint8_t *buf, int len)
         return;
     }
     
+    jointId = jointId - 1;
+
     switch (command) {
     case CAN_CMD_GET_GEN_STATUS:
         putstr("Attempt to get general status!\n");
@@ -655,8 +675,9 @@ static void parseCAN(uint8_t *buf, int len)
         sendPosition();
         break;
     case CAN_CMD_GET_JOINT_LIMITS:
-        if (jointId < 0 || jointId > 3) {
-            break;
+        if (jointId < 0 || jointId > 2) {
+            putstr("JointId out of range in parseCAN, aborting\n");
+            return;
         }
         sendJointLimits(jointId);
         break;
@@ -664,6 +685,10 @@ static void parseCAN(uint8_t *buf, int len)
         sendValves();
         break;
     case CAN_CMD_GET_JOINT_STATUS:
+        if (jointId < 0 || jointId > 2) {
+            putstr("JointId out of range in parseCAN, aborting\n");
+            return;
+        }
         sendJointStatus(jointId);
         break;
     case CAN_CMD_GET_EXT_STATUS:
@@ -671,6 +696,10 @@ static void parseCAN(uint8_t *buf, int len)
         break;
     case CAN_CMD_GET_PID_VALUES:
         sendPIDValues();
+        break;
+    case CAN_CMD_GET_INTEGRATORS:
+        sendIntegrators();
+        break;
     default:
         break;
     }
