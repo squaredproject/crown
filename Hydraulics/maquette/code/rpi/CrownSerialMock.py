@@ -91,17 +91,17 @@ def processRequest(item):
             commandId = item[2]
             
         print ("command is " + commandId)
-        if commandId == 's':
+        if commandId == 's': # tower status
             responseString = "<!s" + towerId + "{\"homed\":[true, true, false], \"switches\": [4, 0, 1], \"enabled\": [true, true, true], \"running\": true,\"error\": 0}>"
-        elif commandId == 'j':
-            responseString = "<!j" + towerId + str(jointId) + "{\"jointId\":" + str(jointId) + ", \"pos\":300, \"valve\":78, \"homed\":true, \"enabled\":true, \"switches\":0x02}>"
-        elif commandId == 'l':
-            responseString = "<!l" + towerId + str(jointId) + "{\"min\":-345,\"max\":427, \"center\": 4027}>"
-        elif commandId == 'T':
+        elif commandId == 'j': # joint status
+            responseString = "<!j" + towerId + str(jointId) + "{\"jointId\":" + str(jointId) + ", \"pos\":300, \"target\": 250, \"valve\":78, \"homed\":true, \"enabled\":true, \"switches\":0x02}>"
+        elif commandId == 'l': # joint limits
+            responseString = "<!l" + towerId + str(jointId) + "{\"min\":-250,\"max\":300, \"center\": 4027}>"
+        elif commandId == 'T': #position
             responseString = "<!T" + towerId + "[13,-34,200]>"
-        elif commandId == 'v':
+        elif commandId == 'v': # valves
             responseString = "<!v" + towerId + "[13,63,93]>"
-        elif commandId == 'p':
+        elif commandId == 'p': #pid values
             responseString = "<!p" + towerId + "{\"p\": [100,80,120], \"i\": [2, 4, 5.6]}>"
         else:   
             responseString = None
