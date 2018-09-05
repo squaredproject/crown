@@ -268,7 +268,11 @@ class Fence extends LXModel  {
   /*
   **
   */
+  public final List<Bulb> bulbs;
   
+  /*
+  **
+  */
   public final int id;
   
   /**
@@ -297,9 +301,14 @@ class Fence extends LXModel  {
     super(new Fixture(geometry, clusterConfig, 0.0f, 0.0f, 0.0f));
     Fixture f = (Fixture)this.fixtures.get(0);
     this.clusters = new ArrayList<>();
+    this.bulbs = new ArrayList<>();
     for (FenceCluster fc : f.clusters) {
         this.clusters.add(fc);
+        for (Bulb bulb : fc.bulbs) {
+          this.bulbs.add(bulb);
+        }
     }
+
     this.x = 0.0f;
     this.z = 0.0f;
     this.ry = 0.0f;

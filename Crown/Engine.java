@@ -260,6 +260,9 @@ abstract class Engine {
     patterns.add(new Pixels(lx));
     patterns.add(new Wedges(lx));
     patterns.add(new Parallax(lx));
+    patterns.add(new RotateTower(lx));
+    patterns.add(new ThrobTower(lx));
+    patterns.add(new RingularityPattern(lx));
     
     patterns.add(new T1Pattern(lx));
     patterns.add(new T2Pattern(lx));

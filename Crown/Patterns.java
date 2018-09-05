@@ -462,3 +462,99 @@ class ColorEffect2 extends ColorEffect {
     super(lx);
   }
 }
+
+/*
+** BrianB wrote this very speicifc for Crown.
+** Since crown has 4 towers, we should be able to rotate among the four.
+*/
+
+class RotateTower extends TSPattern {
+
+  // towers and fences have a different number of bulbs per channel
+  final int TOWERS = 4;
+
+  
+  final BasicParameter period = new BasicParameter("RATE", 2000, 10, 4000);
+  final SawLFO towerIndex = new SawLFO(0, TOWERS, period);
+  
+  RotateTower(LX lx) {
+    super(lx);
+    addModulator(towerIndex).start();
+    addParameter(period);
+  }
+  
+  public void run(double deltaMs) {
+    if (getChannel().getFader().getNormalized() == 0) return;
+
+    //System.out.println(" tower index is: "+towerIndex.getValuef() );
+    
+//    System.out.printf("Making Test Pattern: fence BI %f tower BI %f \n",
+//        fenceBulbIndex.getValuef(),towerBulbIndex.getValuef());
+
+    for (Bulb bulb : model.bulbs) {
+      if (bulb.modelType.equals("tower")) {
+      	int b;
+      	// selected tower?
+      	if (bulb.modelID == (int)towerIndex.getValuef()) {
+      		b = 100;
+      	}
+      	else {
+      		b = 0;
+      	}
+        setColor(bulb.index, lx.hsb(
+            0,
+            0,
+            b
+         ));
+      }
+
+    }
+  }
+}
+
+class ThrobTower extends TSPattern {
+
+  // towers and fences have a different number of bulbs per channel
+  final int TOWERS = 4;
+
+  
+  final BasicParameter period = new BasicParameter("RATE", 2000, 10, 4000);
+  final BasicParameter hue = new BasicParameter("HUE",0,0,100);
+  final BasicParameter sat = new BasicParameter("SAT",0,0,100);
+  final SawLFO towerIndex = new SawLFO(0, TOWERS, period);
+  
+  ThrobTower(LX lx) {
+    super(lx);
+    addModulator(towerIndex).start();
+    addParameter(period);
+    addParameter(hue);
+    addParameter(sat);
+  }
+  
+  public void run(double deltaMs) {
+    if (getChannel().getFader().getNormalized() == 0) return;
+
+    //System.out.println(" tower index is: "+towerIndex.getValuef() );
+    
+
+   float b = towerIndex.getValuef();
+   b = (b % 1);
+   if ( b > 0.5f ) {
+   	 b = 1.0f - b;
+   }
+   b = b * 100.0f;
+
+    for (Bulb bulb : model.bulbs) {
+      if (bulb.modelType.equals("tower")) {
+
+        setColor(bulb.index, lx.hsb(
+            hue.getValuef(),
+            sat.getValuef(),
+            (bulb.modelID == (int)towerIndex.getValuef()) ? b : 0 )
+         );
+      }
+
+    }
+  }
+}
+
