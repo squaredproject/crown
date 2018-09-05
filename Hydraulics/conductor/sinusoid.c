@@ -160,7 +160,9 @@ void generate_positions( void )
 				position[finger][knuckle] = sine_table(theta[finger][knuckle], amplitude[finger][knuckle]) + CENTER_POSITION;
 			}
 			// FIELD HACK - reduce the amplitude by half
-			position[finger][knuckle] = position[finger][knuckle] / 2;
+			// CSW - removing FIELD hack for a while...
+//			position[finger][knuckle] = position[finger][knuckle] / 2;
+			position[finger][knuckle] = position[finger][knuckle];
 		}
 	}
 }
@@ -174,7 +176,7 @@ void stream_positions( void )
 	{
 		for(knuckle = 0; knuckle < KNUCKLES_PER_FINGER;knuckle++)
 		{
-			fprintf(NETWORKFILE,"<%u%ut%04d>", finger, knuckle+1, (int)position[finger][knuckle]);
+			fprintf(NETWORKFILE,"<%u%ut%04d>", finger+1, knuckle+1, (int)position[finger][knuckle]);
 		}
 	}
 	fprintf(NETWORKFILE,"\r\n");
@@ -195,11 +197,11 @@ void stream_debug( void )
 				switch (sine_debug_mode) {
 
 				case SINE_DEBUG_POSITIONS:
-					printf("<%u%ut%04d>", finger, knuckle+1, (int)position[finger][knuckle]);
+					printf("<%u%ut%04d>", finger+1, knuckle+1, (int)position[finger][knuckle]);
 					break;
 
 				case SINE_DEBUG_THETA:
-					printf("<%u%ut%04d>", finger, knuckle+1, (int)theta[finger][knuckle]);
+					printf("<%u%ut%04d>", finger+1, knuckle+1, (int)theta[finger][knuckle]);
 					break;
 				}
 			}

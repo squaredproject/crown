@@ -61,8 +61,8 @@ AVRDUDE_PORT = U
 
 
 # MCU name
-#MCU = atmega2560
-MCU = atmega1280
+MCU = atmega2560
+#MCU = atmega1280
 
 
 # Processor frequency.
