@@ -2,6 +2,7 @@
 #ifndef WAVE_H
 #define WAVE_H
 
+#define NORMAL      0x00        /* normal run state  */
 #define ESTOP_ERROR 0x01 		/* emergency stop switch is hit */
 #define ENCODER_ERROR 0x02 		/* no signal from encoder */
 #define SWITCH_ERROR 0x03 		/* more than one limit switch down */
@@ -29,5 +30,6 @@ void pause_error(uint8_t code);
 void Dump_Status(void);
 uint8_t get_Fbuttons(uint8_t debounce);
 void setRunning(uint8_t bRunning);
+void clearError(void);
 
 #endif //WAVE_H

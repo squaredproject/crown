@@ -39,14 +39,14 @@
 
 typedef enum {
    MODE_OFF = 0,
-   MODE_FREE_PLAY,
-   MODE_POSE,
-   MODE_SLAVE
+   MODE_FREE_PLAY = 1,
+   MODE_POSE = 2,
+   MODE_SLAVE = 3,
 } Mode;
 
 Mode mode = MODE_OFF;
-int towerValid[NUM_TOWERS] = {FALSE, FALSE, FALSE, TRUE};
-int jointValid[NUM_TOWERS][NUM_JOINTS] = {{FALSE, FALSE, FALSE},
+int towerValid[NUM_TOWERS] = {TRUE, TRUE, TRUE, TRUE};
+int jointValid[NUM_TOWERS][NUM_JOINTS] = {{TRUE, TRUE, TRUE},
                                           {TRUE, TRUE, TRUE},
                                           {FALSE, FALSE, FALSE},
                                           {TRUE, TRUE, TRUE}};
@@ -64,6 +64,7 @@ uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 200}, {-532, 328}, {-2
                                                   {{-200, 200}, {-200, 200}, {-200, 200}}};
 */
 uint16_t jointCenter[NUM_TOWERS][NUM_JOINTS] = {{POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {504, 571, 500}, {POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {504, 571, 500 }};
+uint8_t centered[NUM_TOWERS] = {FALSE, FALSE, FALSE, FALSE};
 
 //-64, 472, -16 
                                
@@ -72,10 +73,10 @@ uint16_t jointCenter[NUM_TOWERS][NUM_JOINTS] = {{POT_RANGE/2,POT_RANGE/2,POT_RAN
 int modelPosition[NUM_TOWERS][NUM_JOINTS]       = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
 int staticModelPosition[NUM_TOWERS][NUM_JOINTS] = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
 
-int pinMapping[NUM_TOWERS][NUM_JOINTS] = { {A0, A1, A2},
-                                          {A4, A5, A6},
-                                          {A8, A9, A10},
-                                          {A12, A13, A14} };
+int pinMapping[NUM_TOWERS][NUM_JOINTS] = { {A0, A1, A3},
+                                          {A4, A5, A7},
+                                          {A8, A9, A11},
+                                          {A12, A13, A15} };
                                           
 int posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
                                              {0,0,0},
@@ -132,12 +133,12 @@ static int poseDataValid();
 static int slaveDataValid();
 static void readAllButtons();
 static void InitButtons();
-static void InitButtons();
 static ButtonState *readButtonState(int button);
 static void readSerial();
 static void readCAN();
 static uint8_t accumulateCommandString(uint8_t c);
 static void parseSerialCommand();
+static uint8_t isCentered();
 
 static void Write485(char *buf);
 
@@ -153,6 +154,7 @@ static void HandleCANJointStatus(uint8_t towerId, uint8_t *buf);
 static void HandleCANHomingStatus(uint8_t towerId, uint8_t *buf);
 static void HandleCANExtendedStatus(uint8_t towerId, uint8_t *buf);
 static void HandleCANPIDValues(uint8_t towerId, uint8_t *buf);
+static void HandleCANIntegrators(uint8_t towerId, uint8_t *buf);
 
 #define BLINK_TIME 400
 static int blinkOnOff = 1;
@@ -213,8 +215,8 @@ int secIdx = 0;
 int mainloopTimeout = 0;
 int poseTimeout = 0;
 void loop() {
+  char outBuf[1024];
     unsigned long curTime = millis();
-//    delay(20); // XXX why would I bother waiting?  XXX remove this
 
 
 //    secIdx++;
@@ -246,7 +248,8 @@ void loop() {
        //   Serial.print("data on 485\n");
        //  }
   
-        for (int i=0; i<NUM_TOWERS; i++) {
+//        for (int i=0; i<NUM_TOWERS; i++) {
+        for (int i=0; i<1; i++) {
             for (int j=0; j<NUM_JOINTS; j++) {
                 uint16_t potValue  = analogRead(pinMapping[i][j]);
                 modelPosition[i][j] = maquetteToModel(potValue, i, j);
@@ -275,10 +278,12 @@ void loop() {
             case MODE_OFF:
                 break;
             case MODE_FREE_PLAY:
-                targetSculpture(modelPosition);
+                if (isCentered()) {
+                    targetSculpture(modelPosition);
+                }
                 break;
             case MODE_POSE:
-                if (poseDataValid() ) {
+                if (poseDataValid() && isCentered() ) {
                     targetSculpture(posePosition); // XXX - may want to send the pose data multiple times . Is the 485 reliable?
                     if (curTime < poseTimeout) {
                       blinkPoseButton();
@@ -286,7 +291,7 @@ void loop() {
                 }
                 break;
             case MODE_SLAVE:
-                if (slaveDataValid() ) {
+                if (slaveDataValid()  && isCentered()) {
                     targetSculpture(slavePosition);
                 }
                 break;
@@ -298,6 +303,16 @@ void loop() {
         }
      }
    }
+}
+
+static uint8_t isCentered(void)
+{
+  uint8_t centerVal = TRUE;
+  for (int i=0; i<NUM_TOWERS; i++){
+    centerVal = centerVal && centered[i];
+  }
+
+  return centerVal;
 }
 
 
@@ -452,6 +467,7 @@ static ButtonState *readButtonState(int button)
 static int16_t maquetteToModel(uint16_t potValue, int towerId, int jointId) {
 // Potentiometer has a range of POT_RANGE (1K)
 // Sculpture has a range of SCULPTURE_RANGE (8K)
+
 // Assuming the zeros are lined up, that means that the translation is
    long potValueCentered = ((long)potValue) - jointCenter[towerId][jointId];
    int16_t val = (int16_t)((potValueCentered * SCULPTURE_RANGE)/POT_RANGE);
@@ -482,6 +498,11 @@ static void targetSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]) {
     char modelString[256];
     char smallModelString[64];
     char *ptr = modelString;
+
+    if (!isCentered()) {
+      log_error("Target sculpture called on uncalibrated sculpture. Center first!!");
+      return;
+    }
 
     for (int i=0; i<NUM_TOWERS; i++){
         if (!towerValid[i]) {
@@ -648,6 +669,7 @@ static void parseMaquetteCommand(char *buf, int len) {
     if (bufEnd <= buf) return;
     
     c = *ptr++;
+    Serial.println("maquette command");
     
     switch(c) {
     case 'L':  // set limits for a tower on maquette 
@@ -669,19 +691,18 @@ static void parseMaquetteCommand(char *buf, int len) {
       }
       jointId--; // 0 based indexing
       
-      ntokens = sscanf (ptr,"%d,%d,%d>",&minVal, &maxVal, &centerVal);
+      ntokens = sscanf (ptr,"%d,%d,%d>",&minVal, &maxVal);
 
-      if (ntokens < 3) {
+      if (ntokens < 2) {
         log_error("not enough values in command");
         return;
       }  
       
       jointRange[towerId][jointId][0] = minVal;
       jointRange[towerId][jointId][1] = maxVal;
-      jointRange[towerId][jointId][2] = centerVal;
 
       if (debug) {
-        sprintf(outBuf, "Maquette Tower %d joint %d set to min: %d, max: %d, center: %d\n", towerId+1, jointId+1, minVal, maxVal, centerVal);
+        sprintf(outBuf, "Maquette Tower %d joint %d set to min: %d, max: %d,\n", towerId+1, jointId+1, minVal, maxVal);
         log_debug(outBuf);
       }
       break; 
@@ -776,29 +797,67 @@ static void parseMaquetteCommand(char *buf, int len) {
            log_debug(outBuf);
         }
         break;  
-    case 'C': // Set center of joint.
+    case 'C': // Set center of joint (calibrate)
         ntokens = sscanf(ptr, "%d:%d,%d,%d", &towerId, &jcenter[0], &jcenter[1], &jcenter[2]);  
-        if (ntokens != 4 || towerId > 4 || towerId < 1) {
+        
+        if (ntokens != 1 && ntokens != 4) {
+          log_error("Invalid number of center tokens. Require 3 or none");
+          break; 
+        }
+
+        if (towerId > 4 || towerId < 1) {
           log_error("Invalid tower");
           break;
         }
 
-        if (jcenter[0] > POT_RANGE || jcenter[0] < 0) {
-            log_error("Joint 1 center out of range\n");
-            break;
-        } else if (jcenter[1] > POT_RANGE || jcenter[1] < 0) {
-            log_error("Joint 2 center out of range\n");
-            break;
-        } else if (jcenter[2] > POT_RANGE || jcenter[2] < 0) {
-            log_error("Joint 3 center out of range\n");
-            break;
-        } 
-        
-       towerId--;
+
+        towerId--; // 0 based indexing from now on
+
+        if (ntokens == 1) {
+          // take the current center of the joint as the center
+          for (int i=0; i<3; i++) {
+            jcenter[i] = analogRead(pinMapping[towerId][i]);
+          }
+        } else if (ntokens == 4) {
+          if (jcenter[0] > POT_RANGE || jcenter[0] < 0) {
+              log_error("Joint 1 center out of range\n");
+              break;
+          } else if (jcenter[1] > POT_RANGE || jcenter[1] < 0) {
+              log_error("Joint 2 center out of range\n");
+              break;
+          } else if (jcenter[2] > POT_RANGE || jcenter[2] < 0) {
+              log_error("Joint 3 center out of range\n");
+              break;
+          } 
+       } 
+       
        for (int i=0; i<NUM_JOINTS; i++) {
           jointCenter[towerId][i] = jcenter[i];   
        }
+       centered[towerId] = TRUE;
+       
        break;
+    case 'c': // Get calibration status
+      sprintf(outBuf, "<!c[%d, %d, %d]>", centered[0], centered[1], centered[2], centered[3]);
+      Serial.println(outBuf);
+      break;
+    case 'S': // simulation. Get the position that we would be sending the towers
+       sprintf(outBuf, "[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]", 
+            modelPosition[0,0], modelPosition[0,1], modelPosition[0,2],
+            modelPosition[1,0], modelPosition[1,1], modelPosition[1,2],
+            modelPosition[2,0], modelPosition[2,1], modelPosition[2,2],
+            modelPosition[3,0], modelPosition[3,1], modelPosition[3,2]);
+       Serial.println(outBuf);
+       break;
+
+    case 'A': // analog read of the joints. Sanity check
+      sprintf(outBuf, "[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]",
+        analogRead(pinMapping[0][0]), analogRead(pinMapping[0][1]), analogRead(pinMapping[0][2]),
+        analogRead(pinMapping[1][0]), analogRead(pinMapping[1][1]), analogRead(pinMapping[1][2]),
+        analogRead(pinMapping[2][0]), analogRead(pinMapping[2][1]), analogRead(pinMapping[2][2]),
+        analogRead(pinMapping[3][0]), analogRead(pinMapping[3][1]), analogRead(pinMapping[3][2]));
+      Serial.println(outBuf);
+      break;
        
     default:
       break; 
@@ -866,6 +925,10 @@ static void parseTowerCommand(char *buf, int len) {
         // Set I values. Pass through
         Write485(buf);
         break;
+    case 'i':
+        // VAN Request integrator values.
+        CAN_RequestIntegrators(towerId);
+        break;
     case 'P':
         // Set P values. Pass through
         Write485(buf);
@@ -878,15 +941,51 @@ static void parseTowerCommand(char *buf, int len) {
         // Get extended status
         CAN_RequestExtendedStatus(towerId);
         break;
-        
-    break;
+    case 'm':
+        // set min values. Pass through
+        Write485(buf);
+        break;
+    case 'M':
+        // set max values. Pass through
+        Write485(buf);
+        break;
+    case 'C':
+        // set center values. Pass through
+        Write485(buf);
+        break;
+    case 'w':
+        // Manually home joint. Pass through
+        Write485(buf);
+        break;
+    case 'r':
+        // Manually force joint into running mode
+        Write485(buf);
+        break; 
+    case 'N':
+        // neuter
+        Write485(buf);
+        break;
+    case 'D':
+        // set joint limits
+        Write485(buf);
+        break;
+    case 'x':
+        // set dead band
+        Write485(buf);
+        break;
+    case 'z':
+        // clear error condition
+        Write485(buf);
+        break;
+    default:
+      Serial.println("Unknown command to maquette");
     }
 }
         
 static void Write485(char *buf)
 {
-//    Serial.print("writing to 485: ");
-//    Serial.println(buf);
+    Serial.print("writing to 485: ");
+    Serial.println(buf);
     fprintf(NETWORKFILE, buf);
 }
 
@@ -937,10 +1036,19 @@ static void CAN_init()
 
 static void readCAN()
 {
+/* NB - errors don't clear by themselves. if you want to check the
+ *  error for debug purposes, you need to clear it or you end up 
+ *  doing nothing other than checking for errors...
+ */
+
+ /*
   if (mcp_can_check_error()) {  // first let's check for errors...
     Serial.println("Error on CAN bus!");
     
-  } else if (CAN_MSGAVAIL == mcp_can_check_receive()) {        
+  } else 
+*/
+  
+  if (CAN_MSGAVAIL == mcp_can_check_receive()) {        
     Serial.println("DATA on CAN!!");
     CAN_receive();
   } 
@@ -1021,6 +1129,12 @@ static void CAN_receive()
         break;
     case CAN_MSG_EXTENDED_STATUS:
         HandleCANExtendedStatus(towerId, buf);
+        break;
+    case CAN_MSG_PID_VALUES:
+        HandleCANPIDValues(towerId, buf);
+        break;
+    case CAN_MSG_INTEGRATORS:
+        HandleCANIntegrators(towerId, buf);
         break;
     /*
     case CAN_MSG_ACK:
@@ -1103,10 +1217,11 @@ static void HandleCANJointStatus(uint8_t towerId, uint8_t jointId, uint8_t *buf)
 
     CAN_BufferToJointStatus(buf, &joint);
 
-    sprintf(serialBuf, "<!j%d%d{\"jointId\":%d, \"pos\":%d, \"valve\":%d, \"homed\":%s, \"enabled\":%s, \"switches\":0x%x}>",
+    sprintf(serialBuf, "<!j%d%d{\"jointId\":%d, \"pos\":%d, \"target\":%d, \"valve\":%d, \"homed\":%s, \"enabled\":%s, \"switches\":0x%x}>",
             towerId, jointId, 
             jointId,
             joint.pos,
+            joint.target,
             joint.valve,
             TF_STRING(joint.homed),
             TF_STRING(joint.enabled),
@@ -1193,13 +1308,29 @@ static void HandleCANPIDValues(uint8_t towerId, uint8_t *buf)
 
     CAN_BufferToPIDValues(buf, &pids);
 
-    sprintf(serialBuf, "<!p%%d[{\"p\":%d,\"i\":%d},{\"p\":%d,\"i\":%d}, {\"p\":%d,\"i\":%d}]>",
+    sprintf(serialBuf, "<!p%d[{\"p\":%d,\"i\":%d},{\"p\":%d,\"i\":%d}, {\"p\":%d,\"i\":%d}]>",
               towerId,
               pids.Kp[0], pids.Ki[0], 
               pids.Kp[1], pids.Ki[1], 
               pids.Kp[2], pids.Ki[2]);
               
     Serial.println((char *)serialBuf);       
+}
+
+static void HandleCANIntegrators(uint8_t towerId, uint8_t *buf)
+{
+    uint8_t serialBuf[512];
+    CAN_Integrators integrators;
+
+    CAN_BufferToIntegrators(buf, &integrators);
+
+    sprintf(serialBuf, "<!i%d[%d, %d, %d]>",
+              towerId,
+              integrators.i1,
+              integrators.i2,
+              integrators.i3);
+                
+    Serial.println((char *)serialBuf); 
 }
 
 

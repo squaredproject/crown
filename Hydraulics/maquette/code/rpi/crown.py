@@ -7,6 +7,7 @@ from SocketServer import ThreadingMixIn
 import threading
 import urlparse
 import traceback
+import cgi
 import json
 import CrownSerial
 import CrownSerialMock
@@ -126,7 +127,7 @@ def getSculptureState(towers):
     requester = AsyncRequester(calls)
     results = requester.run()
     if (results):
-        resultList = []
+        resultList = {}
         for towerId in towers: # set up template
             if towerId not in gTowerRange:
                 continue
@@ -137,30 +138,37 @@ def getSculptureState(towers):
                                   'enabled' : True, 
                                   'homed'   : True})
             towerObj = {'tower': towerId, 'joints':jointList, 'running':True, 'error':False}
-            resultList.append(towerObj)
+            print("adding towerId {} to resultList".format(towerId))
+            resultList[towerId]=towerObj
         
         for call in calls: 
             # the format of the individual responses is json string data 
             resultObj = json.loads(call['response'])  # XXX handle misformatted json
-            towerIdx = call['callArgs'][0] - 1
+            towerId = call['callArgs'][0]
+            print("towerIdx is {}".format(towerId))
+            print("resultObj is {}".format(resultObj))
+            print("resultList is {}".format(resultList))
+            print("sizeof resultList is {}".format(len(resultList)))
             if call['call'] == requestTowerPosition:
-                resultList[towerIdx]['joints'][0]['position'] = resultObj[0]
-                resultList[towerIdx]['joints'][1]['position'] = resultObj[1]
-                resultList[towerIdx]['joints'][2]['position'] = resultObj[2]
+                print("resultlist towerId is {}".format(resultList[towerId]))
+                print("joints 0 is {}".format(resultList[towerId]['joints'][0]))
+                resultList[towerId]['joints'][0]['position'] = resultObj[0]
+                resultList[towerId]['joints'][1]['position'] = resultObj[1]
+                resultList[towerId]['joints'][2]['position'] = resultObj[2]
             if call['call'] == requestTowerGeneralStatus:
-                resultList[towerIdx]['running'] = resultObj['running']
-                resultList[towerIdx]['error']   = resultObj['error']
-                resultList[towerIdx]['joints'][0]['enabled'] = resultObj['enabled'][0]
-                resultList[towerIdx]['joints'][0]['homed']   = resultObj['homed'][0]
-                resultList[towerIdx]['joints'][1]['enabled'] = resultObj['enabled'][1]
-                resultList[towerIdx]['joints'][1]['homed']   = resultObj['homed'][1]
-                resultList[towerIdx]['joints'][2]['enabled'] = resultObj['enabled'][2]
-                resultList[towerIdx]['joints'][2]['homed']   = resultObj['homed'][2]
+                resultList[towerId]['running'] = resultObj['running']
+                resultList[towerId]['error']   = resultObj['error']
+                resultList[towerId]['joints'][0]['enabled'] = resultObj['enabled'][0]
+                resultList[towerId]['joints'][0]['homed']   = resultObj['homed'][0]
+                resultList[towerId]['joints'][1]['enabled'] = resultObj['enabled'][1]
+                resultList[towerId]['joints'][1]['homed']   = resultObj['homed'][1]
+                resultList[towerId]['joints'][2]['enabled'] = resultObj['enabled'][2]
+                resultList[towerId]['joints'][2]['homed']   = resultObj['homed'][2]
             if call['call'] == requestJointLimits:
                 jointIdx = call['callArgs'][1] # joints 0 based. because we hate life XXX I don't have to propagate that
-                resultList[towerIdx]['joints'][jointIdx]['center']  = resultObj['center']
-                resultList[towerIdx]['joints'][jointIdx]['min']     = resultObj['min']
-                resultList[towerIdx]['joints'][jointIdx]['max']     = resultObj['max']
+                resultList[towerId]['joints'][jointIdx]['center']  = resultObj['center']
+                resultList[towerId]['joints'][jointIdx]['min']     = resultObj['min']
+                resultList[towerId]['joints'][jointIdx]['max']     = resultObj['max']
                 
         return (200,json.dumps(resultList))
     else:
@@ -208,6 +216,25 @@ def getTowerLimits(towerId):
     else:
         return(500)
         
+        
+def getJointLimits(towerId, jointId):
+    """ Get min, max, and center positions for all joints.
+        Returns [{"min": xxx, "max":xxx, "center":xxx}] """
+    calls = []
+    calls.append({'call'   : requestJointLimits, 'callArgs' : [towerId, jointId], 'response' : None, 
+                  'filter' : jointLimitsRequestFilter, 'filterArgs' : [towerId, jointId]})
+    requester = AsyncRequester(calls)
+    results = requester.run()
+    if (results):
+        limits = []
+        for call in calls:
+            limits.append(json.loads(call["response"]))
+        print("limits: ", json.dumps(limits));
+        return(200, json.dumps(limits))
+                
+    else:
+        return(500)
+        
 def getDriveValues(towerId):
     """ Get current drive values for all joints
         Returns [xx,xx,xx] """
@@ -238,7 +265,7 @@ def getPIDValues(towerId):
 def getMaquetteStatus():
     """Get the status of the maquette. Includes mode, position, limits"""
     calls = [{'call'   : requestMaquetteStatus, 'callArgs' : None, 'response' : None,
-              'filter' : maquetteStatusFilter, 'filterArfs' : None}]
+              'filter' : maquetteStatusFilter, 'filterArgs' : None}]
               
     requester = AsyncRequester(calls)
     results = requester.run()
@@ -246,6 +273,19 @@ def getMaquetteStatus():
         return(200, json.dumps(results[4:]))
     else:
         return(500)
+        
+def getMaquetteCalibration():
+    calls = [{'call'   : requestMaquetteCalibration, 'callArgs' : None, 'response' : None,
+              'filter' : maquetteCalibrationFilter, 'filterArgs' : None}]
+              
+    requester = AsyncRequester(calls)
+    results = requester.run()
+    if (results):
+        return(200, json.dumps(results[4:]))
+    else:
+        return(500)
+    
+
    
 
 GENERAL_STATUS_REQUEST = 's'
@@ -255,17 +295,21 @@ HOME_COMMAND           = 'H'
 TOWER_POSITION_REQUEST = 'T'
 VALVE_DRIVE_REQUEST    = 'v'
 SET_HOME_SPEED_COMMAND = 'h'
-SET_POSITION_COMMAND   = 't'
+SET_TARGETS_COMMAND    = 't'
 SET_LIMITS_COMMAND     = 'L'
+SET_MIN_COMMAND        = 'm'
+SET_MAX_COMMAND        = 'M'
+SET_CENTER_COMMAND     = 'C'
 SET_I_VALUE_COMMAND    = 'I'
 SET_P_VALUE_COMMAND    = 'P'
 PID_VALUES_REQUEST     = 'p'
 NEUTER_COMMAND         = 'n'
-OVERRIDE_RUN_COMMAND   = 'r'
-OVERRIDE_HOME_COMMAND  = 'w'
 EXTENDED_STATUS_REQUEST = 'e'
+MAQUETTE_CALIBRATION_REQUEST = 'c'
 SET_RUN_STATE_COMMAND  = 'r'
-SET_HOMED_STATE_COMMAND = 'w'
+SET_HOME_STATE_COMMAND = 'w'
+SET_MAQUETTE_MODE_COMMAND = 'M'
+SET_MAQUETTE_TOWER_CENTER_COMMAND = 'C'
 
 def validateResponseHeader(message, towerId, command):
     if message[0] != '!':
@@ -293,7 +337,7 @@ def generalStatusRequestFilter(message, args):
 def jointStatusRequestFilter(message, args):
     ret = validateResponseHeader(message, args[0], JOINT_STATUS_REQUEST)
     try: 
-        if (ret and (args[1] == int(message[3]))): # checking third position in header against tower id
+        if (ret and (args[1] == int(message[3]))): # checking third position in header against joint id
             return message[4:]
     except ValueError:
         pass
@@ -303,7 +347,7 @@ def jointStatusRequestFilter(message, args):
 def jointLimitsRequestFilter(message, args):
     ret = validateResponseHeader(message, args[0], JOINT_LIMITS_REQUEST)
     try: 
-        if (ret and (args[1] == int(message[3]))): # checking third position in header against tower id
+        if (ret and (args[1] == int(message[3]))): # checking third position in header against joint id
             return message[4:]
     except ValueError:
         pass
@@ -331,6 +375,13 @@ def PIDValuesRequestFilter(message, args):
     else:
         return None
 
+def maquetteCalibrationFilter(message, args):
+    ret = validateResponseHeader(message, args[0], MAQUETTE_CALIBRATION_REQUEST)
+    if (ret):
+        return message[3:]
+    else:
+        return None
+        
 # things one can request...
 
 def requestTowerGeneralStatus(args):
@@ -388,13 +439,24 @@ def requestExtendedStatus(args):
         towerId = args   
     serial.write("<" + str(towerId) + EXTENDED_STATUS_REQUEST + ">")
     
+def requestMaquetteCalibration(args):
+    if (isinstance(args, list)):
+        towerId = args[0]
+    else:
+        towerId = args
+        
+    serial.write("<" + str(towerId) + MAQUETTE_CALIBRATION_REQUEST + ">")
+    
 ## Will I do an ack on these commands? No. These are 485 commands
 
 def commandHome(towerId, jointId):
     serial.write("<" + str(towerId) + str(jointId) + HOME_COMMAND + ">")
     
-def commandSetPosition(towerId, j1, j2, j3):
-    serial.write("<" + str(towerId) + SET_POSITION_COMMAND +  "_" + str(j1) + "_" + str(j2) + "_" + str(j3) + ">")
+def commandSetTargets(towerId, j1, j2, j3):
+    serial.write("<" + str(towerId) + SET_TARGETS_COMMAND + str(j1) +  ">")
+    serial.write("<" + str(towerId) + SET_TARGETS_COMMAND + str(j2) +  ">")
+    serial.write("<" + str(towerId) + SET_TARGETS_COMMAND + str(j3) +  ">")
+
     
 def commandSetHomeSpeed(towerId, jointId, homeSpeed):
     serial.write("<" + str(towerId) + str(jointId) + SET_HOME_SPEED_COMMAND + str(homespeed))
@@ -409,37 +471,98 @@ def commandSetRunState(towerId, onOff):
         onOffVal = "0"
     serial.write("<" + str(towerId) + SET_RUN_STATE_COMMAND + onOffVal + ">") 
     
-def commandSetLimits(towerId, jointId, min, max, center):
-    serial.write("<" + str(towerId) + str(jointId) + SET_LIMITS_COMMAND + "_" + str(min) + "_" + str(max) + "_" + str(center) + ">")
+def commandSetCenters(towerId):
+    serial.write("<" + str(towerId) + str(1) + SET_CENTER_COMMAND + ">")
+    serial.write("<" + str(towerId) + str(2) + SET_CENTER_COMMAND + ">")
+    serial.write("<" + str(towerId) + str(3) + SET_CENTER_COMMAND + ">")
+
+    
+def commandSetLimits(towerId, jointId, min, max):
+    serial.write("<" + str(towerId) + str(jointId) + SET_MIN_COMMAND + str(min) + ">")
+    serial.write("<" + str(towerId) + str(jointId) + SET_MAX_COMMAND + str(max) + ">")
+
+def commandSetTowerHomed(towerId):
+    print("setting homed")
+    serial.write("<" + str(towerId) + str(1) + SET_HOME_STATE_COMMAND + "1>")
+    serial.write("<" + str(towerId) + str(2) + SET_HOME_STATE_COMMAND + "1>")
+    serial.write("<" + str(towerId) + str(3) + SET_HOME_STATE_COMMAND + "1>")
+    print("end homed")
+
+def commandSetMaquetteMode(mode):
+    if mode == "pose":
+        modeInt = "2"
+    elif mode == "off":
+        modeInt = "0"
+    elif mode == "immediate":
+        modeInt = "1"
+    else:
+        raise Exception
+    serial.write("<m" + SET_MAQUETTE_MODE_COMMAND + modeInt + ">")    
+    
+def commandCalibrateMaquette(towerId):
+    serial.write("<m" + SET_MAQUETTE_TOWER_CENTER_COMMAND + towerId + ">")    
+  
+
     
 
+
 class Handler(BaseHTTPRequestHandler):
-    def sendResponse(self, resp):
+    def sendResponse(self, resp, mimetype="application/json"):
+#         print("attempting to send response");
+#         self.send_response(resp[0])
+#         self.send_header('Content-type', mimetype)
+#         self.send_header('Access-Control-Allow-Origin', '*')
+#         self.end_headers()
+#         self.wfile.write(resp[1])
+#         return
+        
         if (  isinstance(resp, list) 
            or isinstance(resp, tuple)):
+            print("sending list or tuple")
+            print("code is {}".format(resp[0]))
             self.send_response(resp[0])
+            self.send_header('Content-type', mimetype)
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             if resp[1]:
                 self.wfile.write(resp[1])
-                self.wfile.write('\n')  
-        else:
-            self.send_response(resp)
-            self.end_headers()           
                 
+        else:
+            print("sending single response!")
+            self.send_response(resp)
+            self.end_headers()  
+            
+    def sendError(self, errcode):
+        self.end_headers()
+        self.send_response(errcode)
+             
+                
+    def getFile(self, path, mimeType):
+        try:
+            print ("attempting to open", path)
+            f=open("." + path, "rb")
+            self.send_response(200)
+            self.send_header('Content-type', mimeType)
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(f.read())
+            f.close()
+        except Exception:
+            self.sendError(404)
+
         
     def do_GET(self):
         parsed_path = urlparse.urlparse(self.path)
         paths = parsed_path.path[1:].split('/')
         print paths
         path_len = len(paths)
-        if path_len < 2:
-            print("404")
-            self.send_response(404)
-            return
+        
+        if (paths[0] == ""):
+            self.getFile("/control_panel.html", 'text/html');
+    
+        
             
-        print(paths[0])
-                    
-        if paths[0] == "crown":
+        elif paths[0] == "crown":
             if paths[1] == "sculpture":
                 if len(paths) < 3:
                     # /crown/sculpture. Get sculpture state
@@ -471,12 +594,16 @@ class Handler(BaseHTTPRequestHandler):
                         self.sendResponse(getTowerLimits(towerNum)) 
                     elif paths[4] == "homingStatus":
                         self.sendResponse([200, HomingStatusHandler.getHomingStatus(towerNum)])
-                    elif paths[4] == "limits":
-                        self.sendResponse(getTowerLimits(towerNum))
                     elif paths[4] == "pid":
                         self.sendResponse(getPIDValues(towerNum))
                     elif paths[4] == "valves":
                         self.sendResponse(getDriveValues(towerNum))
+                        
+                    elif len(paths) == 7:
+                        jointNum = int(paths[5])
+                        if paths[6] == "limits":
+                            self.sendResponse(getJointLimits(towerNum, jointNum));
+                            return;
 
                     else:
                         self.send_response(404)
@@ -487,7 +614,12 @@ class Handler(BaseHTTPRequestHandler):
             elif paths[1] == "savedParameters": # get saved pid and limits
                 pass
             elif paths[1] == "maquette": # get maquette status
-                self.sendResponse(getMaquetteStatus())
+                if (len(paths) == 2):
+                    # get maquette status
+                    self.sendResponse(getMaquetteStatus())
+                elif len(paths) == 3:
+                    if paths[2] == "calibration":
+                        self.sendResponse(getMaquetteCalibration())
             elif paths[1] == "playback": # get playback status (playing, not playing, which playlist)
                 self.sendResponse(getPlaybackState())
             elif paths[1] == "record": # get recording state (recording, not recording, which tower to record)
@@ -496,6 +628,25 @@ class Handler(BaseHTTPRequestHandler):
                 self.sendResponse(getPlaylists())
             elif paths[1] == "clips": # get list of clips
                 self.sendResponse(getClips())
+        elif paths[0] == "admin":
+            self.getFile("/control_panel.html", 'text/html');
+        elif paths[0] == "img" or paths[0] == "js" or paths[0] == "style":
+            print("GET path is {}\n".format(self.path))
+           
+            if self.path.endswith(".png"):
+                self.getFile(self.path, 'image/png')
+            elif self.path.endswith(".gif"):
+                self.getFile(self.path,'image/gif')
+            elif self.path.endswith(".jpeg"):
+                self.getFile(self.path, 'image/jpeg')
+            elif self.path.endswith(".html"):
+                self.getFile(self.path, 'text/html')
+            elif self.path.endswith(".js"):
+                self.getFile(self.path, 'application/javascript')
+            elif self.path.endswith(".css"):
+                self.getFile(self.path,'text/css')
+            else:
+                self.sendResponse(404)
         else: # for now, just 404
             self.sendResponse(404)
             
@@ -512,6 +663,15 @@ class Handler(BaseHTTPRequestHandler):
     def getClips():
         return [200, Playback.getClips()]
         
+    def do_OPTIONS(self):
+        print "OPTIONS"
+        self.send_response(200, "ok")
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
+        self.send_header("Access-Control-Allow-Headers", "X-Requested-With")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+
         
     def do_PUT(self):
         ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
@@ -544,8 +704,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_response(404)
                     return
                     
-                if paths[5] == "position": # set position
-                    self.sendResponse(commandSetPosition(towerId, postvars["joint1"], postvars["joint2"], postvars["joint3"]))
+                if paths[5] == "targets": # set  target position
+                    self.sendResponse(commandSetTargets(towerId, postvars["joint1"], postvars["joint2"], postvars["joint3"]))
                     return
                 elif paths[5] == "joints":
                     if len(paths) < 6:
@@ -577,18 +737,29 @@ class Handler(BaseHTTPRequestHandler):
         # yeah, the API uses a 1's based index.
             
     def do_POST(self): # homing, playback, record, 
+    
         parsed_path = urlparse.urlparse(self.path)
         paths = parsed_path.path.split('/')
         if len(paths) < 2:
             self.send_response(404)
             return
-            
+# 
+#         ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
+#         if ctype == 'multipart/form-data':
+#             postvars = cgi.parse_multipart(self.rfile, pdict)
+#         elif ctype == 'application/x-www-form-urlencoded':
+#             length = int(self.headers.getheader('content-length'))
+#             postvars = cgi.parse_qs(self.rfile.read(length), keep_blank_values=1)
+#         else:
+#             postvars = {}
+#             
+        print paths
+        paths = paths[1:]
         if paths[0] == "crown":
             if paths[1] == "sculpture":
                 if (   (len(paths) >= 7) 
                    and (paths[2] == "towers")
-                   and (paths[4] == "joints")
-                   and (paths[6] == "home")):
+                   and (paths[4] == "joints")):
                     try:
                         towerId = int(paths[3])
                         jointId = int(paths[5])
@@ -597,12 +768,52 @@ class Handler(BaseHTTPRequestHandler):
                     except ValueError:
                         self.send_response(404)
                         return
-                    self.sendResponse(commandHome(towerId, jointId))
-                    return
+
+                    if (paths[6] == "home"):
+                        self.sendResponse(commandHome(towerId, jointId))
+                        return
+                    elif (paths[6] == "limits"):
+                        commandSetLimits(towerId, jointId, -250, 300);
+                        self.send_response(200);
+                        return
+                elif (len(paths) == 5) :
+                    try: 
+                        print("paths 3 is ", paths[3])
+                        print("paths 4 is ", paths[4])
+                        towerId = int(paths[3])
+                        if (paths[4] == "center"):
+                            commandSetCenters(towerId)
+                            self.send_response(200);
+                        elif (paths[4] == "running"):
+                            try:
+                                print("running?")
+                                commandSetTowerHomed(towerId)
+                                commandSetRunState(towerId, True)
+                                print("sending 200")
+                                self.send_response(200);
+                                return
+                            except Exception as e:
+                                traceback.print_exc()
+                                raise e
+
+                        else:
+                            self.send_response(404)
+                              
+                    except Exception:
+                        self.send_response(404)
+                        return;
+                    
                 else:
                     self.send_response(404)
                     return  
-            #elif paths[1] ==  
+            elif paths[1] == "maquette":
+                if paths[2] == "mode":
+                    commandSetMaquetteMode(paths[3])
+                    self.end_response(200)
+                elif paths[2] == "towers":
+                    if paths[4] == "calibrate":
+                        commandCalibrateMaquette(int(paths[3]))
+                    
         else:
             self.send_response(404)
             return  

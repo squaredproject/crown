@@ -299,6 +299,17 @@ int CAN_RequestPIDValues(uint8_t tower) {
     return (mcp_can_send(g_txId, 1, cmdLen, cmd));
 }
 
+int CAN_RequestIntegrators(uint8_t tower) {
+    uint8_t cmd[8];
+    uint8_t cmdLen = 2;
+    cmd[CAN_CMD_BYTE]         = CAN_CMD_GET_INTEGRATORS;
+    cmd[CAN_TOWER_JOINT_BYTE] = ((tower & CAN_TOWER_MASK) << CAN_TOWER_SHIFT);
+
+    // push into CAN
+    return (mcp_can_send(g_txId, 1, cmdLen, cmd));
+}
+
+
 
 
 int CAN_SendPosition(int16_t j1, int16_t j2, int16_t j3) {
@@ -317,7 +328,7 @@ int CAN_SendPosition(int16_t j1, int16_t j2, int16_t j3) {
     return (mcp_can_send(g_txId, 1, cmdLen, cmd));
 }
 
-int CAN_SendJointLimits(uint8_t jointId, int16_t maxVal, int16_t minVal, int16_t centerVal) {
+int CAN_SendJointLimits(uint8_t jointId, int16_t minVal, int16_t maxVal, int16_t centerVal) {
     uint8_t cmd[8];
     uint8_t cmdLen = 8;
     cmd[CAN_CMD_BYTE]         = CAN_MSG_JOINT_LIMITS;
@@ -333,9 +344,6 @@ int CAN_SendJointLimits(uint8_t jointId, int16_t maxVal, int16_t minVal, int16_t
     return (mcp_can_send(g_txId, 1, cmdLen, cmd));
 }
 
-uint8_t switch_to_bits(uint8_t switchVal) {
-    return switchVal; // XXX fixme !!!
-}
 
 
 int CAN_SendGeneralStatus(CAN_StatusStruct *status) {
@@ -343,22 +351,17 @@ int CAN_SendGeneralStatus(CAN_StatusStruct *status) {
     uint8_t cmdLen = 7;
     cmd[CAN_CMD_BYTE]         = CAN_MSG_GENERAL_STATUS;
     cmd[CAN_TOWER_JOINT_BYTE] = 0; 
-    cmd[CAN_DATA+0]       = (status->runState << 4) | (status->homed[0] << 2) | (status->homed[1] << 1) | (status->homed[2] << 0);
+    cmd[CAN_DATA+0]       = (status->runState << 3) | (status->homed[0] << 2) | (status->homed[1] << 1) | (status->homed[2] << 0);
     cmd[CAN_DATA+1]       = (status->state);
-    cmd[CAN_DATA+2]       =  switch_to_bits(status->sw[0] << 4) | 
-                             switch_to_bits(status->sw[1] << 2) | 
-                             switch_to_bits(status->sw[2] << 0);
-    cmd[CAN_DATA+3]       = (status->jointEnable[0] << 2) | (status->jointEnable[1] << 1) | (status->jointEnable[2] << 0);    
+    cmd[CAN_DATA+2]       = ((status->sw[0] & 0x07) << 4) | 
+                            (status->sw[1] & 0x07);
+    cmd[CAN_DATA+3]       = (status->sw[2] & 0x07);
+    cmd[CAN_DATA+4]       = (status->jointEnable[0] << 2) | (status->jointEnable[1] << 1) | (status->jointEnable[2] << 0);    
 
     // push into CAN   
     return (mcp_can_send(g_txId, 1, cmdLen, cmd));
 }
 
-typedef struct __attribute__((__packed__)) {
-    uint8_t v1;
-    uint8_t v2;
-    uint8_t v3;
-} CAN_Data_GeneralStatus;
 
 int CAN_SendValves(uint8_t v1, uint8_t v2, uint8_t v3) {
     uint8_t cmd[8];
@@ -380,16 +383,17 @@ typedef struct __attribute__((__packed__)) {
 } CAN_Data_Valves;
 
 
-int CAN_SendJointStatus(uint8_t jointId, int16_t pos, uint8_t valve, uint8_t sw, uint8_t homed, uint8_t enabled) {
+int CAN_SendJointStatus(uint8_t jointId, int16_t pos, int16_t target, uint8_t valve, uint8_t sw, uint8_t homed, uint8_t enabled) {
     uint8_t cmd[8];
-    uint8_t cmdLen = 7;
+    uint8_t cmdLen = 8;
     cmd[CAN_CMD_BYTE]         = CAN_MSG_JOINT_STATUS;
     cmd[CAN_TOWER_JOINT_BYTE] = ((jointId & CAN_JOINT_MASK) << CAN_JOINT_SHIFT);
     cmd[CAN_DATA+0]       = (uint8_t)((pos & 0xFF00) >> 8);
     cmd[CAN_DATA+1]       = (uint8_t)(pos & 0x00FF);
-    cmd[CAN_DATA+2]       = valve;
-    cmd[CAN_DATA+3]       = ((enabled & 0x01) << 1) | (homed & 0x01);
-    cmd[CAN_DATA+4]       = sw;
+    cmd[CAN_DATA+2]       = (uint8_t)((target & 0xFF00) >> 8);
+    cmd[CAN_DATA+3]       = (uint8_t)(target & 0x00FF);
+    cmd[CAN_DATA+4]       = valve;
+    cmd[CAN_DATA+5]       = ((enabled & 0x01) << 4) | ((homed & 0x01) << 3) | (sw & 0x7);
 
     // push into CAN
     return (mcp_can_send(g_txId, 1, cmdLen, cmd));
@@ -474,6 +478,22 @@ int CAN_SendPIDValues(int8_t p1, int8_t p2, int8_t p3, int8_t i1, int8_t i2, int
     return (mcp_can_send(g_txId, 1, cmdLen, cmd));
 }
 
+int CAN_SendIntegrators(uint16_t i1, uint16_t i2, uint16_t i3) {
+    uint8_t cmd[8];
+    uint8_t cmdLen = 8;
+    cmd[CAN_CMD_BYTE]         = CAN_MSG_INTEGRATORS;
+    cmd[CAN_TOWER_JOINT_BYTE] = 0; 
+    cmd[CAN_DATA+0]       = (uint8_t)((i1 & 0xFF00) >> 8); 
+    cmd[CAN_DATA+1]       = (uint8_t)(i1 & 0x00FF);
+    cmd[CAN_DATA+2]       = (uint8_t)((i2 & 0xFF00) >> 8); 
+    cmd[CAN_DATA+3]       = (uint8_t)(i2 & 0x00FF);
+    cmd[CAN_DATA+4]       = (uint8_t)((i3 & 0xFF00) >> 8); 
+    cmd[CAN_DATA+5]       = (uint8_t)(i3 & 0x00FF);
+    
+    // push into CAN
+    return (mcp_can_send(g_txId, 1, cmdLen, cmd));
+}
+
 int CAN_SendAck(uint8_t cmd_to_ack) {
     uint8_t cmd[8];
     uint8_t cmdLen = 3;
@@ -499,20 +519,27 @@ void CAN_BufferToJointLimits(uint8_t *buf, CAN_Limits *limits)
     limits->centerPos = buf[CAN_DATA + 4] << 8 | buf[CAN_DATA + 5];  
 }
 
+void CAN_BufferToIntegrators(uint8_t *buf, CAN_Integrators *integrators)
+{
+    integrators->i1 = buf[CAN_DATA + 0] << 8 | buf[CAN_DATA + 1];
+    integrators->i2 = buf[CAN_DATA + 2] << 8 | buf[CAN_DATA + 3];
+    integrators->i3 = buf[CAN_DATA + 4] << 8 | buf[CAN_DATA + 5];
+}
+
 
 void CAN_BufferToStatus(uint8_t *buf, CAN_StatusStruct *canStatus) 
 {
-    canStatus->runState   = (buf[CAN_DATA] && 0x01);
-    canStatus->homed[0]   = (buf[CAN_DATA] & 0x08) >> 3;
-    canStatus->homed[1]   = (buf[CAN_DATA] & 0x04) >> 2;
-    canStatus->homed[2]   = (buf[CAN_DATA] & 0x02) >> 1;
+    canStatus->runState   = (buf[CAN_DATA] & 0x08) >> 3;
+    canStatus->homed[0]   = (buf[CAN_DATA] & 0x04) >> 2;
+    canStatus->homed[1]   = (buf[CAN_DATA] & 0x02) >> 1;
+    canStatus->homed[2]   = (buf[CAN_DATA] & 0x01) >> 0;
     canStatus->state      = buf[CAN_DATA + 1];
-    canStatus->sw[0]      = (buf[CAN_DATA + 2] & 0x30) >> 4;
-    canStatus->sw[1]      = (buf[CAN_DATA + 2] & 0x0c) >> 2;
-    canStatus->sw[2]      = (buf[CAN_DATA + 2] & 0x03);
-    canStatus->jointEnable[0] = buf[CAN_DATA + 3];
-    canStatus->jointEnable[1] = buf[CAN_DATA + 4];
-    canStatus->jointEnable[2] = buf[CAN_DATA + 5];
+    canStatus->sw[0]      = (buf[CAN_DATA + 2] & 0xF0) >> 4;
+    canStatus->sw[1]      = (buf[CAN_DATA + 2] & 0x0F);
+    canStatus->sw[2]      = (buf[CAN_DATA + 3]);
+    canStatus->jointEnable[0] = (buf[CAN_DATA + 4] & 0x04) >> 2;
+    canStatus->jointEnable[1] = (buf[CAN_DATA + 4] & 0x02) >> 1;
+    canStatus->jointEnable[2] = (buf[CAN_DATA + 4] & 0x01);
 }
 
 void CAN_BufferToValves(uint8_t *buf, CAN_Valves *valves)
@@ -525,11 +552,13 @@ void CAN_BufferToValves(uint8_t *buf, CAN_Valves *valves)
 void CAN_BufferToJointStatus(uint8_t *buf, CAN_JointStatus *joint)
 {
   joint->pos     =  buf[CAN_DATA + 0] << 8 | buf[CAN_DATA + 1];
-  joint->valve   =  buf[CAN_DATA + 2];
-  joint->enabled = (buf[CAN_DATA+3] & 0x02) >> 1;
-  joint->homed   = (buf[CAN_DATA+3] & 0x01);
-  joint->switches = buf[CAN_DATA+4];
+  joint->target  =  buf[CAN_DATA + 2] << 8 | buf[CAN_DATA + 3];
+  joint->valve   =  buf[CAN_DATA + 4];
+  joint->enabled = ((buf[CAN_DATA+5] >> 4) & 0x01);
+  joint->homed   = ((buf[CAN_DATA+5] >> 3) & 0x01);
+  joint->switches = buf[CAN_DATA+5] & 0x07;
 }
+
 
 void CAN_BufferToPIDValues(uint8_t *buf, CAN_PIDValues *pids) 
 {

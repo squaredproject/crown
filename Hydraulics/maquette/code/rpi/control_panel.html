@@ -12,9 +12,47 @@
   <!--[if lt IE 9]
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
   [endif]-->
+  <link rel="stylesheet" type="text/css" href="style/jquery-ui-min-1.8.24.css">
 
 
-<script>
+</head>
+<body>
+<div id="maquette">
+<h3> Maquette Control </h3>
+    Maquette Mode:
+    <select id="maquetteMode">
+        <option value="off" selected="selected">OFF</option>
+        <option value="pose">pose</option>
+        <option value="immediate" disabled>copy</option>
+        <option value="playback" disabled>playback</option>
+        <button type="button" id="centerM1">Calibrate T1</button> <&nbsp;> <&nbsp;> <&nbsp;>
+        <button type="button" id="centerM2">Calibrate T2</button> <&nbsp;> <&nbsp;> <&nbsp;>
+        <button type="button" id="centerM3">Calibrate T3</button> <&nbsp;> <&nbsp;> <&nbsp;>
+        <button type="button" id="centerM4">Calibrate T4</button> <&nbsp;> <&nbsp;> <&nbsp;><br>
+        <button type="button" id="getMCalibration">Get Calibration Status</button>
+        To use maquette: Calibrate the system by setting a tower straight upright, then<br>
+        pushing the 'Center' button for the tower. Do this for all four towers <br>
+        Maquette will not work without all towers calibrated
+    </select>
+</div><br><br>
+<div id="sculpture">
+<h3> Sculpture Control</h3>
+    <div id="control">
+    <button type="button" id="enableT1">Enable T1</button><br>
+    <button type="button" id="enableT2">Enable T2</button><br>
+    <button type="button" id="enableT3">Enable T3</button><br>
+    <button type="button" id="enableT4">Enable T4</button><br>
+    <br>Return Status </br>
+    <textarea id="feedbackText" style="width:400px; height:200px"></textarea>
+    </div>
+</div>
+</body>
+<script type="text/javascript" src="js/jquery-1.4.3.min.js"></script>
+<script type="text/javascript" src="js/jquery-ui-min-1.8.24.js"></script>
+<script type="text/javascript" >
+
+var feedbackTextLineCount = 0;
+var MAX_FEEDBACK_LINES = 40;
 
 function makeTower() {
     var tower = {};
@@ -38,33 +76,452 @@ function makeTower() {
     return tower;
 }
 
+function displayError(text) {
+    displayText(text, "ERROR: ");
+}
+
+function displaySuccess(text) {
+    displayText(text, "SUCCESS: ");
+}
+
+function displayText(text, prolog) {
+    var currentText = $("#feedbackText").text();
+    var prologText = "";
+    if (prolog != null) {
+        prologText = prolog;
+    }
+    currentText = currentText + "\n" + prologText + text;
+    feedbackTextLineCount++;
+    if (feedbackTextLineCount> MAX_FEEDBACK_LINES) {
+        var idx = currentText.indexOf('\n');
+        currentText = currentText[idx+1];
+        feedbackTextLineCount--;
+    }
+    console.log(currentText);
+    $("#feedbackText").text(currentText);
+}
+
+function enableTower(towerId) {
+    setTowerCenter(towerId, function(tf) {
+        if (!tf) return; 
+        console.log(tf);
+        setTowerLimits(towerId, 1, -250, 300, function(tf) {
+            if (!tf) return;   
+            setTowerLimits(towerId, 2, -250, 300, function(tf) {
+                if (!tf) return;
+                setTowerLimits(towerId, 3, -250, 300,  function(tf) {
+                    if (!tf) return;
+                    setRunning(towerId, function(tf) {
+                        if (!tf) return;
+                    });
+                });
+            });
+        });
+    });
+}    
+
+
+// nb - towerid (or joint id) is 1 based
+// towerIdx (or joint idx) is 0 based
+
+var CROWN_SCULPTURE_BASE = "/crown/sculpture";
+var CROWN_MAQUETTE_BASE = "/crown/maquette";
+
+function towerResponseToTower(towerJson, towerIdx)
+{
+    var tower = gTowers[towerIdx]
+    tower.running = towerJson.running;
+    tower.error   = towerJson.error;
+    for (var i=0; i<3; i++) {
+        tower.joints[i].pos = towerJson.joints[i].pos;
+        tower.joints[i].min = towerJson.joints[i].min;
+        tower.joints[i].max = towerJson.joints[i].max;
+        tower.joints[i].center = towerJson.joints[i].center;
+        tower.joints[i].homed  = towerJson.joints[i].homed;
+        tower.joints[i].enabled = towerJson.joints[i].enabled;
+    }
+}
+
+function setTowerCenter(towerId, callbackfn) {
+    console.log("set tower " + towerId + " center");
+    $.ajax({
+        type: 'POST',
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerId) + "/center",
+        success: function(data, status, req) {
+            //checkTowerCenter(towerId); // I don't know how to check the tower center, so punting here
+            callbackfn(true);
+            },
+        error: function(data, status, req) {
+            displayError("Internal error " + status + " setting tower " + towerId + " center");
+            console.log("Error requesting data\n");
+            callbackfn(false);
+        }
+    });
+}
+
+function setTowerLimits(towerId, jointId, min, max, callbackfn) {
+    console.log("set tower " + towerId + " center");
+    $.ajax({
+        type: 'POST',
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerId) + "/joints/" + jointId + "/limits",
+        data: {'min': min,
+               'max': max },
+        success: function(data, status, req) {
+            checkTowerLimits(towerId, jointId, min, max, callbackfn);
+        },
+        error: function(data, status, req) {
+            displayError("Internal error " + status + " setting tower " + towerId + " limits");
+            console.log("Error requesting data\n");
+            callbackfn(false);
+        }
+    });
+}
+
+function checkTowerLimits(towerId, jointId, min, max, callbackfn) {
+    var checkLimitsTimeout = 0;
+    console.log("check tower limits " + towerId + ", joint " + jointId);
+    checkLimitsTimeout = setTimeout(function() {
+        displayError("Could not verify limits  on tower " + towerId + ", joint " + jointId);
+        callbackfn(false);
+    }, 500);
+    $.ajax({
+        type: 'GET',
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/joints/" + jointId + "/limits",
+
+        success: function(data, status, req) {
+            clearTimeout(checkLimitsTimeout);
+            var jointIdx = jointId - 1;
+            if (data[0]["min"] == min && data[0]["max"] == max) {
+                displaySuccess("Set limits on tower " + towerId + ", joint " + jointId + ", min: " + min + " max: " + max);
+                callbackfn(true);
+            } else {
+                displayError("Limits on tower " +  towerId + ", joint " + jointId + " not set correctly");
+                callbackfn(false);
+            }
+        },
+        error: function(data, status, req) {
+            console.log("Internal error " + status + " checking tower " + towerId + ", joint "  +  jointId + " limits");
+            // let the timeout handle displaying any errors
+        }
+    });
+}
+
+// force all joints to homed and set them running
+function setRunning(towerId, callbackfn) {
+    console.log("setting tower running");
+    $.ajax({
+        type: 'POST',
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/running",
+        data: {"running":true,
+               "homed": true 
+              },
+        success: function(data, status, req) {
+            checkRunning(towerId, callbackfn) 
+        },
+        error: function(data, status, req) {
+            console.log("Internal error " + status + " setting " + towerId + " running");
+            callbackfn(false);
+        }
+    });    
+}
+
+function checkRunning(towerId, callbackfn) {
+    var checkRunningTimeout = 0;
+    checkRunningTimeout = setTimeout(function() {
+        displayError("Could not verify run status on tower " + towerId);
+        callbackfn(false);  
+    }, 500);
+    $.ajax({
+        type: 'GET',
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId),
+        data: {"running":true,
+               "homed": true 
+              },
+        success: function(data, status, req) {
+            clearTimeout(checkRunningTimeout);
+            if (data[towerId]["running"] != true 
+               || (data["enabled"][0] && !data["homed"][0])
+               || (data["enabled"][1] && !data["homed"][1])
+               || (data["enabled"][2] && !data["homed"][2])) { 
+               displayError("Trouble setting tower " + towerId + " running. Run state is " 
+                + data["running"] + ", homed state is " + data["homed"] + ", enabled state is " 
+                + data["enabled"]);
+                callbackfn(false);
+            } else {
+                displaySuccess("Tower " + towerId + " ready");
+                callbackfn(true);
+            }
+        },
+        error: function(data, status, req) {
+            console.log("Internal error " + status + " setting " + towerId + " running");
+            // don't bother clearing the timeout - it will display a useful error soon if it hasn't 
+            // already.
+        }
+    });    
+}
+
+function clearError(towerId, callbackfn) {
+    $.ajax({
+        type: 'POST',
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/clearError",
+        success: function(data, status, req) {
+            checkError(towerId, callbackfn);
+            },
+        error: function(data, status, req) {
+            console.log("Internal error " + status + " clearing " + towerId + " error");
+            callbackfn(false);
+        }
+    });       
+}
+
+function checkError(towerId, callbackfn) {
+    var checkErrorTimeout = 0;
+    checkErrorTimeout = setTimeout(function() {
+        displayError("Could not verify run status on tower " + towerId);   
+        callbackfn(false); 
+    }, 500);
+    $.ajax({
+        type: 'GET',
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId),
+        success: function(data, status, req) {
+            clearTimeout(checkErrorTimeout);
+            if (data["error"] != 0) {
+                displayError("Error on tower " + towerId + " persists, currently " + data["error"]);
+                callbackfn(false);
+            }
+            callbackfn(true);
+        },
+        error: function(data, status, req) {
+            console.log("Internal error " + status + " checking " + towerId + " error");
+            // let timeout handle error display
+        }
+    });       
+}
+
+function getTowerByIdx(towerIdx){
+    console.log("Get tower by Idx!!\n");
+    if (towerIdx < 0 || towerIdx > 3) {
+        console.log("Bad input to get tower");
+        return;
+    }
+    
+    $.ajax({
+        type: 'GET',
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerIdx + 1),
+        success: function(data, status, req) {
+            towerResponseToTower(data[towerIdx+1], towerIdx);
+            renderTowerInfo(towerIdx)
+            /*
+            console.log(data);
+            $("#controller_x").html(data["control_x"]);
+            $("#controller_y").html(data["control_y"]);
+            $("#controller_z").html(data["control_z"]);
+
+            $("#sculpture_x").html(data["sculpture_x"]);
+            $("#sculpture_y").html(data["sculpture_y"]);
+            $("#sculpture_z").html(data["sculpture_z"]);
+
+            $("#manual_x").val(data["manual_x"]);
+            $("#manual_y").val(data["manual_y"]);
+            $("#manual_z").val(data["manual_z"]);*/
+            },
+        error: function(data, status, req) {
+            console.log("Error requesting data\n");
+        }
+    });
+    /*
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4) {  // transaction complete
+            if (xmlHttp.status == 200) {
+                console.log("success receiving information about tower " + (towerIdx+1));
+                var towerJson = JSON.parse(xmlHttp.responseText);
+                towerResponseToTower(towerJson, towerIdx);
+                renderTowerInfo(towerIdx)
+            } else {
+                console.log("Call to get info for tower " + towerIdx + "fails, error " + xmlHttp.status + " errorText " + xmlHttp.responseText);
+            }
+        } else {
+            console.log("ready state change\n");
+        }
+    }  
+    */  
+    console.log("Attempting to get tower!");
+//    xmlHttp.open("GET", CROWN_SCULPTURE_BASE  + "/towers/" + towerIdx, true); // true for asynchronous
+//    xmlHttp.open("GET", "localhost:5050"  + "/towers/" + towerIdx, true); // true for asynchronous
+}
+
 gTowers = [];
+maquetteMode = "off"  // should do a get first...
 function init() {
-    for (var i=0; i<4; i++) {
+    console.log("init called");
+    $('#enableT1').click(function() {
+        enableTower(1);
+    });
+    $('#enableT2').click(function() {
+        enableTower(2);
+    });
+    $('#enableT3').click(function() {
+        enableTower(3);
+    });
+    $('#enableT4').click(function() {
+        enableTower(4);
+    });
+
+    $('#centerM1').click(function() {
+        calibrateMaquetteTower(1);
+    });
+    $('#centerM2').click(function() {
+        calibrateMaquetteTower(2);
+    });
+    $('#centerM3').click(function() {
+        calibrateMaquetteTower(3);
+    });
+    $('#centerM4').click(function() {
+        calibrateMaquetteTower(4);
+    });
+    
+    $('#getMCalibration').click(function() {
+        getMaquetteCalibrationStatus();
+    });
+    $("#maquetteMode").change(function(){
+        var stateValue = $("#maquetteMode option:selected").val();
+        $.ajax({
+            type: 'POST',
+            url: CROWN_SCULPTURE_BASE  + "/maquette/mode/" + stateValue;
+            success: function(data, status, req) {
+                console.log("Changed maquette state to " + stateValue);
+                maquetteMode = stateValue;
+                },
+            error: function(data, status, req) {
+                $("#maquetteMode").val(maquetteMode);
+            }
+        });
+    });
+/*    for (var i=0; i<1; i++) {
         gTowers[i] = makeTower();
+        getTowerByIdx(i);
     }
-    XMLHttpRequest("GET", "/crown/sculpture");
+*/
 }
 
-function getSculptureHandler(towers) {  // obviously, this takes parameters...
-    for (var i=0; i<4; i++) {
-        renderTower(i, towers[i]);   
-    }
+function getMaquetteCalibrationStatus() {
+    $.ajax({
+        type: 'GET',
+        url: CROWN_MAQUETTE_BASE  + "/maquette/calibration;
+        success: function(data, status, req) {
+            if ((data[0] == 1) && (data[1] == 1) && (data[2] == 1) && (data[3] == 1)){
+                displayText("Maquette Calibrated", "STATUS: ");
+                console.log("Centered maquette tower " + towerId);
+            } else {
+                if (data[0] != 1) {
+                    displayText("Tower 1 not calibrated", "STATUS: ", );
+                }
+                if (data[1] != 1) {
+                    displayText("Tower 2 not calibrated", "STATUS: ", );
+                }
+                if (data[2] != 1) {
+                    displayText("Tower 3 not calibrated", "STATUS: ", );
+                }
+                if (data[3] != 1) {
+                    displayText("Tower 4 not calibrated", "STATUS: ", );
+                }
+            }
+        },
+        error: function(data, status, req) {
+            displayError("Problem getting maquette calibration status");
+        }
+    });
 }
 
-function renderTower(idx, tower) {
-    $["t" + idx + Status].running = (tower.running == true ? "Running": "Off");
-    .joint_enabled = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled;
-    .homing_status = "[" + tower.joints[0].homed + "," + tower.joints[1].homed + "," + tower.joints[2].homed;
-    .current_position = "[" + tower.joints[0].pos + "," + tower.joints[1].pos + "," + tower.joints[2].pos
-    .limts = // XXX - get for each joint
+function calibrateMaquetteTower(towerId) {
+    $.ajax({
+        type: 'POST',
+        url: CROWN_MAQUETTE_BASE  + "/maquette/towers/" + towerId + "/calibrate;
+        success: function(data, status, req) {
+            console.log("Centered maquette tower " + towerId);
+            },
+        error: function(data, status, req) {
+            $("#maquetteMode").val(maquetteMode);
+            console.log("Error centering maquette tower " + towerId);
+        }
+    });
+}
+
+
+function renderTowerInfo(idx) {
+    var tower = gTowers[idx];
+    $("#status" + idx).text(tower.running);
+    $("#t" + idx + "Status[name=error]").text(tower.error);
+    var jointEnabledText = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled + "]";
+    $("#t" + idx + "Status[name=joint_enabled]").text(jointEnabledText);
+    var homingStatusText =  "[" + tower.joints[0].homed + "," + tower.joints[1].homed + "," + tower.joints[2].homed + "]";
+    $("#t" + idx + "Status[name=homing_status]").text(homingStatusText);
+    var curPosText = "[" + tower.joints[0].pos + "," + tower.joints[1].pos + "," + tower.joints[2].pos + "]";
+    $("#t" + idx + "Status[name=current_position]").text(homingStatusText);
+    $("#t" + idx + "Status[name=j1min]").text(tower.joints[0].min);
+    $("#t" + idx + "Status[name=j1max]").text(tower.joints[0].max);
+    $("#t" + idx + "Status[name=j1center]").text(tower.joints[0].center);
+
+    $("#t" + idx + "Status[name=j2min]").text(tower.joints[1].min);
+    $("#t" + idx + "Status[name=j2max]").text(tower.joints[1].max);
+    $("#t" + idx + "Status[name=j2center]").text(tower.joints[1].center);
+
+    $("#t" + idx + "Status[name=j3min]").text(tower.joints[2].min);
+    $("#t" + idx + "Status[name=j3max]").text(tower.joints[2].max);
+    $("#t" + idx + "Status[name=j3center]").text(tower.joints[2].center);
+    
 }
 // onselect - send to change mode
 // XXX - target position would be nice to know as well. I'm not sure I pull that out anywhere
 
-function homeTower(tid, jid) {
-    // POST /crown/sculpture/tower/[tid]/joints/[jid]/home
+function homeTower(towerIdx, jointIdx) {
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4) {  // transaction complete
+            if (xmlHttp.status == 200 || xmlHttpStatus == 202) {
+                console.log("success requesting home of joint " + jointIdx + " on tower " + towerIdx);
+                listenForHomingStatus(towerIdx, jointIdx);
+            } else {
+                console.log("Call to home joint " + jointId + " on tower" + towerId + "fails, error " + xmlHttp.status + " errorText " + xmlHttp.responseText);
+            }
+        }
+    }    
+    xmlHttp.open("POST", CROWN_SCULPTURE_BASE  + "/towers/" + (towerIdx+1) 
+                                               + "/joints/" + (jointIdx+1) 
+                                               + "/home", true); // true for asynchronous
+    // POST /crown/sculpture/towers/[tid]/joints/[jid]/home
 }
+
+function listenForHomingStatus(towerIdx, jointIdx)
+{
+    // ping twice a second until we get a finished status
+    var homingTimer = setInterval(function(){
+        var xmlHttp = new XMLHttpRequest();
+        xmlHttp.onreadystatechange = function() {
+            if (xmlHttp.readyState == 4) {  // transaction complete
+                if (xmlHttp.status == 200) {
+                    console.log("success getting homing status of joint " + jointIdx + " on tower " + towerIdx);
+                    var homingStatus = JSON.parse(xmlHttp.responseText);
+                    if (homingStatus.status == "DONE") { // XXX is this right?
+                        clearInterval(homingTimer);
+                    }
+                    showHomingStatus(homingStatus);
+                } else {
+                    console.log("Call to home joint " + jointId + " on tower" + towerId + "fails, error " + xmlHttp.status + " errorText " + xmlHttp.responseText);
+                }
+            }
+        }
+    },500);
+     
+    xmlHttp.open("POST", CROWN_SCULPTURE_BASE  + "/towers/" + (towerIdx+1) 
+                                               + "/joints/" + (jointIdx+1), 
+                                               true); 
+}
+
+function showHomingStatus(homingStatus) {
+}
+
 
 function getHomingStatus(tid, jid) {
     // GET /crown/sculpture/tower/[id]/joints/[id]/homingStatus
@@ -85,29 +542,21 @@ function setHomeState(tid, tf) {
 function setPosition(tid, j1, j2, j3) {
     // PUT /crown/sculpture/tower/[tid]/position
 }
-// XXX cross site scripting accept in the main code
-</script>
-</head>
-<body>
-<div id="maquette">
-    Maquette Mode:
-    <select>
-        <option value="off" selected="selected">OFF</option>
-        <option value="pose">pose</option>
-        <option value="immediate" disabled>copy</option>
-        <option value="playback" disabled>playback</option>
-    </select>
-</div>
-<div id="sculpture">
-<div id="tower 1">
+
+$(document).ready(function() {
+    init();
+});
+
+/*
     <div id="t1Status">
-        Status: <br>
-        Running: <span id="running"></span><br>
-        Joint Enable: <span id="joint_enabled"></span><br>
-        Homing Status: <span id="homing_status"></span><br>
-        Current Position: <span id="current_position"></span><br>
-        PID Values: <span id="PID_values"></span><br>
-        Limits: <span id="limits"></span><br>
+        Status: <span id="status1"></span><br>
+        Error: <span id="error"></span><br>
+        Running: <span id="running1"></span><br>
+        Joint Enable: <span id="joint_enabled1"></span><br>
+        Homing Status: <span id="homing_status1"></span><br>
+        Current Position: <span name="current_position"></span><br>
+        PID Values: <span name="PID_values"></span><br>
+        Limits: <span name="limits"></span><br>
         <input type="button" value="Update Tower Status"><br>   
     </div>
     <div id="t1Control">
@@ -129,14 +578,7 @@ function setPosition(tid, j1, j2, j3) {
         J2:  min: <input type="text">, max: <input type="text">, center: <input type="text"> <input type="button" value="Set J1 Limits"><br>
         J3:  min: <input type="text">, max: <input type="text">, center: <input type="text"> <input type="button" value="Set J1 Limits"><br>
     </div>
+*/
 
-</div>
-<div id="tower 2">
-</div>
-<div id="tower 3">
-</div>
-<div id="tower 4">
-</div>
-</div>
-</body>
+</script>
 </html>

@@ -98,6 +98,7 @@ int main( void ){
   // set up UARTS
   UART0_Init(UART_38400);	// Debug Baud Rate (to computer)
   UART1_Init(UART_115200);	// Network Baud out to nodes
+//  UART1_Init(UART_76800);	// Network Baud out to nodes
   UART2_Init(UART_19200);	// LCD Baud Rate
 
   Timer0_Init();		/* Init Timer 0 for tick interrupt */
@@ -140,7 +141,7 @@ int main( void ){
     if (Timer0_flag_is_set()) {
 
     	// 10 Hz control loop
-    	if (ten_Hz_counter >= 100)
+    	if (ten_Hz_counter >= 50)
     	{
     		for (n=0;n<8;n++) knob[n] = (int32_t)ADC_read_low_pass(n);
     		uint8_t this_mode = mode_switch();

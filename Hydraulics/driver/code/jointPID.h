@@ -43,6 +43,7 @@ void Home_Joint(joint_control_block *j);
 uint8_t Joint_Servo_Task(joint_control_block *j);
 void Poll_Limit_Switches(void);
 void Dump_JCB(joint_control_block *j);
+void Neuter_Joint(joint_control_block *j);
 //int16_t limit(int16_t *v, int16_t minVal, int16_t maxVal);
 
 #define LEFT_SW (0x01) 			/* limit switch masks */
