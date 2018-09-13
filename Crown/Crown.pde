@@ -92,6 +92,7 @@ class ProcessingEngine extends Engine {
     Crown.this.automation = automation;
     Crown.this.automationStop = automationStop; 
     Crown.this.automationSlot = automationSlot;
+    System.out.println(" +++ PostCreate: effectKnobParameters is "+effectKnobParameters);
     Crown.this.effectKnobParameters = effectKnobParameters;
     Crown.this.previewChannels = previewChannels;
 

@@ -1,10 +1,10 @@
 final class Config {
 
-  static final boolean autoplayBMSet = true;
+  static final boolean autoplayBMSet = false;
 
   // One or the other not both for now at least... maybe it can handle it :-/ ? 
   static final boolean enableAPC40 = true;
-  static final boolean enableLaunchpad = false;
+  static final boolean enableLaunchpad = true;
 
   static final boolean enableOutputBigtree = true;
 

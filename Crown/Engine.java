@@ -10,6 +10,7 @@ import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ArrayDeque;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -23,6 +24,7 @@ import heronarts.lx.color.LXColor;
 import heronarts.lx.effect.BlurEffect;
 import heronarts.lx.effect.LXEffect;            
 import heronarts.lx.model.LXModel;
+import heronarts.lx.LXLoopTask;
 import heronarts.lx.output.FadecandyOutput;
 import heronarts.lx.output.LXDatagram;
 import heronarts.lx.output.LXDatagramOutput;
@@ -53,7 +55,9 @@ abstract class Engine {
   InterfaceController uiDeck;
   MidiEngine_APC midiEngine_APC;
   MidiEngine_LP midiEngine_LP;
-  TSDrumpad drumpad;
+  TSDrumpad drumpad_APC;
+  TSDrumpad drumpad_LP;
+  public MIDIEventTask midiEventTask; // transition between outside context and LX
   LXListenableNormalizedParameter[] effectKnobParameters;
   final BasicParameter dissolveTime = new BasicParameter("DSLV", 400, 50, 1000);
   final BasicParameter drumpadVelocity = new BasicParameter("DVEL", 1);
@@ -80,8 +84,12 @@ abstract class Engine {
   
     lx.engine.addParameter(drumpadVelocity);
 
-    if (Config.enableAPC40 || Config.enableLaunchpad ) {
-      drumpad = new TSDrumpad();
+    if (Config.enableAPC40) {
+      drumpad_APC = new TSDrumpad();
+    }
+
+    if (Config.enableLaunchpad ) {
+      drumpad_LP = new TSDrumpad();
     }
 
     // there is probably a better place for this, but I don't know where
@@ -95,9 +103,13 @@ abstract class Engine {
     configureBMPTool();
     configureAutomation();
 
-    if (drumpad != null) {
-      System.out.println(" setting drumpad triggerables ");
-      drumpad.triggerables = drumpadTriggerables;
+    if (drumpad_APC != null) {
+      System.out.println(" setting drumpad APC triggerables ");
+      drumpad_APC.triggerables = drumpadTriggerables_APC;
+    }
+    if (drumpad_LP != null) {
+      System.out.println(" setting drumpad LP triggerables ");
+      drumpad_LP.triggerables = drumpadTriggerables_LP;
     }
 
     // ordering: these create the 'drumpad' object if neccesary,
@@ -110,6 +122,11 @@ abstract class Engine {
     }
 
     lx.engine.addLoopTask(new ModelTransformTask(model));
+
+    if (drumpad_LP != null) {
+      midiEventTask = new MIDIEventTask(drumpad_LP);
+      lx.engine.addLoopTask(midiEventTask);
+    }
 
     if (Config.enableOutputBigtree) {
       System.out.println("NDB output enabled");
@@ -140,80 +157,6 @@ abstract class Engine {
   abstract LX createLX();
 
   void postCreateLX() { }
-
-  // void registerIPadPatterns() {
-  //   registerPatternController("None", new NoPattern(lx));
-  //   registerPatternController("Twister", new Twister(lx));
-  //   registerPatternController("Lottor", new MarkLottor(lx));
-  //   registerPatternController("Ripple", new Ripple(lx));
-  //   registerPatternController("Stripes", new Stripes(lx));
-  //   registerPatternController("Lattice", new Lattice(lx));
-  //   registerPatternController("Fumes", new Fumes(lx));
-  //   registerPatternController("Voronoi", new Voronoi(lx));
-  //   registerPatternController("Candy Cloud", new CandyCloud(lx));
-  //   // registerPatternController("Galaxy Cloud", new GalaxyCloud(lx));
-
-  //   registerPatternController("Color Strobe", new ColorStrobe(lx));
-  //   registerPatternController("Strobe", new Strobe(lx));
-  //   registerPatternController("Sparkle Takeover", new SparkleTakeOver(lx));
-  //   registerPatternController("Multi-Sine", new MultiSine(lx));
-  //   registerPatternController("Seesaw", new SeeSaw(lx));
-  //   registerPatternController("Cells", new Cells(lx));
-  //   registerPatternController("Fade", new Fade(lx));
-    
-  //   registerPatternController("Ice Crystals", new IceCrystals(lx));
-  //   registerPatternController("Fire", new Fire(lx));
-
-  //   registerPatternController("Acid Trip", new AcidTrip(lx));
-  //   registerPatternController("Rain", new Rain(lx));
-  //   registerPatternController("Bass Slam", new BassSlam(lx));
-
-  //   registerPatternController("Fireflies", new Fireflies(lx));
-  //   registerPatternController("Bubbles", new Bubbles(lx));
-  //   registerPatternController("Lightning", new Lightning(lx));
-  //   registerPatternController("Wisps", new Wisps(lx));
-  //   registerPatternController("Fireworks", new Explosions(lx));
-    
-  // }
-
-  // void registerIPadEffects() {
-  //   ColorEffect colorEffect = new ColorEffect2(lx);
-  //   ColorStrobeTextureEffect colorStrobeTextureEffect = new ColorStrobeTextureEffect(lx);
-  //   FadeTextureEffect fadeTextureEffect = new FadeTextureEffect(lx);
-  //   AcidTripTextureEffect acidTripTextureEffect = new AcidTripTextureEffect(lx);
-  //   CandyTextureEffect candyTextureEffect = new CandyTextureEffect(lx);
-  //   CandyCloudTextureEffect candyCloudTextureEffect = new CandyCloudTextureEffect(lx);
-  //   // GhostEffect ghostEffect = new GhostEffect(lx);
-  //   // RotationEffect rotationEffect = new RotationEffect(lx);
-
-  //   SpeedEffect speedEffect = engineController.speedEffect = new SpeedEffect(lx);
-  //   SpinEffect spinEffect = engineController.spinEffect = new SpinEffect(lx);
-  //   BlurEffect blurEffect = engineController.blurEffect = new TSBlurEffect2(lx);
-  //   ScrambleEffect scrambleEffect = engineController.scrambleEffect = new ScrambleEffect(lx);
-  //   // StaticEffect staticEffect = engineController.staticEffect = new StaticEffect(lx);
-  //   engineController.masterBrightnessEffect = masterBrightnessEffect;
-
-  //   lx.addEffect(blurEffect);
-  //   lx.addEffect(colorEffect);
-  //   // lx.addEffect(staticEffect);
-  //   lx.addEffect(spinEffect);
-  //   lx.addEffect(speedEffect);
-  //   lx.addEffect(colorStrobeTextureEffect);
-  //   lx.addEffect(fadeTextureEffect);
-  //   // lx.addEffect(acidTripTextureEffect);
-  //   lx.addEffect(candyTextureEffect);
-  //   lx.addEffect(candyCloudTextureEffect);
-  //   // lx.addEffect(ghostEffect);
-  //   lx.addEffect(scrambleEffect);
-  //   // lx.addEffect(rotationEffect);
-
-  //   registerEffectController("Rainbow", candyCloudTextureEffect, candyCloudTextureEffect.amount);
-  //   registerEffectController("Candy Chaos", candyTextureEffect, candyTextureEffect.amount);
-  //   registerEffectController("Color Strobe", colorStrobeTextureEffect, colorStrobeTextureEffect.amount);
-  //   registerEffectController("Fade", fadeTextureEffect, fadeTextureEffect.amount);
-  //   registerEffectController("Monochrome", colorEffect, colorEffect.mono);
-  //   registerEffectController("White", colorEffect, colorEffect.desaturation);
-  // }
 
   void addPatterns(ArrayList<LXPattern> patterns) {
     // Add patterns here.
@@ -283,7 +226,6 @@ abstract class Engine {
     // The 2rd parameter is which row of the drumpad to add it to.
     // defaults to the 3rd row
     // the row parameter is zero indexed
-
     registerPattern(new Twister(lx));
     registerPattern(new MarkLottor(lx));
     registerPattern(new Ripple(lx));
@@ -316,6 +258,163 @@ abstract class Engine {
     registerPattern(new Wisps(lx, 3, 210, 10, 270, 0, 3.5, 10)); // rain storm of wisps
     registerPattern(new Wisps(lx, 35, 210, 180, 180, 15, 2, 15)); // twister of wisps
   }
+
+  // This subsumes the old "PatternTriggerables" and the old "OneShot"
+  void registerPatternTriggerables_LP() {
+
+    ArrayList<Triggerable>[] pad = drumpadTriggerablesLists_LP;
+    // The 2rd parameter is which row of the drumpad to add it to.
+    // defaults to the 3rd row
+    // the row parameter is zero indexed
+
+    // for initial attempt, put every element to 
+    // same really visual output
+
+
+    // first row - random strobe color?  
+    for (int i=0;i<drumpadColumns_LP;i++) {
+      registerVisualDrumpad(new ColorStrobe(lx), pad[0]);
+    }
+
+    // Second row - particular color strobe
+    registerVisualDrumpad(new ColorStrobeColor(lx,0 * 40), pad[1]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,1 * 40), pad[1]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,2 * 40), pad[1]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,3 * 40), pad[1]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[1]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[1]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[1]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[1]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[1]);
+
+    // third row --- these don't really have effects, seems like they make a pattern current???
+    //registerVisualDrumpad(new Twister(lx), pad[2]);
+    //registerVisualDrumpad(new SeeSaw(lx), pad[2]);
+    //registerVisualDrumpad(new MarkLottor(lx),pad[2]);
+    //registerVisualDrumpad(new Ripple(lx),pad[2]);
+    //registerVisualDrumpad(new Stripes(lx),pad[2]);
+    //registerVisualDrumpad(new Lattice(lx),pad[2]);
+    //registerVisualDrumpad(new Fumes(lx),pad[2]);
+    //registerVisualDrumpad(new Voronoi(lx),pad[2]);
+    //registerVisualDrumpad(new CandyCloud(lx),pad[2]);
+    //registerVisualDrumpad(new GalaxyCloud(lx),pad[2]);
+    registerVisualDrumpad(new Pulleys(lx), pad[2]);
+    registerVisualDrumpad(new StrobeOneshot(lx), pad[2]);
+    registerVisualDrumpad(new BassSlam(lx), pad[2]);
+    registerVisualDrumpad(new Fireflies(lx, 70, 6, 180), pad[2]);
+    registerVisualDrumpad(new Fireflies(lx, 40, 7.5f, 90), pad[2]);
+    registerVisualDrumpad(new Pulleys(lx), pad[2]);
+    registerVisualDrumpad(new StrobeOneshot(lx), pad[2]);
+    registerVisualDrumpad(new BassSlam(lx), pad[2]);
+    registerVisualDrumpad(new Fireflies(lx), pad[2]);
+    
+    // fourth row
+    registerVisualDrumpad(new Explosions(lx, 20),  pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,0 * 40), pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,1 * 40), pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,2 * 40), pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,3 * 40), pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[3]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[3]);
+    //registerVisualDrumpad(new Explosions(lx, 20),  pad[3]);
+    //registerVisualDrumpad(new Strobe(lx),  pad[3]);
+    //registerVisualDrumpad(new Wisps(lx, 1, 60, 50, 270, 20, 3.5, 10),pad[3]); // downward yellow wisp
+    //registerVisualDrumpad(new Wisps(lx, 30, 210, 100, 90, 20, 3.5, 10),pad[3]); // colorful wisp storm
+    //registerVisualDrumpad(new Wisps(lx, 1, 210, 100, 90, 130, 3.5, 10),pad[3]); // multidirection colorful wisps
+    //registerVisualDrumpad(new Wisps(lx, 3, 210, 10, 270, 0, 3.5, 10),pad[3]); // rain storm of wisps
+    //registerVisualDrumpad(new Wisps(lx, 35, 210, 180, 180, 15, 2, 15),pad[3]); // twister of wisps
+    //registerVisualDrumpad(new IceCrystals(lx), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[3]);
+    //registerVisualDrumpad(new Rain(lx),pad[3]);
+    //registerVisualDrumpad(new SparkleTakeOver(lx), pad[3]);
+    //registerVisualDrumpad(new MultiSine(lx), pad[3]);
+    //registerVisualDrumpad(new SeeSaw(lx), pad[3]);
+    //registerVisualDrumpad(new Cells(lx), pad[3]);
+    //registerVisualDrumpad(new Fade(lx), pad[3]);
+    //registerVisualDrumpad(new Pixels(lx), pad[3]);
+
+    // 5th row
+    registerVisualDrumpad(new Pulleys(lx), pad[4]);
+    registerVisualDrumpad(new StrobeOneshot(lx), pad[4]);
+    registerVisualDrumpad(new BassSlam(lx), pad[4]);
+    registerVisualDrumpad(new Fireflies(lx, 70, 6, 180), pad[4]);
+    registerVisualDrumpad(new Fireflies(lx, 40, 7.5f, 90), pad[4]);
+    registerVisualDrumpad(new Pulleys(lx), pad[4]);
+    registerVisualDrumpad(new StrobeOneshot(lx), pad[4]);
+    registerVisualDrumpad(new BassSlam(lx), pad[4]);
+    registerVisualDrumpad(new Fireflies(lx), pad[4]);
+    //registerVisualDrumpad(new Explosions(lx), pad[4]);
+
+    // 6th row
+    //registerVisualDrumpad(new Fireflies(lx), pad[5]);
+    //registerVisualDrumpad(new Bubbles(lx), pad[5]);
+    //registerVisualDrumpad(new Lightning(lx), pad[5]);
+    //registerVisualDrumpad(new Wisps(lx), pad[5]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,0 * 40), pad[5]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,1 * 40), pad[5]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,2 * 40), pad[5]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,3 * 40), pad[5]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[5]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[5]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[5]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[5]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[5]);
+    registerVisualDrumpad(new Explosions(lx), pad[5]);
+    
+    // 7th row
+    registerVisualDrumpad(new Fireflies(lx), pad[6]);
+    registerVisualDrumpad(new Bubbles(lx), pad[6]);
+    registerVisualDrumpad(new Lightning(lx), pad[6]);
+    //registerVisualDrumpad(new IceCrystals(lx), pad[6]);
+    registerVisualDrumpad(new Fire(lx), pad[6]); // Make red
+    //registerVisualDrumpad(new AcidTrip(lx),pad[6]);
+    registerVisualDrumpad(new Rain(lx),pad[6]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,0 * 40), pad[6]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,1 * 40), pad[6]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,2 * 40), pad[6]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[6]);
+
+    // 8th row
+    //registerVisualDrumpad(new Wisps(lx, 1, 60, 50, 270, 20, 3.5, 10),pad[7]); // downward yellow wisp
+    //registerVisualDrumpad(new Wisps(lx, 30, 210, 100, 90, 20, 3.5, 10),pad[7]); // colorful wisp storm
+    //registerVisualDrumpad(new Wisps(lx, 1, 210, 100, 90, 130, 3.5, 10),pad[7]); // multidirection colorful wisps
+    //registerVisualDrumpad(new Wisps(lx, 3, 210, 10, 270, 0, 3.5, 10),pad[7]); // rain storm of wisps
+    //registerVisualDrumpad(new Wisps(lx, 35, 210, 180, 180, 15, 2, 15),pad[7]); // twister of wisps
+    registerVisualDrumpad(new Fireflies(lx), pad[7]);
+    registerVisualDrumpad(new Bubbles(lx), pad[7]);
+    registerVisualDrumpad(new Lightning(lx), pad[7]);
+    registerVisualDrumpad(new Pulleys(lx), pad[7]);
+    registerVisualDrumpad(new StrobeOneshot(lx), pad[7]);
+    registerVisualDrumpad(new IceCrystals(lx), pad[7]);
+    registerVisualDrumpad(new Fire(lx), pad[7]); // Make red
+    registerVisualDrumpad(new Pulleys(lx), pad[7]);
+    registerVisualDrumpad(new BassSlam(lx), pad[7]);
+
+
+    // 9th row
+    //registerVisualDrumpad(new Wisps(lx, 1, 60, 50, 270, 20, 3.5, 10),pad[8]); // downward yellow wisp
+    //registerVisualDrumpad(new Wisps(lx, 30, 210, 100, 90, 20, 3.5, 10),pad[8]); // colorful wisp storm
+    //registerVisualDrumpad(new Wisps(lx, 1, 210, 100, 90, 130, 3.5, 10),pad[8]); // multidirection colorful wisps
+    //registerVisualDrumpad(new Wisps(lx, 3, 210, 10, 270, 0, 3.5, 10),pad[8]); // rain storm of wisps
+    //registerVisualDrumpad(new Wisps(lx, 35, 210, 180, 180, 15, 2, 15),pad[8]); // twister of wisps
+    registerVisualDrumpad(new Pulleys(lx), pad[8]);
+    registerVisualDrumpad(new StrobeOneshot(lx), pad[8]);
+    registerVisualDrumpad(new BassSlam(lx), pad[8]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[8]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[8]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[8]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[8]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[8]);
+    registerVisualDrumpad(new ColorStrobeColor(lx,3 * 40), pad[8]);
+  }
+
 
   void registerOneShotTriggerables() {
     registerOneShot(new Pulleys(lx));
@@ -525,10 +624,17 @@ abstract class Engine {
 
     Triggerable triggerable = configurePatternAsTriggerable(pattern);
     BooleanParameter toggle = null;
-    if (drumpad != null) {
-      //toggle = drumpadTriggerablesLists[drumpadRow].size() < 9 ? nfcToggles[drumpadRow][drumpadTriggerablesLists[drumpadRow].size()] : null;
-      drumpadTriggerablesLists[drumpadRow].add(triggerable);
+    if (drumpad_APC != null) {
+      drumpadTriggerablesLists_APC[drumpadRow].add(triggerable);
     }
+  }
+
+  void registerVisualDrumpad(TSPattern pattern, ArrayList<Triggerable> drumpadRow) {
+    LXTransition t = new DissolveTransition(lx).setDuration(dissolveTime);
+    pattern.setTransition(t);
+
+    Triggerable triggerable = configurePatternAsTriggerable(pattern);
+    drumpadRow.add(triggerable);
   }
 
   Triggerable configurePatternAsTriggerable(TSPattern pattern) {
@@ -548,16 +654,16 @@ abstract class Engine {
 
   /* configureEffects */
 
-  void registerEffect(LXEffect effect, String nfcSerialNumber) {
-    if (effect instanceof Triggerable) {
-      Triggerable triggerable = (Triggerable)effect;
-      BooleanParameter toggle = null;
-      if (drumpad != null) {
-//        toggle = drumpadTriggerablesLists[0].size() < 9 ? nfcToggles[0][drumpadTriggerablesLists[0].size()] : null;
-        drumpadTriggerablesLists[0].add(triggerable);
-      }
-    }
-  }
+//   void registerEffect(LXEffect effect, String nfcSerialNumber) {
+//     if (effect instanceof Triggerable) {
+//       Triggerable triggerable = (Triggerable)effect;
+//       BooleanParameter toggle = null;
+//       if (drumpad != null) {
+// //        toggle = drumpadTriggerablesLists[0].size() < 9 ? nfcToggles[0][drumpadTriggerablesLists[0].size()] : null;
+//         drumpadTriggerablesLists[0].add(triggerable);
+//       }
+//     }
+//   }
 
   void registerEffectControlParameter(LXListenableNormalizedParameter parameter) {
     registerEffectControlParameter(parameter, 0, 1, 0);
@@ -574,9 +680,8 @@ abstract class Engine {
   void registerEffectControlParameter(LXListenableNormalizedParameter parameter, double offValue, double onValue, int row) {
     ParameterTriggerableAdapter triggerable = new ParameterTriggerableAdapter(lx, parameter, offValue, onValue);
     BooleanParameter toggle = null;
-    if (drumpad != null) {
-//      toggle = drumpadTriggerablesLists[row].size() < 9 ? nfcToggles[row][drumpadTriggerablesLists[row].size()] : null;
-      drumpadTriggerablesLists[row].add(triggerable);
+    if (drumpad_APC != null) {
+      drumpadTriggerablesLists_APC[row].add(triggerable);
     }
   }
 
@@ -646,33 +751,58 @@ abstract class Engine {
 
   /* configureTriggerables */
   
-  ArrayList<Triggerable>[] drumpadTriggerablesLists;
-  Triggerable[][] drumpadTriggerables;
+  ArrayList<Triggerable>[] drumpadTriggerablesLists_APC;
+  Triggerable[][] drumpadTriggerables_APC;
+  static final int drumpadRows_APC = 6;
+
+    // The launchpad is a 9x9 pad.
+    // There are some interactive elements which are "buttons" and some which are "notes" but we'll
+    // deal with that in the MIDI_LP file.... consider this 9x9
+  ArrayList<Triggerable>[] drumpadTriggerablesLists_LP;
+  Triggerable[][] drumpadTriggerables_LP;
+  static final int drumpadRows_LP = 9;
+  static final int drumpadColumns_LP = 9; // this is kinda dumb
 
   @SuppressWarnings("unchecked")
   void configureTriggerables() {
-    if (drumpad != null) {
-      drumpadTriggerablesLists = new ArrayList[] {
-        new ArrayList<Triggerable>(),
-        new ArrayList<Triggerable>(),
-        new ArrayList<Triggerable>(),
-        new ArrayList<Triggerable>(),
-        new ArrayList<Triggerable>(),
-        new ArrayList<Triggerable>()
-      };
+    if (drumpad_APC != null) {
+        drumpadTriggerablesLists_APC = new ArrayList[drumpadRows_APC];
+        for (int i=0; i < drumpadRows_APC; i++) {
+          drumpadTriggerablesLists_APC[ i ] = new ArrayList<Triggerable>();
+        }
     }
 
+    if (drumpad_LP != null) {
+        drumpadTriggerablesLists_LP = new ArrayList[drumpadRows_LP];
+        for (int i=0; i < drumpadRows_LP; i++) {
+          drumpadTriggerablesLists_LP[ i ] = new ArrayList<Triggerable>();
+        }
+    }
+
+    // These do the APC40
     registerPatternTriggerables();
     registerOneShotTriggerables();
     registerEffectTriggerables();
 
-    if (drumpad != null) {
-      drumpadTriggerables = new Triggerable[drumpadTriggerablesLists.length][];
-      for (int i = 0; i < drumpadTriggerablesLists.length; i++) {
-        ArrayList<Triggerable> triggerablesList= drumpadTriggerablesLists[i];
-        drumpadTriggerables[i] = triggerablesList.toArray(new Triggerable[triggerablesList.size()]);
+    // These do the Launchpad
+    registerPatternTriggerables_LP();
+
+    if (drumpad_APC != null) {
+      drumpadTriggerables_APC = new Triggerable[drumpadTriggerablesLists_APC.length][];
+      for (int i = 0; i < drumpadTriggerablesLists_APC.length; i++) {
+        ArrayList<Triggerable> triggerablesList_APC= drumpadTriggerablesLists_APC[i];
+        drumpadTriggerables_APC[i] = triggerablesList_APC.toArray(new Triggerable[triggerablesList_APC.size()]);
       }
-      drumpadTriggerablesLists = null;
+      drumpadTriggerablesLists_APC = null;
+    }
+
+    if (drumpad_LP != null) {
+      drumpadTriggerables_LP = new Triggerable[drumpadTriggerablesLists_LP.length][];
+      for (int i = 0; i < drumpadTriggerablesLists_LP.length; i++) {
+        ArrayList<Triggerable> triggerablesList_LP = drumpadTriggerablesLists_LP[i];
+        drumpadTriggerables_LP[i] = triggerablesList_LP.toArray(new Triggerable[triggerablesList_LP.size()]);
+      }
+      drumpadTriggerablesLists_LP = null;
     }
   }
 
@@ -681,7 +811,7 @@ abstract class Engine {
   void configureMIDI_APC40() {
 
     // MIDI control
-    midiEngine_APC = new MidiEngine_APC(lx, effectKnobParameters, drumpad, drumpadVelocity, 
+    midiEngine_APC = new MidiEngine_APC(lx, effectKnobParameters, drumpad_APC, drumpadVelocity, 
       previewChannels, bpmTool, uiDeck, outputBrightness, 
       automationSlot, automation, automationStop);
   }
@@ -689,9 +819,10 @@ abstract class Engine {
   void configureMIDI_Launchpad() {
 
     // MIDI control
-    midiEngine_LP = new MidiEngine_LP(lx, effectKnobParameters, drumpad, drumpadVelocity, 
+    midiEngine_LP = new MidiEngine_LP(lx, this, effectKnobParameters, drumpadVelocity, 
       previewChannels, bpmTool, uiDeck, outputBrightness, 
       automationSlot, automation, automationStop);
+
   }
 
   /* configureExternalOutput */
@@ -891,6 +1022,63 @@ class CrownTransition extends LXTransition {
     }
   }
 }
+
+//
+// We find some midi events are comming in on non-LX threads and thus
+// causing threading hazards. We need to transition over to 
+// LX using a LXLoopTask, which will read from the queue
+
+class MIDIEventTask implements LXLoopTask {
+
+  static class MIDIEvent {
+
+    // Should use an Enum but I'm in a hurry and don't remember how
+    // 1 == onPressed 2 == onReleased
+    public int type;
+    public int x;
+    public int y;
+    public float velocity;
+    public long timestamp;
+
+    MIDIEvent(int type, int x, int y, float velocity, long timestamp) {
+      this.type = type;
+      this.x = x;
+      this.y = y;
+      this.velocity = velocity;
+      this.timestamp = timestamp;
+    }
+
+  };
+
+  ArrayDeque< MIDIEvent > q;
+
+  Drumpad drumpad;
+
+  MIDIEventTask(Drumpad drumpad) {
+    this.drumpad = drumpad;
+    this.q = new ArrayDeque<MIDIEvent>();
+  }
+
+  public void add( MIDIEvent e ) {
+    q.addLast(e);
+  }
+
+  public void loop(double deltaMs) {
+    MIDIEvent e = q.pollFirst();
+    if (e == null) return;
+
+    if (e.type == 1) {
+      drumpad.padTriggered(e.x, e.y, e.velocity );
+    }
+    else if (e.type == 2) { // released 
+      drumpad.padReleased(e.x, e.y);
+    }
+    else {
+      System.out.println( " receved event with unknown type   "+e.type);
+    }
+  }
+}
+
 
 class TSAutomationRecorder extends LXAutomationRecorder {
 
