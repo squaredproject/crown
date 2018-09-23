@@ -209,7 +209,7 @@ class Fire extends TSTriggerablePattern {
   final BasicParameter maxHeight = new BasicParameter("HEIGHT", 0.8, 0.3, 1);
   final BasicParameter flameSize = new BasicParameter("SIZE", 30, 10, 75);  
   final BasicParameter flameCount = new BasicParameter ("FLAMES", 75, 0, 75);
-  final BasicParameter hue = new BasicParameter("HUE", 0, 0, 360);
+  final BasicParameter  hue = new BasicParameter("HUE", 0, 0, 360);
   private LinearEnvelope fireHeight = new LinearEnvelope(0,0,500);
 
   private float height = 0;
@@ -251,6 +251,26 @@ class Fire extends TSTriggerablePattern {
     for (int i = 0; i < numFlames; ++i) {
       flames.add(new Flame(height, false));
     }
+  }
+
+  // Todo: call the smaller constructor instead of copy-paste
+  Fire(LX lx, float hueStatic) {
+    super(lx);
+
+    patternMode = PATTERN_MODE_FIRED;
+
+    addParameter(maxHeight);
+    addParameter(flameSize);
+    addParameter(flameCount);
+    addParameter(hue);
+    addModulator(fireHeight);
+
+    flames = new ArrayList<Flame>(numFlames);
+    for (int i = 0; i < numFlames; ++i) {
+      flames.add(new Flame(height, false));
+    }
+
+    hue.setValue(hueStatic);
   }
 
   public void updateNumFlames(int numFlames) {

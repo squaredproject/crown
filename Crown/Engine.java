@@ -310,29 +310,31 @@ abstract class Engine {
     
     // fourth row
     registerVisualDrumpad(new Explosions(lx, 20),  pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,0 * 40), pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,1 * 40), pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,2 * 40), pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,3 * 40), pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[3]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[3]);
-    //registerVisualDrumpad(new Explosions(lx, 20),  pad[3]);
-    //registerVisualDrumpad(new Strobe(lx),  pad[3]);
-    //registerVisualDrumpad(new Wisps(lx, 1, 60, 50, 270, 20, 3.5, 10),pad[3]); // downward yellow wisp
-    //registerVisualDrumpad(new Wisps(lx, 30, 210, 100, 90, 20, 3.5, 10),pad[3]); // colorful wisp storm
-    //registerVisualDrumpad(new Wisps(lx, 1, 210, 100, 90, 130, 3.5, 10),pad[3]); // multidirection colorful wisps
-    //registerVisualDrumpad(new Wisps(lx, 3, 210, 10, 270, 0, 3.5, 10),pad[3]); // rain storm of wisps
-    //registerVisualDrumpad(new Wisps(lx, 35, 210, 180, 180, 15, 2, 15),pad[3]); // twister of wisps
-    //registerVisualDrumpad(new IceCrystals(lx), pad[3]);
+    registerVisualDrumpad(new Strobe(lx),  pad[3]);
+    registerVisualDrumpad(new Wisps(lx, 1, 60, 50, 270, 20, 3.5, 10),pad[3]); // downward yellow wisp
+    registerVisualDrumpad(new Wisps(lx, 30, 210, 100, 90, 20, 3.5, 10),pad[3]); // colorful wisp storm
+    registerVisualDrumpad(new Wisps(lx, 1, 210, 100, 90, 130, 3.5, 10),pad[3]); // multidirection colorful wisps
+    registerVisualDrumpad(new Wisps(lx, 3, 210, 10, 270, 0, 3.5, 10),pad[3]); // rain storm of wisps
+    registerVisualDrumpad(new Wisps(lx, 35, 210, 180, 180, 15, 2, 15),pad[3]); // twister of wisps
+    registerVisualDrumpad(new IceCrystals(lx), pad[3]);
+    registerVisualDrumpad(new Rain(lx),pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,0 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,1 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,2 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,3 * 40), pad[3]);
     //registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[3]);
     //registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[3]);
     //registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[3]);
     //registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[3]);
     //registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[3]);
-    //registerVisualDrumpad(new Rain(lx),pad[3]);
+    //registerVisualDrumpad(new Explosions(lx, 20),  pad[3]);
+
+    //registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[3]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[3]);
+   
     //registerVisualDrumpad(new SparkleTakeOver(lx), pad[3]);
     //registerVisualDrumpad(new MultiSine(lx), pad[3]);
     //registerVisualDrumpad(new SeeSaw(lx), pad[3]);
@@ -346,11 +348,11 @@ abstract class Engine {
     registerVisualDrumpad(new BassSlam(lx), pad[4]);
     registerVisualDrumpad(new Fireflies(lx, 70, 6, 180), pad[4]);
     registerVisualDrumpad(new Fireflies(lx, 40, 7.5f, 90), pad[4]);
-    registerVisualDrumpad(new Pulleys(lx), pad[4]);
     registerVisualDrumpad(new StrobeOneshot(lx), pad[4]);
     registerVisualDrumpad(new BassSlam(lx), pad[4]);
     registerVisualDrumpad(new Fireflies(lx), pad[4]);
-    //registerVisualDrumpad(new Explosions(lx), pad[4]);
+    registerVisualDrumpad(new Explosions(lx), pad[4]);
+    //registerVisualDrumpad(new Pulleys(lx), pad[4]);
 
     // 6th row
     //registerVisualDrumpad(new Fireflies(lx), pad[5]);
@@ -399,20 +401,21 @@ abstract class Engine {
 
 
     // 9th row
-    //registerVisualDrumpad(new Wisps(lx, 1, 60, 50, 270, 20, 3.5, 10),pad[8]); // downward yellow wisp
-    //registerVisualDrumpad(new Wisps(lx, 30, 210, 100, 90, 20, 3.5, 10),pad[8]); // colorful wisp storm
-    //registerVisualDrumpad(new Wisps(lx, 1, 210, 100, 90, 130, 3.5, 10),pad[8]); // multidirection colorful wisps
-    //registerVisualDrumpad(new Wisps(lx, 3, 210, 10, 270, 0, 3.5, 10),pad[8]); // rain storm of wisps
-    //registerVisualDrumpad(new Wisps(lx, 35, 210, 180, 180, 15, 2, 15),pad[8]); // twister of wisps
+    registerVisualDrumpad(new Wisps(lx, 1, 60, 50, 270, 20, 3.5, 10),pad[8]); // downward yellow wisp
+    registerVisualDrumpad(new Wisps(lx, 30, 210, 100, 90, 20, 3.5, 10),pad[8]); // colorful wisp storm
+    registerVisualDrumpad(new Wisps(lx, 1, 210, 100, 90, 130, 3.5, 10),pad[8]); // multidirection colorful wisps
+    registerVisualDrumpad(new Wisps(lx, 3, 210, 10, 270, 0, 3.5, 10),pad[8]); // rain storm of wisps
+    registerVisualDrumpad(new Wisps(lx, 35, 210, 180, 180, 15, 2, 15),pad[8]); // twister of wisps
     registerVisualDrumpad(new Pulleys(lx), pad[8]);
     registerVisualDrumpad(new StrobeOneshot(lx), pad[8]);
     registerVisualDrumpad(new BassSlam(lx), pad[8]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[8]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[8]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[8]);
     registerVisualDrumpad(new ColorStrobeColor(lx,8 * 40), pad[8]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[8]);
-    registerVisualDrumpad(new ColorStrobeColor(lx,3 * 40), pad[8]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,5 * 40), pad[8]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,6 * 40), pad[8]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,7 * 40), pad[8]);
+    
+    //registerVisualDrumpad(new ColorStrobeColor(lx,4 * 40), pad[8]);
+    //registerVisualDrumpad(new ColorStrobeColor(lx,3 * 40), pad[8]);
   }
 
 
@@ -785,7 +788,9 @@ abstract class Engine {
     registerEffectTriggerables();
 
     // These do the Launchpad
-    registerPatternTriggerables_LP();
+    if (drumpad_LP != null) {
+        registerPatternTriggerables_LP();
+    }
 
     if (drumpad_APC != null) {
       drumpadTriggerables_APC = new Triggerable[drumpadTriggerablesLists_APC.length][];

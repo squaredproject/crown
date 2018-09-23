@@ -65,7 +65,8 @@ class MidiEngine_LP {
     public void onPadPressed(Pad pad, long timestamp) {
       int x = pad.getX();
       int y = pad.getY();        
-        client.setPadLight(pad, Color.YELLOW, BackBufferOperation.NONE);
+        client.setPadLight(pad, Color.RED, BackBufferOperation.NONE);
+        ///change colour by Laura 
 
         if (engine.midiEventTask != null) {
           MIDIEventTask.MIDIEvent e = new MIDIEventTask.MIDIEvent(1, y+1, x, drumpadVelocity.getValuef(), timestamp);
@@ -80,7 +81,7 @@ class MidiEngine_LP {
     public void onPadReleased(Pad pad, long timestamp) {
       int x = pad.getX();
       int y = pad.getY();
-      client.setPadLight(pad, Color.BLACK, BackBufferOperation.NONE);
+      client.setPadLight(pad, Color.YELLOW, BackBufferOperation.NONE);
 
       if (engine.midiEventTask!= null) {
         MIDIEventTask.MIDIEvent e = new MIDIEventTask.MIDIEvent(2,  y+1, x, drumpadVelocity.getValuef(), timestamp);
@@ -134,6 +135,7 @@ class MidiEngine_LP {
       }
 
       client.setButtonLight(button, Color.BLACK, BackBufferOperation.NONE);
+      //change colour by Laura
     }
 
 
