@@ -22,6 +22,17 @@ out now ( well, we tried, and couldn't figure it out :-) ).
 
 Such as: ARM - SAVE, that crashes.
 
+## Running headless on a pi
+
+- Install java in /opt/java. Easy thing to do is download the ARM32 package, decompress, copy over to /opt/java.
+- Add java to your path
+- Execute 'compile.sh' to make the class files
+- Copy `crown.service` to `/etc/systemd/service`
+- use systemctl. sudo systemctl start crown.service
+- sudo systemctl stop, sudo systemctl enable
+- to see the logs, use `journalctl crown.service`
+- Ins
+
 ## LED Map
 
 The IP addresses of the NDBs are set in data/crown_clusters.json. There are only 5, and they each have their

@@ -36,11 +36,11 @@ import javax.sound.midi.MidiUnavailableException;
 class MidiEngine_LP {
 
   private final LX lx;
+  private final Engine engine;
   private final DiscreteParameter automationSlot;
   private final LXAutomationRecorder[] automation;
   private final BooleanParameter[] automationStop;
 
-  final TSDrumpad drumpad;
   final BasicParameter drumpadVelocity;
 
   private Launchpad launchpad;
@@ -55,14 +55,25 @@ class MidiEngine_LP {
       this.client = client;
     }
 
+    // NOTE:
+    // Going to trigger on a 9x9 array,
+    // so map the top buttons to row 1, and the side buttons to column 9
+    // X is the column
+    // Y is the row
+
     @Override
     public void onPadPressed(Pad pad, long timestamp) {
       int x = pad.getX();
-      int y = pad.getY();
-        // System.out.printf(" onPadPressed X %d Y %d velocity %f\n",x,y,drumpadVelocity.getValuef() );
-        client.setPadLight(pad, Color.YELLOW, BackBufferOperation.NONE);
+      int y = pad.getY();        
+        client.setPadLight(pad, Color.RED, BackBufferOperation.NONE);
+        ///change colour by Laura 
 
-        drumpad.padTriggered(y, x, drumpadVelocity.getValuef() );
+        if (engine.midiEventTask != null) {
+          MIDIEventTask.MIDIEvent e = new MIDIEventTask.MIDIEvent(1, y+1, x, drumpadVelocity.getValuef(), timestamp);
+          engine.midiEventTask.add( e ); 
+        }
+
+        //drumpad.padTriggered(y+1, x, drumpadVelocity.getValuef() );
 
     }
 
@@ -70,35 +81,79 @@ class MidiEngine_LP {
     public void onPadReleased(Pad pad, long timestamp) {
       int x = pad.getX();
       int y = pad.getY();
-      // System.out.printf(" onPadReleased X %d Y %d velocity %f\n",pad.getX(), pad.getY(),drumpadVelocity.getValuef() );
-      client.setPadLight(pad, Color.BLACK, BackBufferOperation.NONE);
+      client.setPadLight(pad, Color.YELLOW, BackBufferOperation.NONE);
 
-      drumpad.padReleased(y, x);
+      if (engine.midiEventTask!= null) {
+        MIDIEventTask.MIDIEvent e = new MIDIEventTask.MIDIEvent(2,  y+1, x, drumpadVelocity.getValuef(), timestamp);
+        engine.midiEventTask.add( e ); 
+      }
+
+      //drumpad.padReleased(y+1, x);
+
+    }
+
+    // Buttons are: 1 through 8 are returning 0 to 7 
+    // A through H are numbers 0 to 7
+    @Override
+    public void onButtonPressed(Button button, long timestamp) {
+      int x;
+      int y;
+      if (button.isTopButton()) {
+        x = 0;
+        y = button.getCoordinate();
+      }
+      else {
+        x = button.getCoordinate() + 1;
+        y = 8;
+      }
+
+      if (engine.midiEventTask != null) {
+          MIDIEventTask.MIDIEvent e = new MIDIEventTask.MIDIEvent(1, x, y,drumpadVelocity.getValuef(), timestamp);
+          engine.midiEventTask.add( e ); 
+        }
+      
+      client.setButtonLight(button, Color.RED, BackBufferOperation.NONE);
 
     }
 
     @Override
     public void onButtonReleased(Button button, long timestamp) {
-      // System.out.printf(" onButtonReleased coord %d istop %d isright %d\n",button.getCoordinate(), button.isTopButton() ? 1 : 0, button.isRightButton() ? 1 : 0);
+      int x;
+      int y;
+      if (button.isTopButton()) {
+        x = 0;
+        y = button.getCoordinate();
+      }
+      else {
+        x = button.getCoordinate() + 1;
+        y = 8;
+      }
+
+      if (engine.midiEventTask!= null) {
+        MIDIEventTask.MIDIEvent e = new MIDIEventTask.MIDIEvent(2, x, y, drumpadVelocity.getValuef(), timestamp);
+        engine.midiEventTask.add( e ); 
+      }
+
       client.setButtonLight(button, Color.BLACK, BackBufferOperation.NONE);
+      //change colour by Laura
     }
 
 
   };
 
   
-  public MidiEngine_LP(final LX lx, LXListenableNormalizedParameter[] effectKnobParameters, 
-  			final TSDrumpad drumpad, final BasicParameter drumpadVelocity, 
-  			final BooleanParameter[] previewChannels, final BPMTool bpmTool, final InterfaceController uiDeck, 
-  			final BasicParameter outputBrightness, DiscreteParameter automationSlot, 
-  			LXAutomationRecorder[] automation, BooleanParameter[] automationStop) {
+  public MidiEngine_LP(final LX lx, final Engine engine, LXListenableNormalizedParameter[] effectKnobParameters, 
+        final BasicParameter drumpadVelocity, 
+        final BooleanParameter[] previewChannels, final BPMTool bpmTool, final InterfaceController uiDeck, 
+        final BasicParameter outputBrightness, DiscreteParameter automationSlot, 
+        LXAutomationRecorder[] automation, BooleanParameter[] automationStop) {
 
     this.lx = lx;
+    this.engine = engine;
     this.automationSlot = automationSlot;
     this.automation = automation;
     this.automationStop = automationStop;
 
-    this.drumpad = drumpad;
     this.drumpadVelocity = drumpadVelocity;
 
     // Init the Midi driver, fail if none

@@ -251,6 +251,8 @@ abstract class MultiObjectPattern <ObjectType extends MultiObject> extends TSTri
       }
     }
   }
+
+
   
   void makeObject(float strength) {
     ObjectType object = generateObject(strength);
@@ -716,6 +718,27 @@ class ColorStrobe extends TSTriggerablePattern {
     if (timer > 16) {
       timer = 0;
       setColors(lx.hsb(Utils.random(360), 100, 100));
+    }
+  }
+}
+
+class ColorStrobeColor extends TSTriggerablePattern {
+
+  double timer = 0;
+  int hue;
+  
+  ColorStrobeColor(LX lx, int hue) {
+    super(lx);
+    this.hue = hue;
+  }
+  
+  public void run(double deltaMs) {
+    if (getChannel().getFader().getNormalized() == 0) return;
+
+    timer += deltaMs;
+    if (timer > 16) {
+      timer = 0;
+      setColors(lx.hsb(hue, 100, 100));
     }
   }
 }
