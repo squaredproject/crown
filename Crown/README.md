@@ -22,6 +22,13 @@ out now ( well, we tried, and couldn't figure it out :-) ).
 
 Such as: ARM - SAVE, that crashes.
 
+## Note on the saved JSON files
+
+A number of the saved JSON files appear to be corrupt, that is, loading them at startup
+crashes the system. If you find that changing Config.java to include a particular file
+at startup, and the system crashes, that's because that file is no good. In particular,
+it seems that some of the files from Playa 2018 are no good.
+
 ## Running headless on a pi
 
 - Install java in /opt/java. Easy thing to do is download the ARM32 package, decompress, copy over to /opt/java.
