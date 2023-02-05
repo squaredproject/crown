@@ -1,0 +1,30 @@
+Notes on installlation
+- Had to set credentials with github in order to be abe to clone the crown repo:
+    git config --global credential.provider generic
+- Upgraded to python 3.10, according to documentation https://allurcode.com/install-latest-version-of-python-on-raspberry-pi/
+- Installed pip3 
+- Installed arduino command line tools. 
+  curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh > arduino_cli_install.sh
+  sh ./arduino_cli_install.sh
+  <change path in .bashrc to include /home/pi/bin>
+  arduino-cli config init
+  arduino-cli core update-index  (installs list of available boards)
+  arduino-cli board list         (shows attached boards, get fpqn for board)
+  arduino-cli core install arduino:avr  (install board package)
+  arduino-cli lib install mcp_can  (install can library used by this rpi sketch)
+  arduino-cli compile --fbqn arduino:avr:mega maquette.ino
+  arduino-cli upload -p <port> --fqbn <fqbn> <sketch>    (Important - sketch seems to be the *directory* your sketch is in. This may also do the compile)
+  (see instructions at https://siytek.com/arduino-cli-raspberry-pi/)
+
+Maquette Commands (prefixed by 'm'):
+- L<towerId>. Set joint limits for tower
+- D. Set debug level (? levels are 0 and 1?)
+- M<mode_int>. Set mode. 0-3, OFF, FREE_PLAY, POSE, SLAVE
+- s. Get status of maquette
+- P. Set slave position
+- C. Set center of joint (calibration)
+- c. Get calibration status (is calibrated or not?)
+- E. Enable/disable tower
+- e<tower_id><joint-id>. Enable/disable joint
+- S. Return model position (simulation)
+- A. Read all joints, return analog values
