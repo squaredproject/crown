@@ -135,7 +135,7 @@ static int slaveDataValid();
 static void readAllButtons();
 static void InitButtons();
 static ButtonState *readButtonState(int button);
-static void readSerial();
+static void readSerialCommand();
 static void readCAN();
 static uint8_t accumulateCommandString(uint8_t c);
 static void parseSerialCommand();
@@ -173,13 +173,14 @@ void log_debug(char *str);
 #define DBG_LEVEL_DEBUG 3
 #define DBG_LEVEL_INFO 2
 #define DBG_LEVEL_ERROR 1
+static const char *debugString[] = {"OFF", "ERROR", "INFO", "DEBUG"};
 
 int debug = 1;  // debug on/off
 //#define SIMULATE_JOINTS
 
 void log_info(char *str) 
 {
-  if (debug <= DBG_LEVEL_INFO) {
+  if (debug >= DBG_LEVEL_INFO) {
      Serial.print("INFO:" );
      Serial.println(str);
   }
@@ -187,7 +188,7 @@ void log_info(char *str)
 
 void log_error(char *str) 
 {
-  if (debug <= DBG_LEVEL_ERROR) {
+  if (debug >= DBG_LEVEL_ERROR) {
      Serial.print("ERROR:" );
      Serial.println(str);    
   }
@@ -195,7 +196,7 @@ void log_error(char *str)
 
 void log_debug(char *str) 
 {
-  if (debug <= DBG_LEVEL_DEBUG) {
+  if (debug >= DBG_LEVEL_DEBUG) {
      Serial.print("DEBUG:" );
      Serial.println(str);    
   }
@@ -229,7 +230,7 @@ void loop() {
 //    secIdx++;
     
     readAllButtons();
-    readSerial();
+    readSerialCommand();
     readCAN();
     
     if (curTime > mainloopTimeout) {
@@ -476,6 +477,13 @@ static ButtonState *readButtonState(int button)
    values read by the potentiometer are valid - we clamp the 
    value between MAX_POT and MIN_POT */
 
+
+// At the risk of adding yet more complexity, I would consider
+// going through an intermediary translation into canonical joint coordinates [-1, 1]
+// This makes it a little easier to visualize what is going on, and is the
+// standard way to represent this type of positional information.
+// jointCanonical = (potVal - potValMin) / (potValMax - potValMin)
+// And then - jointHydraulicsPos = hydraulicsValMin + jointCanonical*(hydraulicsValMax - hydraulicsValMin)
 static int16_t maquetteToModel(uint16_t potValue, int towerId, int jointId) {
 // Potentiometer has a range of POT_RANGE (1K)  XXX check this!!
 // Sculpture has a range of SCULPTURE_RANGE (8K)
@@ -568,7 +576,7 @@ static void broadcastModelPosition() {
 uint8_t cmd_str[MAX_COMMAND_LENGTH];
 uint8_t cmd_len = 0;
 
-static void readSerial()
+static void readSerialCommand()
 {
   //Serial.println("Sanity test...");
   while(Serial.available() > 0) {
@@ -681,7 +689,9 @@ static void parseMaquetteCommand(char *buf, int len) {
     if (bufEnd <= buf) return;
     
     c = *ptr++;
-    Serial.println("maquette command");
+    log_debug("maquette command!!!");
+    //Serial.println("maquette command!!!");
+    //Serial.println(c);
     
     switch(c) {
     case 'L':  // set limits for a tower on maquette 
@@ -719,11 +729,15 @@ static void parseMaquetteCommand(char *buf, int len) {
       }
       break; 
     case 'D':  // set debug level
-      c =*ptr++;
-      debug = c - '0';
-      if (debug) {
-        sprintf(outBuf, "Setting debug level to %d\n", debug);
-        log_debug(outBuf);
+      Serial.println("Setting debug level"); 
+      c = *ptr++;
+      if (((c - '0') >= 0) && ((c - '0') <= 3)) {
+        debug = c - '0';
+        sprintf(outBuf, "Setting debug level to %s\n", debugString[debug]);
+        Serial.println(outBuf);
+      } else {
+        sprintf(outBuf, "Unknown debug value %d\n", c - '0');
+        Serial.println(outBuf);
       }
       break; 
     case 'M':  // set mode
