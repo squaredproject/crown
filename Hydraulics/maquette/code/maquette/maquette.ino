@@ -8,9 +8,39 @@
 #include "CAN_message.h"
 #include "mcp_can_wrapper.h"
 
-// basic arduino code
-// Weirdly with arduino ide all the standard headers
-// appear to get added for you. I'm not sure how I feel about that...
+
+// Basic Architecture:
+// This embedded processor handles low level communication
+// to the sculpture towers, and to the maquette. It is controlled by a 
+// higher level processor (in this particular case, a Raspberry PI) that 
+// it communicates with over serial. The higher level processor sets
+// state, requests human-visible information, and is responsible for saving
+// and resetting any calibration values
+//
+// One of the oddities in the architecture is that we communicate to the 
+// towers both over RS485 and CAN. This is because the tower controllers were
+// originally built using RS485, but when we brought Crown out to BurningMan in
+// 2018, we wanted to to query for status as well as send commands. However, RS485
+// is not a particularly friendly for two way communication so we added CAN
+// for status and left the original RS485 code alone. This also allowed us
+// to fall back to an older control model if/when the maquette controls weren't
+// ready.
+//
+// The sculpture is designed to be operated in one of two states - Pose mode or 
+// Slave mode. In Pose mode, hitting the button in the center of the maquette 
+// causes the sculpture to take the position of the maquette. In Slave mode, the
+// position of the sculpture is controlled by position information coming from
+// the raspberry pi.
+// 
+// There is an additional (possibly dangerous) mode called Free Play, where the
+// sculpture attempts to immediately reflect any changes to the maquette.
+// 
+// Please note that as of this writing (2/6/23) there is no provision made to
+// keep the towers from hitting each other, assuming their ranges allow them to
+// do so.
+
+// CSW, 2/6/23
+ 
 
 #define NUM_TOWERS 4
 #define NUM_JOINTS 3
@@ -45,12 +75,15 @@ typedef enum {
 } Mode;
 
 Mode mode = MODE_OFF;
+
 int towerValid[NUM_TOWERS] = {TRUE, TRUE, TRUE, TRUE};
 int jointValid[NUM_TOWERS][NUM_JOINTS] = {{TRUE, TRUE, TRUE},
                                           {TRUE, TRUE, TRUE},
                                           {FALSE, FALSE, FALSE},
                                           {TRUE, TRUE, TRUE}};
 
+// XXX - this is the joint range for the MAQUETTE, not the tower.
+// XXX so where is the tower center position?
 uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 200}, {-532, 328}, {-275, 276}},
                                                   {{-300, 520}, {-532, 288}, {-275, 296}},
                                                   {{-200, 200}, {-200, 200}, {-200, 200}},
@@ -63,18 +96,25 @@ uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 200}, {-532, 328}, {-2
                                                   {{-200, 200}, {-200, 200}, {-200, 200}},
                                                   {{-200, 200}, {-200, 200}, {-200, 200}}};
 */
+
+// Joint center is the raw value at the center of the joint
+// XXX - note again that this is the range for the MAQUETTE not CROWN
 uint16_t jointCenter[NUM_TOWERS][NUM_JOINTS] = {{POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {504, 571, 500}, {POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {504, 571, 500 }};
 uint8_t centered[NUM_TOWERS] = {FALSE, FALSE, FALSE, FALSE};
-
+float canonicalJointPosition[NUM_TOWERS][NUM_JOINTS] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
 
 int modelPosition[NUM_TOWERS][NUM_JOINTS]       = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
+// XXX - below - when we're holding position?? XXX
+// XXX - it appears to be set, but never actually read. Not sure what I was thinking. XXX
 int staticModelPosition[NUM_TOWERS][NUM_JOINTS] = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
 
 int pinMapping[NUM_TOWERS][NUM_JOINTS] = { {A0, A1, A3},
                                           {A4, A5, A7},
                                           {A8, A9, A11},
                                           {A12, A13, A15} };
-                                          
+
+// 'Pose' mode sets the towers to the current maquette state, and holds the pose for
+// some number of seconds. It is triggered by a button press
 int posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
                                              {0,0,0},
                                              {0,0,0},
@@ -84,6 +124,9 @@ uint8_t poseDataValid = FALSE;
 #define POSE_STATE_HOLD 1
 uint8_t poseState = POSE_STATE_WAITING;
 
+// In 'Slave' mode, we're reading poses from some external source (such as 
+// a pose list on the rpi) and adjusting the towers to match the current
+// pose.
 int slavePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
                                               {0,0,0},
                                               {0,0,0},
@@ -250,7 +293,10 @@ void loop() {
   
         for (int i=0; i<NUM_TOWERS; i++) {
             for (int j=0; j<NUM_JOINTS; j++) {
+                // For each joint, read the value from the maquette, and check whether that value
+                // has changed more than the accepted delta from the previous position
                 uint16_t potValue  = readJointPos(i, j);
+                canonicalJointPosition[i][j] = maquetteRawToCanonical(potValue, i, j);
                 modelPosition[i][j] = maquetteToModel(potValue, i, j);
 /*                if (j == 1) {
                   char buf[512];
@@ -472,7 +518,7 @@ static ButtonState *readButtonState(int button)
 
 
 
-/* Translate between potentiometer reading (-16K : +16K) 
+/* Translate between potentiometer reading [0, 1204) 
    to model position (-200 to +200). Note that not all
    values read by the potentiometer are valid - we clamp the 
    value between MAX_POT and MIN_POT */
@@ -484,6 +530,21 @@ static ButtonState *readButtonState(int button)
 // standard way to represent this type of positional information.
 // jointCanonical = (potVal - potValMin) / (potValMax - potValMin)
 // And then - jointHydraulicsPos = hydraulicsValMin + jointCanonical*(hydraulicsValMax - hydraulicsValMin)
+
+static float maquetteRawToCanonical(uint16_t potValue, int towerId, int jointId) {
+   int16_t center = jointCenter[towerId][jointId];
+   int16_t min = jointRange[towerId][jointId][0];
+   int16_t max = jointRange[towerId][jointId][0];
+   float canonicalValue = potValue < center ? (potValue - center)/(center - min) : (potValue - center)/(max - center);
+
+   return clamp(canonicalValue, -1.0, 1.0);
+}
+
+static int16_t maquetteCanonicalToSculpture(int towerId, int jointId) {
+   return (int16_t)(canonicalJointPosition[towerId][jointId]*SCULPTURE_RANGE/2) + SCULPTURE_RANGE/2; 
+}
+
+
 static int16_t maquetteToModel(uint16_t potValue, int towerId, int jointId) {
 // Potentiometer has a range of POT_RANGE (1K)  XXX check this!!
 // Sculpture has a range of SCULPTURE_RANGE (8K)
@@ -821,7 +882,13 @@ static void parseMaquetteCommand(char *buf, int len) {
            log_debug(outBuf);
         }
         break;  
-    case 'C': // Set center of joint (calibrate)
+    case 'C': 
+        // Set center of joint (calibrate)
+        // C<towerId>:<joint_center1>,<joint_center2>,<joint_center3>
+        // There are two ways to use this command - either by sending just the tower id and no joint parameters
+        // or by sending the tower id and all three joint parameters. In the first case, the joint
+        // centers will be set to the current position of the joints
+        
         ntokens = sscanf(ptr, "%hhu:%hu,%hu,%hu", &towerId, &jcenter[0], &jcenter[1], &jcenter[2]);  
         
         if (ntokens != 1 && ntokens != 4) {
@@ -833,7 +900,6 @@ static void parseMaquetteCommand(char *buf, int len) {
           log_error("Invalid tower");
           break;
         }
-
 
         towerId--; // 0 based indexing from now on
 
@@ -995,7 +1061,7 @@ static void parseTowerCommand(char *buf, int len) {
         Write485(buf);
         break;
     case 'i':
-        // VAN Request integrator values.
+        // CAN Request integrator values.
         CAN_RequestIntegrators(towerId);
         break;
     case 'P':
