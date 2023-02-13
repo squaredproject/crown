@@ -1,102 +1,294 @@
-# main crown 
+#!/usr/bin/python3
+from collections.abc import Iterable
 import logging
-from sys import platform
 import time
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
-from SocketServer import ThreadingMixIn
-import threading
-import urlparse
-import traceback
-import cgi
 import json
+from sys import platform
+import threading
+import traceback
+
+from flask import Flask, request, abort, make_response, jsonify
+# from flask_utils import jsonify, make_response, jsonify
+
 import CrownSerial
 import CrownSerialMock
 
-test = True
+test = False
 if test:
     serial = CrownSerialMock
 else:
     serial = CrownSerial
 
+
+app = Flask("crown", static_url_path="", static_folder="/home/pi/crown/maquette/Hydraulics/code/rpi/static")
+
+def serve_forever(httpPort=5000):
+    print(f"CROWN webserver serving on port {httpPort}")
+    app.run("0.0.0.0", port=httpPort, threaded=True)
+
 # XXX - note that you can select on Queues. select.select() works just fine...
 # change the code to use select!!
+
+# An Async request consists of both an initial request call, and a filter that makes
+# sure we return the correct response back to the requestor. For the moment, the
+# implementation of the various requests/filters is bound up in the infrastructure 
+# definition - the usage is sufficiently limited that this makes sense.
+class AsyncRequest:
+    def __init__(self, command, args, to_maquette=False):
+        self.joint_id = -1
+        self.tower_id = -1
+        self.response = None
+        self.response_filter = ResponseFilter(command) 
+        self.to_maquette = to_maquette
+        self.command = command
+        if command in [GENERAL_STATUS_REQUEST,
+                       TOWER_POSITION_REQUEST,
+                       VALVE_DRIVE_REQUEST,
+                       PID_VALUES_REQUEST,
+                       EXTENDED_STATUS_REQUEST]:
+           if (isinstance(args, list)):
+               self. tower_id = args[0]
+           else:
+               self.tower_id = args
+        elif command in [JOINT_STATUS_REQUEST,
+                         JOINT_LIMITS_REQUEST]:
+           if (isinstance(args, list)):
+               self.tower_id = args[0]
+               self.joint_id = args[1]
+           else:
+               raise RuntimeError("no joint for joint request")
+        else:
+            raise RuntimeError("Unknown request type")
+   
+    def make_request(self): 
+        send_sculpture_message(self.command, tower_id=self.tower_id, joint_id=self.joint_id, to_maquette=self.to_maquette)
+    
+    def filter(self, message):
+        filtered_response = self.response_filter.filter(message, [self.tower_id, self.joint_id])
+        if filtered_response != None:
+            self.response = filtered_response
+        return filtered_response
+
+    def have_response(self):
+        return (self.response is not None)
+
+    def set_response(self, response):
+        self.response = response
 
 class AsyncRequester:
     """ Handles aggregating multiple requests. (Since we're using a CAN bus under the
     covers, the data packets received are very small. We deal with this by making a 
     lot of requests for small amounts of data) """
     
-    def __init__(self, calldata, timeout=5):
-        self.calldata = calldata
+    def __init__(self, request_list, timeout=0.2):
+        if not isinstance(request_list, Iterable):
+            request_list = [request_list]
+        self.request_list = request_list
         self.timeout = timeout
-        self.dataReady = False
+        self.data_ready = False
                           
-        self.listener = serial.registerListener(AsyncRequester._asyncCallback, self)
-        # self.SerialListener(self.asyncFilter, self.asyncCallback, self)
+        self.listener = serial.registerListener(AsyncRequester._async_callback, self)
         
     def run(self):
         """ Make all requests, wait for responses. Timeout if responses have not been 
         received by the specified timeout """
-        print("RUN asynch requester!\n");
         try:
             endTime = time.time() + self.timeout
-            while (not self.dataReady and time.time() < endTime):
+            while (not self.data_ready and time.time() < endTime):
                 self._request()
-                print("requesting...\n")
                 time.sleep(0.15)
         except Exception as e:
-            print("Exception!\n")
-            print e
+            print(f"Exception in AsyncRequester! {e}\n")
             traceback.print_exc()
         
         serial.freeListener(self.listener)
         
-        if self.dataReady:
-            print ("Have data, sending to callback\n")
+        if self.data_ready:
             return True
         else:
             print ("No data returned, aborting\n")
             return False
-            
-        
         
     def _request(self):
         """ Re-request anything that we haven't gotten a response for """
-        for call in self.calldata:
-            if not call['response']:
-                call["call"](call['callArgs'])
-                
-        
-    def _asyncCallback(myself, message): # callback... can't call through class so I fake it...
+        for request in self.request_list:
+            if not request.have_response():
+                request.make_request()
+
+    @staticmethod
+    def _async_callback(myself, message): # callback... can't call through class so I fake it...
         try: 
-            print("Asynccallback called!")
-            myself.dataReady = True
-            for call in myself.calldata:
-                print("checking on message " + message)
-                print("check against")
-                print(call)
-                if not call['response']:
-                    filteredResponse = call['filter'](message, call['filterArgs'])
-                    if filteredResponse:
-                        print("async callback accepts " + message)
-                        call['response'] = filteredResponse[:] # copying 
-                    else:
-                        myself.dataReady = False  
+            found_requestor = False
+            for request in myself.request_list:
+                filtered_response = request.filter(message)
+                if filtered_response:
+                    request.set_response(filtered_response[:]) # copying 
+                    break
+            if not found_requestor:
+                print(f"Could not find requestor for message {message}")  
+            have_all_requests = True
+            for request in myself.request_list:
+                if not request.have_response():
+                    have_all_requests = False
+                    break
+            myself.data_ready = have_all_requests
             # if there are no responses left, trigger wakeup of main thread.   # XXX - use select 
         except Exception as e:
-            myself.dataReady = False
-            logging.warn("Exception on async serial callback")
+            myself.data_ready = False
+            logging.warning("Exception on async serial callback")
             traceback.print_exc()
                   
         return False   
         
               
 gTowerRange = [1,2,3,4]
+gJointRange = [1,2,3]
 
-# Nomenclature - 'get' is a compound call. 
-# 'Request' a low level call - only a single call on the CAN bus
+   
+""" Description of Serial protocol...
+    The Raspberry Pi communicates serially with the ArduinoMega, which
+    in turn communicates with the hydraulics and the maquette. Commands to 
+    the ArduinoMega take the following form:
+    Hydraulics command:  <tower_id> + COMMAND + (arguments, if any)
+    Maquette command:  "m" + COMMAND + (arguments, if any)
+                       "m" + <tower_id> + COMMAND + (arguments, if any)
+"""
+ 
+# Sculpture
+GENERAL_STATUS_REQUEST = 's'
+JOINT_STATUS_REQUEST   = 'j'   # XXX not currently exposed in web api
+JOINT_LIMITS_REQUEST   = 'l'
+TOWER_POSITION_REQUEST = 'T'
+VALVE_DRIVE_REQUEST    = 'v'
+EXTENDED_STATUS_REQUEST = 'e'  # XXX - not currently exposed in web api
+PID_VALUES_REQUEST     = 'p'
+HOME_COMMAND           = 'H'
+SET_HOME_SPEED_COMMAND = 'h'
+SET_TARGETS_COMMAND    = 't'
+SET_LIMITS_COMMAND     = 'L'
+SET_MIN_COMMAND        = 'm'
+SET_MAX_COMMAND        = 'M'
+SET_CENTER_COMMAND     = 'C'
+SET_I_VALUE_COMMAND    = 'I'
+SET_P_VALUE_COMMAND    = 'P'
+NEUTER_COMMAND         = 'n'  # Removes immediate input to joint - sets target to current value.
+SET_RUN_STATE_COMMAND  = 'r'  # Allow a joint to move... or not
+SET_HOME_STATE_COMMAND = 'w'
 
-def getSculptureState(towers): 
+# Maquette
+MAQUETTE_CALIBRATION_REQUEST = 'c'
+MAQUETTE_STATUS_REQUEST = 's'
+SET_MAQUETTE_MODE_COMMAND = 'M'
+SET_MAQUETTE_TOWER_CENTER_COMMAND = 'C'
+
+class ResponseFilter:
+    """ ResponseFilter
+        Used to check whether a response on the serial bus is the response
+        to a previous request. For reasons I am uncertain of, I am not using
+        an incrementing serial number. XXX CSW
+    """
+    def __init__(self, request_type):
+        self.request_type = request_type
+        self.maquette_request = False
+        self.command_idx = 1
+        self.tower_idx = 2
+        self.joint_idx = 3
+        if self.request_type in [JOINT_LIMITS_REQUEST, JOINT_STATUS_REQUEST]:
+            self.start_idx = 4
+            self.filter_joint = True
+        elif self.request_type in [GENERAL_STATUS_REQUEST,
+                                   TOWER_POSITION_REQUEST,
+                                   PID_VALUES_REQUEST,
+                                   VALVE_DRIVE_REQUEST,
+                                   MAQUETTE_STATUS_REQUEST,
+                                   MAQUETTE_CALIBRATION_REQUEST,
+                                   EXTENDED_STATUS_REQUEST]:
+            self.start_idx = 3
+            self.filter_joint = False
+        else:
+            raise RuntimeError(f"Unknown request {request_type}, aborting")
+        if self.request_type in [MAQUETTE_STATUS_REQUEST, MAQUETTE_CALIBRATION_REQUEST]:
+            self.maquette_request = True
+            # NB - maquette commands all start with 'm'
+            self.command_idx += 1
+            self.tower_idx += 1
+            self.joint_idx += 1
+    
+    def filter(self, message, args):
+        """ If this message is a response to the request, return message stripped of header
+            Otherwise, return None
+        """
+        ret = self.validate_response_header(message, args[0])
+        try: 
+            if (not ret) or (self.filter_joint and (args[1] != int(message[self.joint_idx]))):
+                return None
+            else:
+                return message[self.start_idx:]            
+        except ValueError:
+            pass
+         
+        return None
+
+    # XXX - I don't check for overruns on the response header. FIXME
+    def validate_response_header(self, message, tower_id):
+        if message[0] != '!':
+            print("Message doesn't have response bang!")
+            return False
+
+        if self.maquette_request:
+            if message[1] != 'm':
+                print("Message is maquette message, but doesn't start with m")
+                return False
+        
+        if message[self.command_idx] != self.request_type:
+            print("Message command type wrong")
+            return False
+        
+        try: 
+            # XXX - what is not a tower? idx -1 or none? be consistent
+            if tower_id not in [-1, None]  and int(message[self.tower_idx]) != tower_id:
+                print("Message tower id doesn't match")
+                return False
+        except ValueError:
+            print("Value error in validate response header!")
+            return False
+        
+        return True
+    
+
+
+def send_sculpture_message(command, args=[""], tower_id=-1, joint_id=-1, to_maquette=False):
+    if joint_id is None or joint_id < 0:
+        joint_local = ""
+    else:
+        joint_local = joint_id
+
+    if tower_id is None or tower_id < 0:
+        tower_local = ""
+    else:
+        tower_local = tower_id
+
+    if not isinstance(args, Iterable):
+        args = [args]
+
+    maquette_char = "m" if to_maquette else ""
+
+    serial.write(f"<{maquette_char}{tower_local}{joint_local}{command}{','.join(args)}>")
+
+
+@app.route("/crown/sculpture", methods=["GET"])
+def crown_get_sculpture_state():
+    return _getSculptureState(range(1,4))
+
+
+@app.route("/crown/sculpture/towers/<int:tower_id>", methods=["GET"])
+def crown_get_tower_state():
+    if tower_id not in gTowerRange:
+        return make_response("Invalid tower", 404)
+    response = _getSculptureState(tower_id)
+
+
+def _getSculptureState(towers): 
     """Get the state of one or more towers
        Tower state is defined as the current joint position, the joint limits for each joint
         and the general state. It does not include PID values or current drive
@@ -108,773 +300,352 @@ def getSculptureState(towers):
                             "error":true:false}"""   
         
     calls = []
-    for towerId in towers: # XXX check what happens if towers is an integer TODO
-        if towerId not in gTowerRange:
-            continue
+    if not isinstance(towers, Iterable):
+        towers = [towers]
+    for tower_id in towers:
+        calls.append(AsyncRequest(TOWER_POSITION_REQUEST, [tower_id]))
+        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, [tower_id, 0]))
+        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, [tower_id, 1]))
+        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, [tower_id, 2]))
+        calls.append(AsyncRequest(GENERAL_STATUS_REQUEST, [tower_id]))
             
-        calls.append({'call'   : requestTowerPosition, 'callArgs' : [towerId], 'response' : None,
-                      'filter' : towerPositionRequestFilter, 'filterArgs' : [towerId]})        
-        calls.append({'call'   : requestJointLimits, 'callArgs' : [towerId, 0], 'response' : None, 
-                      'filter' : jointLimitsRequestFilter, 'filterArgs' : [towerId, 0]})
-        calls.append({'call'   : requestJointLimits, 'callArgs' : [towerId, 1], 'response' : None, 
-                      'filter' : jointLimitsRequestFilter, 'filterArgs' : [towerId, 1]})
-        calls.append({'call'   : requestJointLimits, 'callArgs' : [towerId, 2], 'response' : None, 
-                      'filter' : jointLimitsRequestFilter, 'filterArgs' : [towerId, 2]})
-        calls.append({'call'   : requestTowerGeneralStatus, 'callArgs' : [towerId], 'response' : None, 
-                      'filter' : generalStatusRequestFilter, 'filterArgs' : [towerId]})
-                      
-              
     requester = AsyncRequester(calls)
     results = requester.run()
     if (results):
-        resultList = {}
-        for towerId in towers: # set up template
-            if towerId not in gTowerRange:
+        # First, let's set up the object that's going to collate the results
+        result_list = {}
+        for tower_id in towers:
+            if tower_id not in gTowerRange:
                 continue
-            jointList = []
-            for jointId in range(0,3):
-                jointList.append({'id':jointId, 'position':[],
+            joint_list = []
+            for joint_id in range(0,3):
+                joint_list.append({'id':joint_id, 'position':[],
                                   'max': 0, 'min': 0, 'center':0, 
                                   'enabled' : True, 
                                   'homed'   : True})
-            towerObj = {'tower': towerId, 'joints':jointList, 'running':True, 'error':False}
-            print("adding towerId {} to resultList".format(towerId))
-            resultList[towerId]=towerObj
-        
+            tower_obj = {'tower': tower_id, 'joints':joint_list, 'running':True, 'error':False}
+            print(f"adding tower_id {tower_id} to resultList")
+            result_list[tower_id]=tower_obj
+
+        # Now, go through all the responses, and collate them correctly
         for call in calls: 
             # the format of the individual responses is json string data 
-            resultObj = json.loads(call['response'])  # XXX handle misformatted json
-            towerId = call['callArgs'][0]
-            print("towerIdx is {}".format(towerId))
-            print("resultObj is {}".format(resultObj))
-            print("resultList is {}".format(resultList))
-            print("sizeof resultList is {}".format(len(resultList)))
-            if call['call'] == requestTowerPosition:
-                print("resultlist towerId is {}".format(resultList[towerId]))
-                print("joints 0 is {}".format(resultList[towerId]['joints'][0]))
-                resultList[towerId]['joints'][0]['position'] = resultObj[0]
-                resultList[towerId]['joints'][1]['position'] = resultObj[1]
-                resultList[towerId]['joints'][2]['position'] = resultObj[2]
-            if call['call'] == requestTowerGeneralStatus:
-                resultList[towerId]['running'] = resultObj['running']
-                resultList[towerId]['error']   = resultObj['error']
-                resultList[towerId]['joints'][0]['enabled'] = resultObj['enabled'][0]
-                resultList[towerId]['joints'][0]['homed']   = resultObj['homed'][0]
-                resultList[towerId]['joints'][1]['enabled'] = resultObj['enabled'][1]
-                resultList[towerId]['joints'][1]['homed']   = resultObj['homed'][1]
-                resultList[towerId]['joints'][2]['enabled'] = resultObj['enabled'][2]
-                resultList[towerId]['joints'][2]['homed']   = resultObj['homed'][2]
-            if call['call'] == requestJointLimits:
-                jointIdx = call['callArgs'][1] # joints 0 based. because we hate life XXX I don't have to propagate that
-                resultList[towerId]['joints'][jointIdx]['center']  = resultObj['center']
-                resultList[towerId]['joints'][jointIdx]['min']     = resultObj['min']
-                resultList[towerId]['joints'][jointIdx]['max']     = resultObj['max']
-                
-        return (200,json.dumps(resultList))
-    else:
-        return 501
-#
-#def getTowerState(towerId):     # subsumed by getSculptureState      
-#    calls = [{'call'   : requestTowerGeneralStatus, 'callArgs' : [towerId], 'response' : None, 
-#               'filter' : requestGeneralStatusFilter, 'filterArgs' : [towerId]}]    
-#                
-#     requester = AsyncRequester(calls)
-#     results = requester.run()
-#     if (results):
-#         return(200, json.dumps(results[4:]))
-#     else:
-#         return(501, None)
+            result_obj = json.loads(call.response)
+            tower_id = call.tower_id
+            print(f"towerIdx is {tower_id}")
+            print(f"resultObj is {result_obj}")
+            if call.command == TOWER_POSITION_REQUEST:
+                # print("resultlist towerId is {}".format(result_list[tower_id]))
+                # print("joints 0 is {}".format(result_list[tower_id]['joints'][0]))
+                result_list[tower_id]['joints'][0]['position'] = result_obj[0]
+                result_list[tower_id]['joints'][1]['position'] = result_obj[1]
+                result_list[tower_id]['joints'][2]['position'] = result_obj[2]
+            if call.command == GENERAL_STATUS_REQUEST:
+                result_list[tower_id]['running'] = result_obj['running']
+                result_list[tower_id]['error']   = result_obj['error']
+                result_list[tower_id]['joints'][0]['enabled'] = result_obj['enabled'][0]
+                result_list[tower_id]['joints'][0]['homed']   = result_obj['homed'][0]
+                result_list[tower_id]['joints'][1]['enabled'] = result_obj['enabled'][1]
+                result_list[tower_id]['joints'][1]['homed']   = result_obj['homed'][1]
+                result_list[tower_id]['joints'][2]['enabled'] = result_obj['enabled'][2]
+                result_list[tower_id]['joints'][2]['homed']   = result_obj['homed'][2]
+            if call.command == JOINT_LIMITS_REQUEST:
+                joint_idx = call.joint_id-1 # joints 0 based. because we hate life XXX I don't have to propagate that
+                resultList[tower_id]['joints'][joint_idx]['center']  = result_obj['center']
+                resultList[tower_id]['joints'][joint_idx]['min']     = result_obj['min']
+                resultList[tower_id]['joints'][joint_idx]['max']     = result_obj['max']
 
-def getTowerPosition(towerId):
-    """Get the current position of the specified tower
-       Returns [xx,xx,xx] """
-    calls = [{'call'   : requestTowerPosition, 'callArgs' : [towerId], 'response' : None, 
-              'filter' : towerPositionRequestFilter, 'filterArgs' : [towerId]}]    
-    
-    requester = AsyncRequester(calls)
-    results = requester.run()
-    if (results):
-        return(200, calls[0]["response"])
+        # Spit out JSON
+        return jsonify(json.dumps(resultList))
     else:
-        return(500)
+        return make_response("No data from towers", 500)
+
+
+def _simple_web_async_request(command, tower_id=None, joint_id=None, to_maquette=False):
+    if tower_id is not None and tower_id not in gTowerRange:
+        return make_response("Invalid tower", 404)
+    if joint_id is not None and joint_id not in gJointRange:
+        return make_response("Invalid joint", 404)
+    try: 
+        call = AsyncRequest(command, [tower_id, joint_id], to_maquette=to_maquette)
+        requester = AsyncRequester(call)
+        results = requester.run()
+        if (results):
+            return jsonify(call.response)
+        else:
+            return make_response("No response from tower", 500)
+    except Exception as e:
+        print(f"Exception in simple_web_async_request! {e}\n")
+        traceback.print_exc()
+
+
+@app.route("/crown/sculpture/towers/<int:tower_id>/position", methods=["GET"])
+def crown_get_tower_position(tower_id):
+    """ Get current position of all joints (as much as we can tell) """
+    return _simple_web_async_request(TOWER_POSITION_REQUEST, tower_id)
+
+
+@app.route("/crown/sculpture/towers/<int:tower_id>/PID", methods=["GET", "PUT"])
+def crown_get_set_tower_pid(tower_id):
+    """ Get current PI values for all joints, or set PI values for selected joints
+        Returns {"p":[xx,xx,xx],"i":[xx,xx,xx]}"""
+    if request.method == "GET":
+        return _simple_web_async_request(PID_VALUES_REQUEST, tower_id)
+    else:  # method "PUT"
+        if not _validate_tower(tower_id):
+            return make_response("Must have valid tower id", 400)
+        if "joint1_P" in request.values:
+            send_sculpture_message(SET_P_VALUE_COMMAND, tower_id=tower_id, joint_id=1, args=request.values["joint1_P"])
+        if "joint2_P" in request.values:
+            send_sculpture_message(SET_P_VALUE_COMMAND, tower_id=tower_id, joint_id=2, args=request.values["joint2_P"])
+        if "joint3_P" in request.values:
+            send_sculpture_message(SET_P_VALUE_COMMAND, tower_id=tower_id, joint_id=3, args=request.values["joint3_P"])
+        if "joint1_I" in request.values:
+            send_sculpture_message(SET_I_VALUE_COMMAND, tower_id=tower_id, joint_id=1, args=request.values["joint1_I"])
+        if "joint2_I" in request.values:
+            send_sculpture_message(SET_I_VALUE_COMMAND, tower_id=tower_id, joint_id=2, args=request.values["joint2_I"])
+        if "joint3_I" in request.values:
+            send_sculpture_message(SET_I_VALUE_COMMAND, tower_id=tower_id, joint_id=3, args=request.values["joint3_I"])
+        return make_response("Succcess", 200)
         
-def getTowerLimits(towerId):
-    """ Get min, max, and center positions for all joints.
-        Returns [{"min": xxx, "max":xxx, "center":xxx}] """
-    calls = []
-    for jointId in range(1,4):
-        calls.append({'call'   : requestJointLimits, 'callArgs' : [towerId, jointId], 'response' : None, 
-                      'filter' : jointLimitsRequestFilter, 'filterArgs' : [towerId, 1]})
-    requester = AsyncRequester(calls)
-    results = requester.run()
-    if (results):
-        limits = []
-        for call in calls:
-            limits.append(json.loads(call["response"]))
-        return(200, json.dumps(limits))
-                
-    else:
-        return(500)
-        
-        
-def getJointLimits(towerId, jointId):
-    """ Get min, max, and center positions for all joints.
-        Returns [{"min": xxx, "max":xxx, "center":xxx}] """
-    calls = []
-    calls.append({'call'   : requestJointLimits, 'callArgs' : [towerId, jointId], 'response' : None, 
-                  'filter' : jointLimitsRequestFilter, 'filterArgs' : [towerId, jointId]})
-    requester = AsyncRequester(calls)
-    results = requester.run()
-    if (results):
-        limits = []
-        for call in calls:
-            limits.append(json.loads(call["response"]))
-        print("limits: ", json.dumps(limits));
-        return(200, json.dumps(limits))
-                
-    else:
-        return(500)
-        
-def getDriveValues(towerId):
+
+@app.route("/crown/sculpture/towers/<int:tower_id>/drive", methods=["GET"])
+def crown_get_tower_drive(tower_id):
     """ Get current drive values for all joints
         Returns [xx,xx,xx] """
-    calls = [{'call'   : requestValveState, 'callArgs' : [towerId], 'response' : None, 
-              'filter' : valveDriveRequestFilter, 'filterArgs' : [towerId]}]    
-    
-    requester = AsyncRequester(calls)
-    results = requester.run()
-    if (results):
-        return(200, calls[0]["response"])
-    else:
-        return(500)  
+    return _simple_web_async_request(VALVE_DRIVE_REQUEST, tower_id)
               
-def getPIDValues(towerId):
-    """ Get current PI values for all joints
-        Returns {"p":[xx,xx,xx],"i":[xx,xx,xx]}"""
-        
-    calls = [{'call'   : requestPIDState, 'callArgs' : [towerId], 'response' : None, 
-              'filter' : PIDValuesRequestFilter, 'filterArgs' : [towerId]}]    
-    
-    requester = AsyncRequester(calls)
-    results = requester.run()
-    if (results):
-        return(200, calls[0]["response"])
-    else:
-        return(500) 
-                       
-def getMaquetteStatus():
-    """Get the status of the maquette. Includes mode, position, limits"""
-    calls = [{'call'   : requestMaquetteStatus, 'callArgs' : None, 'response' : None,
-              'filter' : maquetteStatusFilter, 'filterArgs' : None}]
-              
-    requester = AsyncRequester(calls)
-    results = requester.run()
-    if (results):
-        return(200, json.dumps(results[4:]))
-    else:
-        return(500)
-        
-def getMaquetteCalibration():
-    calls = [{'call'   : requestMaquetteCalibration, 'callArgs' : None, 'response' : None,
-              'filter' : maquetteCalibrationFilter, 'filterArgs' : None}]
-              
-    requester = AsyncRequester(calls)
-    results = requester.run()
-    if (results):
-        return(200, json.dumps(results[4:]))
-    else:
-        return(500)
-    
 
-   
+@app.route("/crown/sculpture/towers/<int:tower_id>/limits", methods=["GET", "PUT"])
+def crown_get_set_joint_limits(tower_id):
+    """ Get limits (left, center, right) for all joints.
+        Returns [[left,center,right],[left,center,right],[left,center,right]]"""
+    if request.method == "GET":
+        return _simple_web_async_request(TOWER_LIMITS_REQUEST, tower_id)
+    else:
+        if "j1_min" in request.values:
+            send_sculpture_message(SET_MIN_COMMAND, tower_id=tower_id, joint_id=1, args=[request.values["j1_min"]])
+        if "j1_max" in request.values:
+            send_sculpture_message(SET_MAX_COMMAND, tower_id=tower_id, joint_id=1, args=[request.values["j1_max"]])
+        if "j2_min" in request.values:
+            send_sculpture_message(SET_MIN_COMMAND, tower_id=tower_id, joint_id=2, args=[request.values["j2_min"]])
+        if "j2_max" in request.values:
+            send_sculpture_message(SET_MAX_COMMAND, tower_id=tower_id, joint_id=2, args=[request.values["j2_max"]])
+        if "j3_min" in request.values:
+            send_sculpture_message(SET_MIN_COMMAND, tower_id=tower_id, joint_id=3, args=[request.values["j3_min"]])
+        if "j3_max" in request.values:
+            send_sculpture_message(SET_MAX_COMMAND, tower_id=tower_id, joint_id=3, args=[request.values["j3_max"]])
 
-GENERAL_STATUS_REQUEST = 's'
-JOINT_STATUS_REQUEST   = 'j'
-JOINT_LIMITS_REQUEST   = 'l'
-HOME_COMMAND           = 'H'
-TOWER_POSITION_REQUEST = 'T'
-VALVE_DRIVE_REQUEST    = 'v'
-SET_HOME_SPEED_COMMAND = 'h'
-SET_TARGETS_COMMAND    = 't'
-SET_LIMITS_COMMAND     = 'L'
-SET_MIN_COMMAND        = 'm'
-SET_MAX_COMMAND        = 'M'
-SET_CENTER_COMMAND     = 'C'
-SET_I_VALUE_COMMAND    = 'I'
-SET_P_VALUE_COMMAND    = 'P'
-PID_VALUES_REQUEST     = 'p'
-NEUTER_COMMAND         = 'n'
-EXTENDED_STATUS_REQUEST = 'e'
-MAQUETTE_CALIBRATION_REQUEST = 'c'
-SET_RUN_STATE_COMMAND  = 'r'
-SET_HOME_STATE_COMMAND = 'w'
-SET_MAQUETTE_MODE_COMMAND = 'M'
-SET_MAQUETTE_TOWER_CENTER_COMMAND = 'C'
+    return make_response("Success", 200)
+    # commandSetLimits(towerId, jointId, -250, 300);  # XXX - seems like this was set this way.... FIXME?
+    # XXX - shouldn't we be able to restore joint limits, like if the arduino reboots?
 
-def validateResponseHeader(message, towerId, command):
-    if message[0] != '!':
-        return False
-        
-    if message[1] != command:
-        return False
-        
-    try: 
-        if towerId != None and int(message[2]) != towerId:
-            return False
-    except ValueError:
-        return False
-        
-    return True
-   
-def generalStatusRequestFilter(message, args):
-    ret = validateResponseHeader(message, args[0], GENERAL_STATUS_REQUEST)
-    if (ret):
-        return message[3:]
-    else:
-        return None
-        
-    
-def jointStatusRequestFilter(message, args):
-    ret = validateResponseHeader(message, args[0], JOINT_STATUS_REQUEST)
-    try: 
-        if (ret and (args[1] == int(message[3]))): # checking third position in header against joint id
-            return message[4:]
-    except ValueError:
-        pass
-        
-    return None
-        
-def jointLimitsRequestFilter(message, args):
-    ret = validateResponseHeader(message, args[0], JOINT_LIMITS_REQUEST)
-    try: 
-        if (ret and (args[1] == int(message[3]))): # checking third position in header against joint id
-            return message[4:]
-    except ValueError:
-        pass
-        
-    return None
-    
-def towerPositionRequestFilter(message, args):
-    ret = validateResponseHeader(message, args[0], TOWER_POSITION_REQUEST)
-    if (ret):
-        return message[3:]
-    else:
-        return None
-    
-def valveDriveRequestFilter(message, args):
-    ret = validateResponseHeader(message, args[0], VALVE_DRIVE_REQUEST)
-    if (ret):
-        return message[3:]
-    else:
-        return None
-        
-def PIDValuesRequestFilter(message, args):
-    ret = validateResponseHeader(message, args[0], PID_VALUES_REQUEST)
-    if (ret):
-        return message[3:]
-    else:
-        return None
 
-def maquetteCalibrationFilter(message, args):
-    ret = validateResponseHeader(message, args[0], MAQUETTE_CALIBRATION_REQUEST)
-    if (ret):
-        return message[3:]
-    else:
-        return None
-        
-# things one can request...
+@app.route("/crown/sculpture/towers/<int:tower_id>/joints/<int:joint_id>/home", methods=["PUT"])
+def crown_home(tower_id, joint_id):
+    send_sculpture_message(HOME_COMMAND, tower_id=tower_id, joint_id=joint_id)
+    return make_response("Success", 200)
 
-def requestTowerGeneralStatus(args):
-    if (isinstance(args, list)):
-        towerId = args[0]
+ 
+@app.route("/crown/sculpture/towers/<int:tower_id>/joints/<int:joint_id>/home_speed", methods=["PUT"])  # XXX Get? I don't think I care at this point
+def crown_set_home_speed(tower_id, joint_id):
+    if "speed" in request.values:
+        send_sculpture_message(SET_HOME_SPEED_COMMAND, tower_id=tower_id, joint_id=joint_id, args=[int(request.values["speed"])])
+        return make_response("Success", 200)
     else:
-        towerId = args
-        
-    serial.write("<" + str(towerId) + GENERAL_STATUS_REQUEST + ">")
+        return make_response("Must have speed parameter", 400)
 
-def requestJointStatus(args):
-    if (isinstance(args, list)):
-        towerId = args[0]
-        jointId = args[1]
-    else:
-        return # log error !! todo
-        
-    serial.write("<" + str(towerId) + GENERAL_STATUS_REQUEST + ">")
 
-def requestJointLimits(args, jointId = None):
-    if (isinstance(args, list)):
-        towerId = args[0]
-        jointId = args[1]
-    else:
-        return # log error !! todo
-
-    serial.write("<" + str(towerId) + str(jointId) + JOINT_LIMITS_REQUEST + ">")
-    
-def requestTowerPosition(args):
-    if (isinstance(args, list)):
-        towerId = args[0]
-    else:
-        towerId = args
-        
-    serial.write("<" + str(towerId) + TOWER_POSITION_REQUEST + ">") 
-
-def requestValveState(args):
-    if (isinstance(args, list)):
-        towerId = args[0]
-    else:
-        towerId = args     
-    serial.write("<" + str(towerId) + VALVE_DRIVE_REQUEST + ">")
-    
-def requestPIDState(args):
-    if (isinstance(args, list)):
-        towerId = args[0]
-    else:
-        towerId = args   
-    serial.write("<" + str(towerId) + PID_VALUES_REQUEST + ">")
-    
-def requestExtendedStatus(args):
-    if (isinstance(args, list)):
-        towerId = args[0]
-    else:
-        towerId = args   
-    serial.write("<" + str(towerId) + EXTENDED_STATUS_REQUEST + ">")
-    
-def requestMaquetteCalibration(args):
-    if (isinstance(args, list)):
-        towerId = args[0]
-    else:
-        towerId = args
-        
-    serial.write("<" + str(towerId) + MAQUETTE_CALIBRATION_REQUEST + ">")
-    
-## Will I do an ack on these commands? No. These are 485 commands
-
-def commandHome(towerId, jointId):
-    serial.write("<" + str(towerId) + str(jointId) + HOME_COMMAND + ">")
-    
-def commandSetTargets(towerId, j1, j2, j3):
-    serial.write("<" + str(towerId) + SET_TARGETS_COMMAND + str(j1) +  ">")
-    serial.write("<" + str(towerId) + SET_TARGETS_COMMAND + str(j2) +  ">")
-    serial.write("<" + str(towerId) + SET_TARGETS_COMMAND + str(j3) +  ">")
-
-    
-def commandSetHomeSpeed(towerId, jointId, homeSpeed):
-    serial.write("<" + str(towerId) + str(jointId) + SET_HOME_SPEED_COMMAND + str(homespeed))
-    
-def commandNeuterValve(towerId, jointId):
-    serial.write("<" + str(towerId) + str(jointId) + NEUTER_COMMAND + ">")
-    
-def commandSetRunState(towerId, onOff):
-    if onOff:
-        onOffVal = "1"
-    else:
-        onOffVal = "0"
-    serial.write("<" + str(towerId) + SET_RUN_STATE_COMMAND + onOffVal + ">") 
-    
-def commandSetCenters(towerId):
-    serial.write("<" + str(towerId) + str(1) + SET_CENTER_COMMAND + ">")
-    serial.write("<" + str(towerId) + str(2) + SET_CENTER_COMMAND + ">")
-    serial.write("<" + str(towerId) + str(3) + SET_CENTER_COMMAND + ">")
-
-    
-def commandSetLimits(towerId, jointId, min, max):
-    serial.write("<" + str(towerId) + str(jointId) + SET_MIN_COMMAND + str(min) + ">")
-    serial.write("<" + str(towerId) + str(jointId) + SET_MAX_COMMAND + str(max) + ">")
-
-def commandSetTowerHomed(towerId):
+@app.route("/crown/sculpture/towers/<int:tower_id>/force_homed", methods=["PUT"])
+def crown_force_home(tower_id):
     print("setting homed")
-    serial.write("<" + str(towerId) + str(1) + SET_HOME_STATE_COMMAND + "1>")
-    serial.write("<" + str(towerId) + str(2) + SET_HOME_STATE_COMMAND + "1>")
-    serial.write("<" + str(towerId) + str(3) + SET_HOME_STATE_COMMAND + "1>")
+    send_sculpture_message(SET_HOME_STATE_COMMAND, tower_id=tower_id, joint_id=1, args=[1])
+    send_sculpture_message(SET_HOME_STATE_COMMAND, tower_id=tower_id, joint_id=2, args=[1])
+    send_sculpture_message(SET_HOME_STATE_COMMAND, tower_id=tower_id, joint_id=3, args=[1])
     print("end homed")
+    return make_response("Success", 200)
 
-def commandSetMaquetteMode(mode):
-    if mode == "pose":
-        modeInt = "2"
-    elif mode == "off":
-        modeInt = "0"
-    elif mode == "immediate":
-        modeInt = "1"
-    else:
-        raise Exception
-    serial.write("<m" + SET_MAQUETTE_MODE_COMMAND + modeInt + ">")    
+
+@app.route("/crown/sculpture/tower/<int:tower_id>/running", methods=["PUT"])
+def crown_set_run_state(tower_id):
+    if "state" in request.values:
+        onOff = 1 if "state" in [1, "on", "running"] else 0
+    if onOff:
+        crown_force_home(tower_id)
+    send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_id, args=[onOff])
+    return make_response("Success", 200)
+
+
+@app.route("/crown/sculpture/tower/<int:tower_id>/joint/<joint_id>/neuter", methods=["PUT"])
+def commandNeuterValve(tower_id, joint_id):
+    send_sculpture_message(NEUTER_COMMAND, tower_id=tower_id, joint_id=joint_id)
+    return make_response("Success", 200)
+
     
-def commandCalibrateMaquette(towerId):
-    serial.write("<m" + SET_MAQUETTE_TOWER_CENTER_COMMAND + towerId + ">")    
+@app.route("/crown/sculpture/tower/<int:tower_id>/center", methods=["PUT"])
+def crown_set_center(tower_id):
+    """ Causes the current values of the tower joints to be set as the
+        center values. This really *should* return the current values, and be
+        considered at the low level as an AsyncRequest. XXX FIXME """
+    send_sculpture_message(SET_CENTER_COMMAND, tower_id=tower_id, joint_id=1)
+    send_sculpture_message(SET_CENTER_COMMAND, tower_id=tower_id, joint_id=2)
+    send_sculpture_message(SET_CENTER_COMMAND, tower_id=tower_id, joint_id=3)
+    return make_response("Success", 200)
+
+
+@app.route("/crown/sculpture/tower/<int:tower_id>/targets", methods=["PUT"])
+def crown_set_targets():
+    """ Set the target values for the hydraulics. Fire and forget. """
+    # XXX - I should also be able to get these values, even if I have to store them on the pi
+    if not _validate_tower(tower_id):
+        return make_response("Must have valid tower id", 400)
+    elif set("j1", "j2", "j3") not in set(request.values):
+        return make_response("Must contain joint value parameters j1, j2, j3", 400)
+    send_sculpture_message(SET_TARGETS_COMMAND, tower_id=tower_id, joint_id=1, args=request.values["j1"])
+    send_sculpture_message(SET_TARGETS_COMMAND, tower_id=tower_id, joint_id=2, args=request.values["j2"])
+    send_sculpture_message(SET_TARGETS_COMMAND, tower_id=tower_id, joint_id=3, args=request.values["j3"])
+    return make_response("Success", 200)
+
+
+# XXX What are saved parameters here? 
+@app.route("/crown/savedParameters", methods=["GET"])
+def crown_get_parameters():
+    pass
+
+	
+@app.route("/crown/maquette", methods=["GET", "PUT"])
+def crown_get_maquette_state():
+    if request.method == "GET":
+        """Get the status of the maquette. Includes mode, position, limits"""
+        return _simple_web_async_request(MAQUETTE_STATUS_REQUEST, to_maquette=True)
+    else:
+        """Only valid POST currently is to set the mode"""
+        if "mode" in request.values:
+            mode = request.values["mode"]
+            modeInt = -1
+            if mode == "pose":
+                modeInt = "2"
+            elif mode == "off":
+                modeInt = "0"
+            elif mode == "immediate":
+                modeInt = "1"
+            if modeInt >= 0:
+                send_sculpture_message(SET_MAQUETTE_MODE_COMMAND, [modeInt], to_maquette=True)
+                return make_response("Success", 200)
+            else:
+                return make_response("Invalid mode", 400)
+        else:
+            return make_response("Must specify mode", 400)
+            
+
+@app.route("/crown/maquette/calibration", methods=["GET"])
+def requestMaquetteCalibration():
+    return _simple_web_async_request(MAQUETTE_CALIBRATION_REQUEST, to_maquette=True)
+ 
+
+@app.route("/crown/maquette/towers/<tower_id>/calibrate", methods=["PUT"]) 
+def maquette_calibrate(tower_id):
+    send_sculpture_message(SET_MAQUETTE_TOWER_CENTER_COMMAND, tower_id=tower_id, to_maquette=True)
   
 
-    
+# @app.route("/crown/playback", methods=["GET"])
+# def crown_get_playback_state():
+#    response = getPlaybackState()
 
 
-class Handler(BaseHTTPRequestHandler):
-    def sendResponse(self, resp, mimetype="application/json"):
-#         print("attempting to send response");
-#         self.send_response(resp[0])
-#         self.send_header('Content-type', mimetype)
-#         self.send_header('Access-Control-Allow-Origin', '*')
-#         self.end_headers()
-#         self.wfile.write(resp[1])
-#         return
-        
-        if (  isinstance(resp, list) 
-           or isinstance(resp, tuple)):
-            print("sending list or tuple")
-            print("code is {}".format(resp[0]))
-            self.send_response(resp[0])
-            self.send_header('Content-type', mimetype)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            if resp[1]:
-                self.wfile.write(resp[1])
-                
-        else:
-            print("sending single response!")
-            self.send_response(resp)
-            self.end_headers()  
+# @app.route("/crown/record", methods=["GET"])
+# def crown_get_maquette_state():
+#    response = getRecordingState()
+
+
+# @app.route("/crown/playlists", methods=["GET"])
+# def crown_get_playlists():
+#    response = getPlaylists()
+
+
+# @app.route("/crown/clips", methods=["GET"])
+# def crown_get_clips():
+#    response = getPlaylists()
+ 
+     
+# XXX - what are the saved parameters?  
+@app.route("/crown/parameters", methods=["PUT"])
+def crown_set_saved_parameters_():
+    pass
+
+
+@app.route("/crown/sculpture/towers/<int:tower_id>/debug", methods=["PUT"])
+def crown_set_tower_debug(tower_id):
+    pass
+
+
+@app.route("/crown/sculpture/towers/<int:tower_id>/playback", methods=["PUT"])
+def crown_set_playback(tower_id):
+    pass
+
+
+@app.route("/crown/sculpture/towers/<int:tower_id>recording", methods=["PUT"])
+def crown_set_recording(tower_id):
+    pass
+
+
+@app.route("/crown/sculpture/towers/<int:tower_id>/playlists", methods=["PUT"])
+def crown_set_playlists():
+    pass
+
             
-    def sendError(self, errcode):
-        self.end_headers()
-        self.send_response(errcode)
-             
-                
-    def getFile(self, path, mimeType):
-        try:
-            print ("attempting to open", path)
-            f=open("." + path, "rb")
-            self.send_response(200)
-            self.send_header('Content-type', mimeType)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(f.read())
-            f.close()
-        except Exception:
-            self.sendError(404)
-
         
-    def do_GET(self):
-        parsed_path = urlparse.urlparse(self.path)
-        paths = parsed_path.path[1:].split('/')
-        print paths
-        path_len = len(paths)
-        
-        if (paths[0] == ""):
-            self.getFile("/control_panel.html", 'text/html');
-    
-        
-            
-        elif paths[0] == "crown":
-            if paths[1] == "sculpture":
-                if len(paths) < 3:
-                    # /crown/sculpture. Get sculpture state
-                    # option for extended state? ?extended=true
-                    self.sendResponse(getSculptureState(range(1,4))) 
-                elif paths[2] == "towers": 
-                    # /crown/sculpture/towers/[id]
-                    if len(paths) < 4:
-                        self.send_response(404)
-                        return
-                    try:
-                        towerNum = int(paths[3])
-                    except ValueError:
-                        self.send_response(404)
-                        return
-                        
-                    if towerNum not in gTowerRange:
-                        self.send_response(404)
-                        return
-                      
-                    if len(paths) < 5:
-                        # get tower state
-                        self.sendResponse(getSculptureState([towerNum]))
-                    elif paths[4] == "position":
-                        # get tower position
-                        self.sendResponse(getTowerPosition(towerNum))
-                    elif paths[4] == "limits":
-                        # get joint limits
-                        self.sendResponse(getTowerLimits(towerNum)) 
-                    elif paths[4] == "homingStatus":
-                        self.sendResponse([200, HomingStatusHandler.getHomingStatus(towerNum)])
-                    elif paths[4] == "pid":
-                        self.sendResponse(getPIDValues(towerNum))
-                    elif paths[4] == "valves":
-                        self.sendResponse(getDriveValues(towerNum))
-                        
-                    elif len(paths) == 7:
-                        jointNum = int(paths[5])
-                        if paths[6] == "limits":
-                            self.sendResponse(getJointLimits(towerNum, jointNum));
-                            return;
-
-                    else:
-                        self.send_response(404)
-                        return                                                   
-                else:
-                    self.send_response(404)
-                    return                    
-            elif paths[1] == "savedParameters": # get saved pid and limits
-                pass
-            elif paths[1] == "maquette": # get maquette status
-                if (len(paths) == 2):
-                    # get maquette status
-                    self.sendResponse(getMaquetteStatus())
-                elif len(paths) == 3:
-                    if paths[2] == "calibration":
-                        self.sendResponse(getMaquetteCalibration())
-            elif paths[1] == "playback": # get playback status (playing, not playing, which playlist)
-                self.sendResponse(getPlaybackState())
-            elif paths[1] == "record": # get recording state (recording, not recording, which tower to record)
-                self.sendResponse(getRecordingState())
-            elif paths[1] == "playlists": # get list of playlists
-                self.sendResponse(getPlaylists())
-            elif paths[1] == "clips": # get list of clips
-                self.sendResponse(getClips())
-        elif paths[0] == "admin":
-            self.getFile("/control_panel.html", 'text/html');
-        elif paths[0] == "img" or paths[0] == "js" or paths[0] == "style":
-            print("GET path is {}\n".format(self.path))
-           
-            if self.path.endswith(".png"):
-                self.getFile(self.path, 'image/png')
-            elif self.path.endswith(".gif"):
-                self.getFile(self.path,'image/gif')
-            elif self.path.endswith(".jpeg"):
-                self.getFile(self.path, 'image/jpeg')
-            elif self.path.endswith(".html"):
-                self.getFile(self.path, 'text/html')
-            elif self.path.endswith(".js"):
-                self.getFile(self.path, 'application/javascript')
-            elif self.path.endswith(".css"):
-                self.getFile(self.path,'text/css')
-            else:
-                self.sendResponse(404)
-        else: # for now, just 404
-            self.sendResponse(404)
-            
-
-    def getPlaybackState():
-        return [200, getPlaybackStatue()]
-                      
-    def getRecordingState():
-        return [200, {"recordingState":Recording.getStatus(), "towers":Recording.getTowers()}]
-        
-    def getPlaylists():
-        return [200, Playback.getPlaylists()]
-        
-    def getClips():
-        return [200, Playback.getClips()]
-        
-    def do_OPTIONS(self):
-        print "OPTIONS"
-        self.send_response(200, "ok")
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS')
-        self.send_header("Access-Control-Allow-Headers", "X-Requested-With")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+# class HomingStatusHandler():
+#     homingStatus = []
+#    
+#    def init():
+#        for i in range(0,4):
+#            homingStatus.append(None)
+#        serial.registerListener(HomingStatusHandler.homingCallback, None)  # XXX - note that this adds a dependency on initing crown serial before creating this object!
+#            
+#    def setHomingStatus(homingMessage):
+#        towerId = homingMessage[2]
+#        try:
+#            homingObject = json.loads(homingMessage[4:])
+#            HomwingStatusHandlr.homingStatus[towerId] = homingObject
+#        except ValueError:
+#            logging.error("malformed json in homing message")
+#            
+#    def getHomingStatus(towerId):
+#        if (towerId not in gTowerRange):
+#            return None
+#        return HomingStatusHandler.homingStatus[towerId]
+#        
+#    def homingCallback(message, args):
+#        if (validateRequestHeader(message, None, HOME_COMMAND)) :
+#            HomingStatusHandler.setHomingStatus(message)
+#            return True
+#        else:
+#            return False
 
 
-        
-    def do_PUT(self):
-        ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
-        if ctype == 'multipart/form-data':
-            postvars = cgi.parse_multipart(self.rfile, pdict)
-        elif ctype == 'application/x-www-form-urlencoded':
-            length = int(self.headers.getheader('content-length'))
-            postvars = cgi.parse_qs(self.rfile.read(length), keep_blank_values=1)
-        else:
-            postvars = {}
-            
-        parsed_path = urlparse.urlparse(self.path)
-        paths = parsed_path.path.split('/')
-        if len(paths) < 2:
-            self.send_response(404)
-            return 
-            
-        if paths[0] == "crown":
-            if paths[1] == "sculpture":
-                if len(paths) < 5 or paths[2] != "towers":
-                    self.send_response(404)
-                    return     
-                try:                            
-                    towerNum = int(paths[3])
-                except ValueError:
-                    self.send_response(404)
-                    return
-                                     
-                if not towerNum in gTowerRange:
-                    self.send_response(404)
-                    return
-                    
-                if paths[5] == "targets": # set  target position
-                    self.sendResponse(commandSetTargets(towerId, postvars["joint1"], postvars["joint2"], postvars["joint3"]))
-                    return
-                elif paths[5] == "joints":
-                    if len(paths) < 6:
-                        self.send_response(404)
-                        return
-                    self.sendResponse(commandSetLimits(towerId, jointId, postvars["min"], postvars["max"], postvars["center"]))
-                    return
-                elif paths[5] == "pid":
-                    self.sendResponse(setTowerPID([[postvars["joint1_P"], postvars["joint1_1"]],
-                                              [postvars["joint2_P"], postvars["joint2_1"]],
-                                              [postvars["joint3_P"], postvars["joint3_1"]]]))
-                elif paths[5] == "debug":
-                    pass
-            elif paths[1] == "savedParameters": # set saved limits and pid values
-                pass
-            elif paths[1] == "maquette": # set maquette limits and mode
-                pass
-            elif paths[1] == "playback": #get playback status (playing, not playing, which playlist)
-                pass
-            elif paths[1] == "record": # get recording state (recording, not recording, which tower to record)
-                pass
-            elif paths[1] == "playlists": # modify playlists
-                pass
-            
-        return
-        
-        # XXX TODO - decide if the towers are indexed based on 1 or 0
-        # I seem to be leaning on 1 for the ids at least
-        # yeah, the API uses a 1's based index.
-            
-    def do_POST(self): # homing, playback, record, 
-    
-        parsed_path = urlparse.urlparse(self.path)
-        paths = parsed_path.path.split('/')
-        if len(paths) < 2:
-            self.send_response(404)
-            return
-# 
-#         ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
-#         if ctype == 'multipart/form-data':
-#             postvars = cgi.parse_multipart(self.rfile, pdict)
-#         elif ctype == 'application/x-www-form-urlencoded':
-#             length = int(self.headers.getheader('content-length'))
-#             postvars = cgi.parse_qs(self.rfile.read(length), keep_blank_values=1)
-#         else:
-#             postvars = {}
-#             
-        print paths
-        paths = paths[1:]
-        if paths[0] == "crown":
-            if paths[1] == "sculpture":
-                if (   (len(paths) >= 7) 
-                   and (paths[2] == "towers")
-                   and (paths[4] == "joints")):
-                    try:
-                        towerId = int(paths[3])
-                        jointId = int(paths[5])
-                        if (towerId not in gTowerRange) or (jointId not in range(1,4)):
-                            raise ValueError 
-                    except ValueError:
-                        self.send_response(404)
-                        return
-
-                    if (paths[6] == "home"):
-                        self.sendResponse(commandHome(towerId, jointId))
-                        return
-                    elif (paths[6] == "limits"):
-                        commandSetLimits(towerId, jointId, -250, 300);
-                        self.send_response(200);
-                        return
-                elif (len(paths) == 5) :
-                    try: 
-                        print("paths 3 is ", paths[3])
-                        print("paths 4 is ", paths[4])
-                        towerId = int(paths[3])
-                        if (paths[4] == "center"):
-                            commandSetCenters(towerId)
-                            self.send_response(200);
-                        elif (paths[4] == "running"):
-                            try:
-                                print("running?")
-                                commandSetTowerHomed(towerId)
-                                commandSetRunState(towerId, True)
-                                print("sending 200")
-                                self.send_response(200);
-                                return
-                            except Exception as e:
-                                traceback.print_exc()
-                                raise e
-
-                        else:
-                            self.send_response(404)
-                              
-                    except Exception:
-                        self.send_response(404)
-                        return;
-                    
-                else:
-                    self.send_response(404)
-                    return  
-            elif paths[1] == "maquette":
-                if paths[2] == "mode":
-                    commandSetMaquetteMode(paths[3])
-                    self.end_response(200)
-                elif paths[2] == "towers":
-                    if paths[4] == "calibrate":
-                        commandCalibrateMaquette(int(paths[3]))
-                    
-        else:
-            self.send_response(404)
-            return  
-                              
-        return
-    def do_DELETE(self): # playlists, recordings
-        return
-        
-class HomingStatusHandler():
-    homingStatus = []
-    
-    def init():
-        for i in range(0,4):
-            homingStatus.append(None)
-        serial.registerListener(HomingStatusHandler.homingCallback, None)  # XXX - note that this adds a dependency on initing crown serial before creating this object!
-            
-    def setHomingStatus(homingMessage):
-        towerId = homingMessage[2]
-        try:
-            homingObject = json.loads(homingMessage[4:])
-            HomwingStatusHandlr.homingStatus[towerId] = homingObject
-        except ValueError:
-            logging.error("malformed json in homing message")
-            
-    def getHomingStatus(towerId):
-        if (towerId not in gTowerRange):
-            return None
-        return HomingStatusHandler.homingStatus[towerId]
-        
-    def homingCallback(message, args):
-        if (validateRequestHeader(message, None, HOME_COMMAND)) :
-            HomingStatusHandler.setHomingStatus(message)
-            return True
-        else:
-            return False
-
-
-
-class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
-    """Handle requests in a separate thread."""
-
-    
 
 if platform == "linux" or platform == "linux2":
-    logfile = '/var/log/crown/crown.log'
+    # logfile = '/var/log/crown/crown.log'
+    logfile = 'crown.log'
 elif platform == "darwin":
     logfile = 'crown.log'
+
 
 if __name__ == "__main__":
     logging.basicConfig(filename=logfile,level=logging.DEBUG)
     
     serial.init()
     
-    homingHandler = HomingStatusHandler()
+    # homingHandler = HomingStatusHandler()
     
     time.sleep(1) # why am I doing this?
     
-    server = ThreadedHTTPServer(('localhost', 5050), Handler)
-    print 'Starting server, use <Ctrl-C> to stop'
+    
+    # server = ThreadedHTTPServer(('', 5050), Handler)
+    # print('Starting server, use <Ctrl-C> to stop')
     try:
-        server.serve_forever()
+        serve_forever(5050)
     except KeyboardInterrupt:   
         pass
         
