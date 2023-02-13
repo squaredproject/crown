@@ -5,11 +5,11 @@ from sys import platform
 from threading import Thread, Lock
 import logging
 import time
-import Queue
+import queue
 
 
 if platform == "linux" or platform == "linux2":
-    tty = '/dev/ttyUSB0'
+    tty = '/dev/ttyACM0'
 elif platform == "darwin":
     tty = '/dev/tty.usbserial'
     
@@ -25,7 +25,7 @@ serialThread = None
 
 running = True
 
-writeQueue = Queue.Queue()
+writeQueue = queue.Queue()
 
 
 def init():  
@@ -44,16 +44,18 @@ def shutdown():
 def run():
     serial_open()
     while( running ):
-        try: 
-            avail_read,avail_write,avail_error=select([ser, writeQueue], [], [], timeout)
+        try:
+            # avail_read,avail_write,avail_error=select.select([ser, writeQueue], [], [], timeout)
+            avail_read,avail_write,avail_error=select.select([ser], [], [], timeout)
             if ser in avail_read:
-                if checkForResponse(): 
-                    routeResponse()
+                resp = checkForResponse()
+                if resp: 
+                    routeResponse(resp)
             
             
             while(writeQueue.qsize() > 0) :  # XXX do this in a select - can look for writes and reads simultaneously
                 item = writeQueue.get()
-                ser.write(item)
+                ser.write(bytes(item, "utf-8"))
                 
 
         except serial.SerialException:
@@ -69,9 +71,9 @@ def serial_open():
             ser.close()
             time.sleep(1)
         ser.port = tty
-        ser.open()            
+        ser.open()
     except serial.SerialException: # maybe serialUtil.SerialException?
-        logging.error("Failed to open serial port at " + str(tty));
+        print("Failed to open serial port at " + str(tty));
 
 # called by listener thread...
 def registerListener(callback, args):
@@ -91,18 +93,16 @@ def freeListener(callbackId):
     del listeners[callbackId]
     listenerMutex.release()
     
-    
-    
 
 # command interface - private functions
-MAX_COMMAND_LEN = 256
+MAX_COMMAND_LEN = 2000
 command_len = 0
 command = []
 
 
 bInCommand = False
-COMMAND_START_CHAR = '<'
-COMMAND_END_CHAR = '>'  
+COMMAND_START_CHAR = b'<'
+COMMAND_END_CHAR = b'>'  
 
 
 def checkForResponse():
@@ -112,7 +112,7 @@ def checkForResponse():
     command_finished = False
     if command_len >= MAX_COMMAND_LEN:
         command = []
-    c = ser.read(1) 
+    c = ser.read(1)
     while(c):
         command_len = command_len + 1
         if ((not bInCommand) and c == COMMAND_START_CHAR):
@@ -123,29 +123,33 @@ def checkForResponse():
             command.append(c)
         elif (bInCommand and c == COMMAND_END_CHAR):
             command_finished = True
+            command_len = 0
             bInCommand = False
             
-        if not command_finished and command_len >= max_command_len:
+        if not command_finished and command_len >= MAX_COMMAND_LEN:
             bInCommand = False
+            command_len = 0
+            print("Exceeded maximum size of command, resetting")
         if command_finished:
             break
         else:
             c = ser.read(1)
-        
+     
+    if command_finished:
+        return b''.join(command).decode('utf-8')
+    else:
+        return None
             
-    return command_finished
             
-            
-def routeResponse():
+def routeResponse(response):
     listenerMutex.acquire()
-    bareCommand = command[1:-1] # strip '<' ..'>'
+    bareCommand = response[1:-1] # strip '<' ..'>'
     for key in listeners :
         listener = listeners[key]
         if listener["callback"](listener["args"], bareCommand):  
             break
             
     listenerMutex.release()
-    command = []
     
   
 
