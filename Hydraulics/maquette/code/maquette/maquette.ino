@@ -58,13 +58,10 @@
 #endif
 
 #define MAIN_LOOP_TIMEOUT_MILLIS 20
-
 #define TF_STRING(x) ((x) ? "true" : "false")
-
 #define SETTLE_TIME 2
 
 //const int SPI_CS_PIN = 53;
-
 
 
 typedef enum {
@@ -73,7 +70,6 @@ typedef enum {
    MODE_POSE = 2,
    MODE_SLAVE = 3,
 } Mode;
-
 Mode mode = MODE_OFF;
 
 int towerValid[NUM_TOWERS] = {TRUE, TRUE, TRUE, TRUE};
@@ -266,7 +262,7 @@ unsigned long mainloopTimeout = 0;
 unsigned long poseTimeout = 0;
 
 void loop() {
-    char outBuf[1024];
+    char outBuf[4096];
     unsigned long curTime = millis();
 
 
@@ -609,6 +605,7 @@ void debug_info(char *debugStr)  // XXX add formatting
     Serial.print(buf);
 }
 
+
 // Let the rest of the world know what we're doing
 // Here I'm going to work in JSON, since that's easiest for me to parse
 static void broadcastModelPosition() {
@@ -620,7 +617,7 @@ static void broadcastModelPosition() {
         sprintf(ptr, "{'tower': %d, 'joints':[", i);
         ptr += strlen(ptr);
         for (int j=0; j<NUM_JOINTS; j++) {
-            sprintf(ptr, "%d,", modelPosition[i][j]);
+            sprintf(ptr, "%.2f,", canonicalJointPosition[i][j]);
             ptr += strlen(ptr);
         }
         ptr -= 1; // cut trailing ','
@@ -632,10 +629,10 @@ static void broadcastModelPosition() {
     Serial.print(modelString); 
 }
 
-#define MAX_COMMAND_LENGTH 32
 
-uint8_t cmd_str[MAX_COMMAND_LENGTH];
-uint8_t cmd_len = 0;
+#define MAX_COMMAND_LENGTH 32
+static uint8_t cmd_str[MAX_COMMAND_LENGTH];
+static uint8_t cmd_len = 0;
 
 static void readSerialCommand()
 {
@@ -838,10 +835,10 @@ static void parseMaquetteCommand(char *buf, int len) {
       }
       break; 
     case 's': // Get status
-        sprintf(outBuf, "<!ms{\"mode\": %d, \"poseState\": %d, [\n", mode, poseState);
+        sprintf(outBuf, "<!ms{\"mode\": %d, \"poseState\": %d, \"towerState\": [", mode, poseState);
         for (int i=0; i<4; i++) {
             char towerStr[1024];
-            sprintf(towerStr, "{\"tower\": %d, \"jointPos\" : [%d, %d, %d], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerValid\":%s, \"jointValid\" : [%s, %s, %s]},\n",
+            sprintf(towerStr, "{\"tower\": %d, \"jointPos\" : [%d, %d, %d], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerValid\":%s, \"jointValid\" : [%s, %s, %s]},",
                                 i, modelPosition[i][0], modelPosition[i][1], modelPosition[i][2],
                                 jointCenter[i][0], jointCenter[i][1], jointCenter[i][2],
                                 jointRange[i][0][0],jointRange[i][0][1], jointRange[i][1][0], jointRange[i][1][1], jointRange[i][2][0], jointRange[i][2][1],

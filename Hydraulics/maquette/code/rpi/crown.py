@@ -80,7 +80,7 @@ class AsyncRequester:
     covers, the data packets received are very small. We deal with this by making a 
     lot of requests for small amounts of data) """
     
-    def __init__(self, request_list, timeout=0.2):
+    def __init__(self, request_list, timeout=1.0):
         if not isinstance(request_list, Iterable):
             request_list = [request_list]
         self.request_list = request_list
@@ -94,8 +94,8 @@ class AsyncRequester:
         received by the specified timeout """
         try:
             endTime = time.time() + self.timeout
+            self._request()
             while (not self.data_ready and time.time() < endTime):
-                self._request()
                 time.sleep(0.15)
         except Exception as e:
             print(f"Exception in AsyncRequester! {e}\n")
@@ -122,7 +122,8 @@ class AsyncRequester:
             for request in myself.request_list:
                 filtered_response = request.filter(message)
                 if filtered_response:
-                    request.set_response(filtered_response[:]) # copying 
+                    request.set_response(filtered_response[:]) # copying
+                    found_requestor = True
                     break
             if not found_requestor:
                 print(f"Could not find requestor for message {message}")  

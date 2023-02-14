@@ -119,12 +119,12 @@ def checkForResponse():
             bInCommand = True
             command = []
             command.append(c)
-        elif (bInCommand and c != COMMAND_END_CHAR):
+        elif (bInCommand):
             command.append(c)
-        elif (bInCommand and c == COMMAND_END_CHAR):
-            command_finished = True
-            command_len = 0
-            bInCommand = False
+            if (c == COMMAND_END_CHAR):
+                command_finished = True
+                command_len = 0
+                bInCommand = False
             
         if not command_finished and command_len >= MAX_COMMAND_LEN:
             bInCommand = False
