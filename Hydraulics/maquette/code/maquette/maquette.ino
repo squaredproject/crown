@@ -1,7 +1,9 @@
 #include <mcp_can_dfs.h>
 //#include <mcp_can.h>
+#include<avr/wdt.h>
 
 #include <SPI.h>
+#include <EEPROM.h>
 #include "UART1.h"
 #include "UARTbaudrates.h"
 
@@ -63,6 +65,17 @@
 
 //const int SPI_CS_PIN = 53;
 
+#define CAL_DATE_EEPROM_OFFSET 0
+#define EEPROM_JOINT_CENTER_OFFSET (CAL_DATE_EEPROM_OFFSET + sizeof(long))
+#define EEPROM_JOINT_VALID_OFFSET (EEPROM_JOINT_CENTER_OFFSET + 12*sizeof(short))
+
+
+
+typedef struct {
+    long cal_ts_s;  // Unclear that I can actually get a timestamp here
+    short centers[12];  // center for every joint and every tower
+    byte valid[12];     // is calibration for that joint valid? 
+} maquetteCalibration;
 
 typedef enum {
    MODE_OFF = 0,
@@ -84,8 +97,6 @@ uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 200}, {-532, 328}, {-2
                                                   {{-300, 520}, {-532, 288}, {-275, 296}},
                                                   {{-200, 200}, {-200, 200}, {-200, 200}},
                                                   {{-300, 520}, {-532, 288}, {-275, 296}}};
-//-300, -532, -275
-// 520, 288, 296
 
 /*uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-200, 200}, {-200, 200}, {-200, 200}},
                                                   {{-200, 200}, {-200, 200}, {-200, 200}},
@@ -241,18 +252,57 @@ void log_debug(char *str)
   }
 }
 
+short EEPROMReadShort(int eepromOffset)
+{
+    byte first = EEPROM.read(eepromOffset);
+    byte second = EEPROM.read(eepromOffset + 1);
+    return ((short)first << 8) | second;
+}
+
+void readCalibrationData() 
+{
+    for (int i=0; i<NUM_TOWERS; i++) {
+        for (int j=0; j<NUM_JOINTS; j++) {
+            jointValid[i][j] = EEPROM.read(EEPROM_JOINT_VALID_OFFSET + i*4 + j);
+            jointCenter[i][j] = EEPROMReadShort(EEPROM_JOINT_CENTER_OFFSET + i*4 + j);
+        }
+    }
+}
+
+void saveTowerCalibration(int tower)
+{
+    for (int j=0; j<NUM_JOINTS; j++) {
+        EEPROM.put(EEPROM_JOINT_VALID_OFFSET + tower*4 + j, jointValid[tower][j]);
+        EEPROM.put(EEPROM_JOINT_CENTER_OFFSET + tower*4 + j, jointCenter[tower][j]);
+    }
+}
+
+void writeCalibrationData()
+{
+    for (int i=0; i<NUM_TOWERS; i++) {
+        for (int j=0; j<NUM_JOINTS; j++) {
+            EEPROM.put(EEPROM_JOINT_VALID_OFFSET + i*4 + j, jointValid[i][j]);
+            EEPROM.put(EEPROM_JOINT_CENTER_OFFSET + i*4 + j, jointCenter[i][j]);
+        }
+    }
+}
+
+
+
 // 485 bus here...
 #define NETWORKFILE   &uart1file
 
 void setup(){
   Serial.begin(115200);
   UART1_Init(UART_115200);  // Network Baud out to nodes
+  wdt_disable();  // Disable watchdog
   delay(100);
   InitButtons();
   InitLEDs();
   CAN_init();
   Serial.println("Starting maquette...");
   fprintf(NETWORKFILE, "Starting maquette...");
+  wdt_enable(WDTO_2S);
   //pinMode(35, INPUT_PULLUP);
 }
 
@@ -271,6 +321,7 @@ void loop() {
     readAllButtons();
     readSerialCommand();
     readCAN();
+    wdt_reset();  // Tell watchdog not to bark
     
     if (curTime > mainloopTimeout) {
       mainloopTimeout = curTime + MAIN_LOOP_TIMEOUT_MILLIS;
@@ -292,7 +343,7 @@ void loop() {
                 // For each joint, read the value from the maquette, and check whether that value
                 // has changed more than the accepted delta from the previous position
                 uint16_t potValue  = readJointPos(i, j);
-                canonicalJointPosition[i][j] = maquetteRawToCanonical(potValue, i, j);
+                canonicalJointPosition[i][j] = maquetteRawToCanonical((int16_t)potValue, i, j);
                 modelPosition[i][j] = maquetteToModel(potValue, i, j);
 /*                if (j == 1) {
                   char buf[512];
@@ -527,13 +578,12 @@ static ButtonState *readButtonState(int button)
 // jointCanonical = (potVal - potValMin) / (potValMax - potValMin)
 // And then - jointHydraulicsPos = hydraulicsValMin + jointCanonical*(hydraulicsValMax - hydraulicsValMin)
 
-static float maquetteRawToCanonical(uint16_t potValue, int towerId, int jointId) {
+static float maquetteRawToCanonical(int16_t potValue, int towerId, int jointId) {
    int16_t center = jointCenter[towerId][jointId];
-   int16_t min = jointRange[towerId][jointId][0];
-   int16_t max = jointRange[towerId][jointId][0];
-   float canonicalValue = potValue < center ? (potValue - center)/(center - min) : (potValue - center)/(max - center);
-
-   return clamp(canonicalValue, -1.0, 1.0);
+   int16_t min = jointRange[towerId][jointId][0] + center;
+   int16_t max = jointRange[towerId][jointId][1] + center;
+   float canonicalValue = potValue < center ? ((float)(potValue - center))/((float)(center - min)) : ((float)(potValue - center))/((float)(max - center));
+   return clampf(canonicalValue, -1.0, 1.0);
 }
 
 static int16_t maquetteCanonicalToSculpture(int towerId, int jointId) {
@@ -550,6 +600,14 @@ static int16_t maquetteToModel(uint16_t potValue, int towerId, int jointId) {
    int16_t val = (int16_t)((potValueCentered * SCULPTURE_RANGE)/POT_RANGE);
 
    return clamp(val, jointRange[towerId][jointId][0], jointRange[towerId][jointId][1]);
+}
+
+static float clampf(float value, float min, float max) {
+   if (value > max)
+       return max;
+   if (value < min)
+       return min;
+   return value;
 }
 
 
@@ -835,10 +893,11 @@ static void parseMaquetteCommand(char *buf, int len) {
       }
       break; 
     case 's': // Get status
+        // Note that I'm being very careful here not to overrun outBuf, which can't be very big because we have a small stack.
         sprintf(outBuf, "<!ms{\"mode\": %d, \"poseState\": %d, \"towerState\": [", mode, poseState);
+        Serial.print(outBuf);
         for (int i=0; i<4; i++) {
-            char towerStr[1024];
-            sprintf(towerStr, "{\"tower\": %d, \"jointPos\" : [%d, %d, %d], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerValid\":%s, \"jointValid\" : [%s, %s, %s]},",
+            sprintf(outBuf, "{\"tower\": %d, \"jointPos\" : [%d %d, %d], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerValid\":%s, \"jointValid\" : [%s, %s, %s]},",
                                 i, modelPosition[i][0], modelPosition[i][1], modelPosition[i][2],
                                 jointCenter[i][0], jointCenter[i][1], jointCenter[i][2],
                                 jointRange[i][0][0],jointRange[i][0][1], jointRange[i][1][0], jointRange[i][1][1], jointRange[i][2][0], jointRange[i][2][1],
@@ -847,11 +906,11 @@ static void parseMaquetteCommand(char *buf, int len) {
                                 (jointValid[i][1] ? "true" : "false"),
                                 (jointValid[i][2] ? "true" : "false"));
                                 
-            strcat(outBuf, towerStr);
+            if (i==3)
+                outBuf[strlen(outBuf)-1] = '\0'; // remove trailing ','
+            Serial.print(outBuf);    
         }
-        outBuf[strlen(outBuf)-1] = '\0'; // remove trailing ','
-        strcat(outBuf, "]}>");
-        Serial.println(outBuf);
+        Serial.println("]}>");
         break;
     case 'P':  // set slave (pose) data
         ntokens = sscanf (ptr,"t%hhu:%hu,%hu,%hu", 
@@ -923,6 +982,8 @@ static void parseMaquetteCommand(char *buf, int len) {
        }
        centered[towerId] = TRUE;
        Serial.println(maquetteToModel(jcenter[0], towerId, 0));
+
+       saveTowerCalibration(towerId);
        
        break;
     case 'c': // Get calibration status
@@ -990,7 +1051,25 @@ static void parseMaquetteCommand(char *buf, int len) {
         
       Serial.println(outBuf);
       break;
-       
+    
+    case 'p': // Get just the joint position, canonical form
+        // Using Serial.print because the Arduino folks have not implemented
+        // sprintf for floats. Fuckers.
+        Serial.print("<!mp[");
+        for (int i=0; i<NUM_TOWERS; i++) {
+            Serial.print("[");
+            for (int j=0; j<NUM_JOINTS; j++) {
+                Serial.print(canonicalJointPosition[i][j], 2);
+                if (j < NUM_JOINTS-1) {
+                    Serial.print(",");
+                }
+            }
+            Serial.print("]");
+            if (i< NUM_TOWERS-1) {
+                Serial.print(",");
+            }
+        }
+        Serial.print("]>\r\n");   
     default:
       break; 
     }
