@@ -44,6 +44,24 @@
 // CSW, 2/6/23
  
 
+// Note on the serial protocol:
+// The serial protocol on both the RS485 line (to the driver at the sculpture arm)
+// and on the serial line (to the higher level Raspberry Pi) takes the following 
+// form:
+// [m][tower_id][joint_id]<command>[args...]
+// An 'm' at the beginning means that this command is explicitly for the maquette,
+// and should not be sent to the sculpture driver.
+// 'tower_id' is mandatory for driver commands (not maquette commands). Since each
+// driver handles a single tower, the 'tower_id' is effectively the address on the
+// 485 bus. 'joint_id' may or may not be optional, depending on the command.
+// And 'command' is a single alpha character...
+//
+// If I were designing the system from scratch, this is not how I would specify the
+// protocol. I'm basically layering the arduino and raspberry pi on top of an 
+// existing system that just sent oscillating wave commands to the towers. I do not
+// want to break that system because it operates as a backup control system while
+// we get the kinks out of the new control system. 
+
 #define NUM_TOWERS 4
 #define NUM_JOINTS 3
 #define MIN_POT 384
@@ -65,18 +83,6 @@
 
 //const int SPI_CS_PIN = 53;
 
-#define CAL_DATE_EEPROM_OFFSET 0
-#define EEPROM_JOINT_CENTER_OFFSET (CAL_DATE_EEPROM_OFFSET + sizeof(long))
-#define EEPROM_JOINT_VALID_OFFSET (EEPROM_JOINT_CENTER_OFFSET + 12*sizeof(short))
-
-
-
-typedef struct {
-    long cal_ts_s;  // Unclear that I can actually get a timestamp here
-    short centers[12];  // center for every joint and every tower
-    byte valid[12];     // is calibration for that joint valid? 
-} maquetteCalibration;
-
 typedef enum {
    MODE_OFF = 0,
    MODE_FREE_PLAY = 1,
@@ -85,34 +91,66 @@ typedef enum {
 } Mode;
 Mode mode = MODE_OFF;
 
-int towerValid[NUM_TOWERS] = {TRUE, TRUE, TRUE, TRUE};
-int jointValid[NUM_TOWERS][NUM_JOINTS] = {{TRUE, TRUE, TRUE},
+// Block of calibration data
+// Joint enabled is whether the joint is currently enabled.
+// It is a uint8_t (bool), and there are 12 of them (4 towers, 3 joints per tower).
+// Tower enabled is whether the tower is currently enabled. 
+// It is a uint8_t (boo), and there are 4 of them (one for each tower).
+// Maquette joint center is the center of the joint on the maquette, as read by the potentiometer.
+// It is a uint16_t, and there are 12 of them (4 towers, 3 joints per tower).
+// Maquette Tower Center Calibrated is whether all the joint centers on each
+// tower are considered correctly calibrated.
+// It is a uint8_t, and there are 4 of them.
+#define EEPROM_CAL_DATE_OFFSET 0
+#define EEPROM_JOINT_ENABLED_OFFSET (EEPROM_CAL_DATE_OFFSET + sizeof(uint32_t))
+#define EEPROM_TOWER_ENABLED_OFFSET (EEPROM_JOINT_ENABLED_OFFSET + 12*sizeof(uint8_t))
+#define EEPROM_MAQUETTE_JOINT_CENTER_OFFSET (EEPROM_TOWER_ENABLED_OFFSET + 4*sizeof(uint8_t))
+#define EEPROM_MAQUETTE_TOWER_CENTER_CALIBRATED_OFFSET (EEPROM_MAQUETTE_JOINT_CENTER_OFFSET + 12*sizeof(uint16_t))
+
+// Enable/disable towers and joints
+// Position commands will not be sent to any tower/joint that is disabled
+int towerEnabled[NUM_TOWERS] = {TRUE, TRUE, TRUE, TRUE};
+int jointEnabled[NUM_TOWERS][NUM_JOINTS] = {{TRUE, TRUE, TRUE},
                                           {TRUE, TRUE, TRUE},
                                           {FALSE, FALSE, FALSE},
                                           {TRUE, TRUE, TRUE}};
 
-// XXX - this is the joint range for the MAQUETTE, not the tower.
-// XXX so where is the tower center position?
-uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 200}, {-532, 328}, {-275, 276}},
+// Whether we've centered the towers. If we don't have center information, we don't dare to move them.
+uint8_t maquetteTowerCenterCalibrated[NUM_TOWERS] = {FALSE, FALSE, FALSE, FALSE};
+
+
+// Joint range is the valid offset *ON THE SCULPTURE*, relative to the joint center, for the motion. 
+// This *should* be relatively stable - we shouldn't have to do the homing dance if we're careful.
+// XXX - Note that this information, despite being needed to do the maquette to sculpture
+// translation, is not actually set. (We can get it by asking the drivers. We just don't do
+// that as a matter of course, and we do not save the values) FIXME
+int16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 200}, {-532, 328}, {-275, 276}},
                                                   {{-300, 520}, {-532, 288}, {-275, 296}},
                                                   {{-200, 200}, {-200, 200}, {-200, 200}},
                                                   {{-300, 520}, {-532, 288}, {-275, 296}}};
 
-/*uint16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-200, 200}, {-200, 200}, {-200, 200}},
-                                                  {{-200, 200}, {-200, 200}, {-200, 200}},
-                                                  {{-200, 200}, {-200, 200}, {-200, 200}},
-                                                  {{-200, 200}, {-200, 200}, {-200, 200}}};
-*/
 
-// Joint center is the raw value at the center of the joint
-// XXX - note again that this is the range for the MAQUETTE not CROWN
-uint16_t jointCenter[NUM_TOWERS][NUM_JOINTS] = {{POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {504, 571, 500}, {POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, {504, 571, 500 }};
-uint8_t centered[NUM_TOWERS] = {FALSE, FALSE, FALSE, FALSE};
+// Maquette joint center is the value read by the potentiometer when the joint is in the
+// center position. It should be stable across reboots, and is saved and restored in EEPROM
+uint16_t maquetteJointCenter[NUM_TOWERS][NUM_JOINTS] = {{POT_RANGE/2,POT_RANGE/2,POT_RANGE/2}, 
+                                                        {POT_RANGE/2, POT_RANGE/2, POT_RANGE/2},
+                                                        {POT_RANGE/2, POT_RANGE/2, POT_RANGE/2},
+                                                        {POT_RANGE/2, POT_RANGE/2, POT_RANGE/2}};
+
+// Maquette jointRange. Again, relative to the maquette center. I'm believing here I can just 
+// set the range and then forget about it - this may or may not be correct. XXX - Check this.
+int16_t maquetteJointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 300}, {-300, 300}, {-300, 300}},
+                                                      {{-300, 300}, {-300, 300}, {-300, 300}},
+                                                      {{-300, 300}, {-300, 300}, {-300, 300}},
+                                                      {{-300, 300}, {-300, 300}, {-300, 300}}};
+
+// Canonical position is in the range [-1.0, 1.0], where -1.0 is all the way out, and 1.0 is all the way
+// in. 0 is the center. This is calculated on the maquette.
 float canonicalJointPosition[NUM_TOWERS][NUM_JOINTS] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
 
+// Model position - joint position of sculpture, if it matched maquette
 int modelPosition[NUM_TOWERS][NUM_JOINTS]       = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
-// XXX - below - when we're holding position?? XXX
-// XXX - it appears to be set, but never actually read. Not sure what I was thinking. XXX
+// Static model position - similiar to above, except de-noised a bit 
 int staticModelPosition[NUM_TOWERS][NUM_JOINTS] = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
 
 int pinMapping[NUM_TOWERS][NUM_JOINTS] = { {A0, A1, A3},
@@ -178,7 +216,7 @@ int modeIsLocal = TRUE; // could control via serial, or via local button
 
 static int16_t maquetteToModel(uint16_t pos, int i, int j);
 static int16_t clamp(int16_t value, int16_t max, int16_t min);
-static void targetSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]);
+static void sendToSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]);
 static void broadcastModelPosition();
 static void setModeFromSwitch();
 static int slaveDataValid();
@@ -252,39 +290,111 @@ void log_debug(char *str)
   }
 }
 
+// There are four different configuration variables that we store in EEPROM. These are
+// towerEnabled - whether the specified tower should be sent commands or not.
+// jointEnabled - whether the specified joint should be sent commands or not.
+// maquetteJointCenter - the center of the joint, as read by the potentiometer
+// maquetteTowerCenterCalibrated - whether all the joint centers are valid and the tower is considered calibrated
+
 short EEPROMReadShort(int eepromOffset)
 {
     byte first = EEPROM.read(eepromOffset);
     byte second = EEPROM.read(eepromOffset + 1);
-    return ((short)first << 8) | second;
+    return ((short)second << 8) | first;
+}
+
+static void debugCalibrationData(int tower)
+{
+    char buf[256];
+    sprintf(buf, "Tower %d Maquette Calibration Data: \r\n ", tower);
+    Serial.print(buf);
+    sprintf(buf, "  Joint Enabled: %d, %d, %d\r\n", jointEnabled[tower][0], jointEnabled[tower][1], jointEnabled[tower][2]);
+    Serial.print(buf);
+    sprintf(buf, "  Joint Center: %d, %d, %d\r\n", maquetteJointCenter[tower][0], maquetteJointCenter[tower][1], maquetteJointCenter[tower][2]);
+    Serial.print(buf);
+    sprintf(buf, "  Tower Enabled: %d,  Tower Center Calibrated  %d\r\n", towerEnabled[tower], maquetteTowerCenterCalibrated[tower]);
+    Serial.print(buf); 
+}
+
+void printCalibrationData()
+{
+    // Print the first 256 hex characters of EEPROM
+    char buf[256];
+    int eeprom_offset = 0;
+    for (int i=0; i<16; i++) {
+        sprintf(buf, "0x%x 0x%x 0x%x 0x%x  0x%x 0x%x 0x%x 0x%x  0x%x 0x%x 0x%x 0x%x  0x%x 0x%x 0x0%x 0x%x", 
+                      EEPROM.read(eeprom_offset),
+                      EEPROM.read(eeprom_offset+1),
+                      EEPROM.read(eeprom_offset+2),
+                      EEPROM.read(eeprom_offset+3),
+                      EEPROM.read(eeprom_offset+4),
+                      EEPROM.read(eeprom_offset+5),
+                      EEPROM.read(eeprom_offset+6),
+                      EEPROM.read(eeprom_offset+7),
+                      EEPROM.read(eeprom_offset+8),
+                      EEPROM.read(eeprom_offset+9),
+                      EEPROM.read(eeprom_offset+10),
+                      EEPROM.read(eeprom_offset+11),
+                      EEPROM.read(eeprom_offset+12),
+                      EEPROM.read(eeprom_offset+13),
+                      EEPROM.read(eeprom_offset+14),
+                      EEPROM.read(eeprom_offset+15));
+        Serial.print(buf);
+        Serial.println("");
+        eeprom_offset += 16;
+    }
 }
 
 void readCalibrationData() 
 {
+    char buf[256];
+    Serial.println("Reading calibration data from EEPROM");
     for (int i=0; i<NUM_TOWERS; i++) {
         for (int j=0; j<NUM_JOINTS; j++) {
-            jointValid[i][j] = EEPROM.read(EEPROM_JOINT_VALID_OFFSET + i*4 + j);
-            jointCenter[i][j] = EEPROMReadShort(EEPROM_JOINT_CENTER_OFFSET + i*4 + j);
+            jointEnabled[i][j] = EEPROM.read(EEPROM_JOINT_ENABLED_OFFSET + i*sizeof(uint8_t)*NUM_JOINTS + j*sizeof(uint8_t));
+            maquetteJointCenter[i][j] = EEPROMReadShort(EEPROM_MAQUETTE_JOINT_CENTER_OFFSET + i*sizeof(uint16_t)*NUM_JOINTS + j*sizeof(uint16_t));
         }
+        towerEnabled[i] = EEPROM.read(EEPROM_TOWER_ENABLED_OFFSET + i*sizeof(uint8_t));
+        maquetteTowerCenterCalibrated[i] = EEPROM.read(EEPROM_MAQUETTE_TOWER_CENTER_CALIBRATED_OFFSET + i*sizeof(uint8_t));
+        debugCalibrationData(i);
     }
 }
 
-void saveTowerCalibration(int tower)
+/* 
+ * writeTowerCalibration
+ * Save calibration information (4 fields) for the specified tower
+*/
+void writeTowerCalibrationData(int tower)
 {
     for (int j=0; j<NUM_JOINTS; j++) {
-        EEPROM.put(EEPROM_JOINT_VALID_OFFSET + tower*4 + j, jointValid[tower][j]);
-        EEPROM.put(EEPROM_JOINT_CENTER_OFFSET + tower*4 + j, jointCenter[tower][j]);
+        EEPROM.put(EEPROM_JOINT_ENABLED_OFFSET + tower*sizeof(uint8_t)*NUM_JOINTS + j*sizeof(uint8_t), jointEnabled[tower][j]);
+        EEPROM.put(EEPROM_MAQUETTE_JOINT_CENTER_OFFSET + tower*sizeof(uint16_t)*NUM_JOINTS + j*sizeof(uint16_t), maquetteJointCenter[tower][j]);
     }
+    Serial.print("Writing tower enabled ");
+    Serial.print(towerEnabled[tower]);
+    Serial.print(" to offset ");
+    Serial.println(EEPROM_TOWER_ENABLED_OFFSET + tower*sizeof(uint8_t));
+    EEPROM.put(EEPROM_TOWER_ENABLED_OFFSET + tower*sizeof(uint8_t), towerEnabled[tower]);
+    EEPROM.put(EEPROM_MAQUETTE_TOWER_CENTER_CALIBRATED_OFFSET + tower*sizeof(uint8_t), maquetteTowerCenterCalibrated[tower]);
+   
+    Serial.println("Wrote Tower Calibration Data");
+    debugCalibrationData(tower);
 }
 
+/*
+ * writeCalibrationdata
+ * Save calibration data (4 fields) for all four towers
+ */
 void writeCalibrationData()
 {
     for (int i=0; i<NUM_TOWERS; i++) {
-        for (int j=0; j<NUM_JOINTS; j++) {
-            EEPROM.put(EEPROM_JOINT_VALID_OFFSET + i*4 + j, jointValid[i][j]);
-            EEPROM.put(EEPROM_JOINT_CENTER_OFFSET + i*4 + j, jointCenter[i][j]);
-        }
+        writeTowerCalibrationData(i);
     }
+}
+
+void invalidateCalibration(int tower)
+{
+    EEPROM.put(EEPROM_MAQUETTE_TOWER_CENTER_CALIBRATED_OFFSET + tower, FALSE);
 }
 
 
@@ -303,7 +413,10 @@ void setup(){
   Serial.println("Starting maquette...");
   fprintf(NETWORKFILE, "Starting maquette...");
   wdt_enable(WDTO_2S);
+  readCalibrationData();
   //pinMode(35, INPUT_PULLUP);
+   // XXX - FIXME - Need to read the EEPROM for maquette calibration information,
+  // as well as whether we've turned on/off joints towers etc.
 }
 
 int timerIdx = 0;
@@ -347,11 +460,11 @@ void loop() {
                 modelPosition[i][j] = maquetteToModel(potValue, i, j);
 /*                if (j == 1) {
                   char buf[512];
-                  sprintf(buf, "pot val: %d, center: %d, model: %d\n", potValue, jointCenter[0][1], modelPosition[0][1]);
+                  sprintf(buf, "pot val: %d, center: %d, model: %d\n", potValue, maquetteJointCenter[0][1], modelPosition[0][1]);
                   Serial.print(buf);
                 }
 */
-                if ( towerValid[i] && jointValid[i][j] && 
+                if ( towerEnabled[i] && jointEnabled[i][j] && 
                    ((modelPosition[i][j] - 20 > staticModelPosition[i][j]) || 
                     (modelPosition[i][j] + 20 < staticModelPosition[i][j]))) {
                     //char buf[256];
@@ -369,13 +482,13 @@ void loop() {
                 break;
             case MODE_FREE_PLAY:
                 if (isCentered()) {
-                    targetSculpture(modelPosition);
+                    sendToSculpture(modelPosition);
                 }
                 break;
             case MODE_POSE:
                 getPoseData(); // Get pose data, if ready.  
                 if (poseDataValid && isCentered() ) {
-                    targetSculpture(posePosition);
+                    sendToSculpture(posePosition);
                     if (curTime > poseTimeout) {
                       poseState = POSE_STATE_WAITING;
                     } else {
@@ -385,7 +498,7 @@ void loop() {
                 break;
             case MODE_SLAVE:
                 if (slaveDataValid()  && isCentered()) {
-                    targetSculpture(slavePosition);
+                    sendToSculpture(slavePosition);
                 }
                 break;
             default:
@@ -402,7 +515,7 @@ static uint8_t isCentered(void)
 {
   uint8_t centerVal = TRUE;
   for (int i=0; i<NUM_TOWERS; i++){
-    centerVal = centerVal && centered[i];
+    centerVal = centerVal && maquetteTowerCenterCalibrated[i];
   }
 
   return centerVal;
@@ -411,6 +524,8 @@ static uint8_t isCentered(void)
 
 static void setPoseButtonLED(int onOff)
 {
+    Serial.print("Pose button LED ");
+    Serial.print(onOff);
     digitalWrite(POSE_BUTTON_LED, onOff?HIGH:LOW);
 }
 
@@ -429,8 +544,8 @@ static void getPoseData() {
     // check for button press
     if (buttonState[0].justReleased) { // XXX NB - note that pose button is currently first in array. Should be a better thing than hard coding like this
       // get pose data
-      for (int i=0; i<4; i++) {
-        for (int j=0; j<3; j++) {
+      for (int i=0; i<NUM_TOWERS; i++) {
+        for (int j=0; j<NUM_JOINTS; j++) {
           posePosition[i][j] = modelPosition[i][j];
         }
       }
@@ -579,9 +694,9 @@ static ButtonState *readButtonState(int button)
 // And then - jointHydraulicsPos = hydraulicsValMin + jointCanonical*(hydraulicsValMax - hydraulicsValMin)
 
 static float maquetteRawToCanonical(int16_t potValue, int towerId, int jointId) {
-   int16_t center = jointCenter[towerId][jointId];
-   int16_t min = jointRange[towerId][jointId][0] + center;
-   int16_t max = jointRange[towerId][jointId][1] + center;
+   int16_t center = maquetteJointCenter[towerId][jointId];
+   int16_t min = maquetteJointRange[towerId][jointId][0] + center;
+   int16_t max = maquetteJointRange[towerId][jointId][1] + center;
    float canonicalValue = potValue < center ? ((float)(potValue - center))/((float)(center - min)) : ((float)(potValue - center))/((float)(max - center));
    return clampf(canonicalValue, -1.0, 1.0);
 }
@@ -596,7 +711,7 @@ static int16_t maquetteToModel(uint16_t potValue, int towerId, int jointId) {
 // Sculpture has a range of SCULPTURE_RANGE (8K)
 
 // Assuming the zeros are lined up, that means that the translation is
-   long potValueCentered = ((long)potValue) - jointCenter[towerId][jointId];
+   long potValueCentered = ((long)potValue) - maquetteJointCenter[towerId][jointId];
    int16_t val = (int16_t)((potValueCentered * SCULPTURE_RANGE)/POT_RANGE);
 
    return clamp(val, jointRange[towerId][jointId][0], jointRange[towerId][jointId][1]);
@@ -620,7 +735,7 @@ static int16_t clamp(int16_t value, int16_t min, int16_t max) {
 }
 
 // Send target position to sculpture
-static void targetSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]) {
+static void sendToSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]) {
     char modelString[256];
     char smallModelString[64];
     char *ptr = modelString;
@@ -631,11 +746,11 @@ static void targetSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]) {
     }
 
     for (int i=0; i<NUM_TOWERS; i++){
-        if (!towerValid[i]) {
+        if (!towerEnabled[i]) {
           continue;
         }
         for (int j=0; j<NUM_JOINTS; j++) {
-            if (!jointValid[i][j]) {
+            if (!jointEnabled[i][j]) {
               continue;
             }
             sprintf(ptr, "<%d%dt%d>", i+1, j+1, positionArray[i][j]);
@@ -787,6 +902,8 @@ static void initPoseMode()
   blinkOnOff = 0;
 }
 
+static int gLEDOn = 0;  // XXX testing LED blink...
+
 static void parseMaquetteCommand(char *buf, int len) {
     int maxVal;
     int minVal;
@@ -806,10 +923,15 @@ static void parseMaquetteCommand(char *buf, int len) {
     
     c = *ptr++;
     log_debug("maquette command!!!");
-    //Serial.println("maquette command!!!");
-    //Serial.println(c);
+    Serial.print("maquette command ");
+    Serial.println(c);
     
     switch(c) {
+    case 'b':  // toggle led on button... testing
+      gLEDOn = 1 - gLEDOn;
+      setPoseButtonLED(gLEDOn);
+      Serial.println("<!mb+>");
+      break;
     case 'L':  // set limits for a tower on maquette 
       /* next character should be a digit - tower 
          Note that this clause will catch EOL */
@@ -836,13 +958,15 @@ static void parseMaquetteCommand(char *buf, int len) {
         return;
       }  
       
-      jointRange[towerId][jointId][0] = minVal;
-      jointRange[towerId][jointId][1] = maxVal;
+      maquetteJointRange[towerId][jointId][0] = minVal;
+      maquetteJointRange[towerId][jointId][1] = maxVal;
 
       if (debug) {
         sprintf(outBuf, "Maquette Tower %d joint %d set to min: %d, max: %d,\n", towerId+1, jointId+1, minVal, maxVal);
         log_debug(outBuf);
       }
+      writeTowerCalibrationData(towerId);
+      Serial.println("<!mL>");
       break; 
     case 'D':  // set debug level
       Serial.println("Setting debug level"); 
@@ -855,6 +979,7 @@ static void parseMaquetteCommand(char *buf, int len) {
         sprintf(outBuf, "Unknown debug value %d\n", c - '0');
         Serial.println(outBuf);
       }
+      Serial.println("<!mD+>");
       break; 
     case 'M':  // set mode
       c =*ptr++;
@@ -891,20 +1016,22 @@ static void parseMaquetteCommand(char *buf, int len) {
           log_debug(outBuf);
         }     
       }
+      Serial.println("<!mM+>");
       break; 
     case 's': // Get status
         // Note that I'm being very careful here not to overrun outBuf, which can't be very big because we have a small stack.
         sprintf(outBuf, "<!ms{\"mode\": %d, \"poseState\": %d, \"towerState\": [", mode, poseState);
         Serial.print(outBuf);
-        for (int i=0; i<4; i++) {
-            sprintf(outBuf, "{\"tower\": %d, \"jointPos\" : [%d %d, %d], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerValid\":%s, \"jointValid\" : [%s, %s, %s]},",
+        for (int i=0; i<NUM_TOWERS; i++) {
+            // XXX
+            sprintf(outBuf, "{\"tower\": %d, \"jointPos\" : [%d, %d, %d], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerEnabled\":%s, \"jointEnabled\" : [%s, %s, %s]},",
                                 i, modelPosition[i][0], modelPosition[i][1], modelPosition[i][2],
-                                jointCenter[i][0], jointCenter[i][1], jointCenter[i][2],
-                                jointRange[i][0][0],jointRange[i][0][1], jointRange[i][1][0], jointRange[i][1][1], jointRange[i][2][0], jointRange[i][2][1],
-                                (towerValid[i] ? "true" : "false"),
-                                (jointValid[i][0] ? "true" : "false"),
-                                (jointValid[i][1] ? "true" : "false"),
-                                (jointValid[i][2] ? "true" : "false"));
+                                maquetteJointCenter[i][0], maquetteJointCenter[i][1], maquetteJointCenter[i][2],
+                                maquetteJointRange[i][0][0], maquetteJointRange[i][0][1], maquetteJointRange[i][1][0], maquetteJointRange[i][1][1], maquetteJointRange[i][2][0], maquetteJointRange[i][2][1],
+                                (towerEnabled[i] ? "true" : "false"),
+                                (jointEnabled[i][0] ? "true" : "false"),
+                                (jointEnabled[i][1] ? "true" : "false"),
+                                (jointEnabled[i][2] ? "true" : "false"));
                                 
             if (i==3)
                 outBuf[strlen(outBuf)-1] = '\0'; // remove trailing ','
@@ -921,9 +1048,9 @@ static void parseMaquetteCommand(char *buf, int len) {
         }
         towerId--; // 0 based idx
         for (int i=0; i<3; i++) {
-          slavePosition[towerId][i] = clamp(jtarget[i], jointRange[towerId][i][0], jointRange[towerId][i][1]);
-          sprintf(outBuf, "Clamping %d between %d and %d, result %d\n", jtarget[i], jointRange[towerId][i][0], 
-                                                                                    jointRange[towerId][i][1], 
+          slavePosition[towerId][i] = clamp(jtarget[i], maquetteJointRange[towerId][i][0], maquetteJointRange[towerId][i][1]);
+          sprintf(outBuf, "Clamping %d between %d and %d, result %d\n", jtarget[i], maquetteJointRange[towerId][i][0], 
+                                                                                    maquetteJointRange[towerId][i][1], 
                                                                                     slavePosition[towerId][i]);
           log_debug(outBuf);
         } 
@@ -937,6 +1064,7 @@ static void parseMaquetteCommand(char *buf, int len) {
            sprintf(outBuf, "Slave bitmask is %x\n", slaveValidBitmask);
            log_debug(outBuf);
         }
+        Serial.println("<!mP+>");
         break;  
     case 'C': 
         // Set center of joint (calibrate)
@@ -978,17 +1106,57 @@ static void parseMaquetteCommand(char *buf, int len) {
        } 
        
        for (int i=0; i<NUM_JOINTS; i++) {
-          jointCenter[towerId][i] = jcenter[i];   
+          maquetteJointCenter[towerId][i] = jcenter[i];   
        }
-       centered[towerId] = TRUE;
+       maquetteTowerCenterCalibrated[towerId] = TRUE;
        Serial.println(maquetteToModel(jcenter[0], towerId, 0));
 
-       saveTowerCalibration(towerId);
+       writeTowerCalibrationData(towerId);
+       Serial.println("<!mC+>");  // XXX see comments below
        
        break;
     case 'c': // Get calibration status
-      sprintf(outBuf, "<!c[%d, %d, %d, %d]>", centered[0], centered[1], centered[2], centered[3]);
+      sprintf(outBuf, "<!mc[%d, %d, %d, %d]>", maquetteTowerCenterCalibrated[0], maquetteTowerCenterCalibrated[1], maquetteTowerCenterCalibrated[2], maquetteTowerCenterCalibrated[3]);
       Serial.println(outBuf);
+      break;
+    case 'X': // uncalibrate
+      for (int i=0; i<NUM_TOWERS; i++) { 
+        maquetteTowerCenterCalibrated[i] = FALSE;
+      }
+      // Okay. So let's assume that I can write the protocol for the maquette. What do I want it to be?
+      // Let's keep it of the form <mxxxx>
+      // Then we can do <m<0-99><c>:<t>:<j>:<args>>  And here t and j and args can be blank, but we always have the ':' in them. Then the response is
+      // <!m<0-99><c>:<success/failure>:response>>  And *that* is a lot more reasonable.
+      // But first shall I figure out the storage problem? 
+      writeCalibrationData();
+      Serial.println("<!mX+>");  // XXX - for the moment, a positive response
+      break;
+    case 'q':
+      // Nuke eeprom.
+      for (int i=0; i<48; i++) {
+        uint8_t foo = 0;
+        EEPROM.put(i, foo);
+      }
+      Serial.println("<!mq+>");
+      break;
+    case 'Q':
+      printCalibrationData();
+      Serial.println("<!mQ+>");
+      break;
+    case 'w':
+      ntokens = sscanf(ptr, "%hhu:%hhu", &towerId, &val);
+      if (ntokens == 2) {
+         unsigned int eeprom_offset = towerId;
+         uint8_t byte_val = (uint8_t)val;
+         EEPROM.put(eeprom_offset, byte_val);
+         Serial.print("Attempting tp write ");
+         Serial.print(byte_val);
+         Serial.print(" at location ");
+         Serial.println(eeprom_offset);
+         printCalibrationData();
+      } else {
+        Serial.println("Wrong number of tokens");
+      }
       break;
     case 'E': // enable/disable tower
       ntokens = sscanf(ptr, "%hhu:%hhu", &towerId, &val);
@@ -1004,7 +1172,9 @@ static void parseMaquetteCommand(char *buf, int len) {
           log_error("value must be 0 or 1 (on/off)");
           break;      
       }
-      towerValid[towerId-1] = val;
+      towerEnabled[towerId-1] = val;
+      writeCalibrationData();
+      Serial.println("<!mE+>");  // XXX fixme - return different success/error codes
       break;
        
     case 'e': // enable/disable joint
@@ -1030,11 +1200,13 @@ static void parseMaquetteCommand(char *buf, int len) {
           log_error("value must be 0 or 1 (on/off)");
           break;      
       }
-      jointValid[towerId-1][jointId-1] = val;
+      jointEnabled[towerId-1][jointId-1] = val;
+      writeCalibrationData();
+      Serial.println("<m!me+>"); // XXX fixme above
       break;
         
     case 'S': // simulation. Get the position that we would be sending the towers
-       sprintf(outBuf, "[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]", 
+       sprintf(outBuf, "<!mS[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]>", 
             modelPosition[0,0], modelPosition[0,1], modelPosition[0,2],
             modelPosition[1,0], modelPosition[1,1], modelPosition[1,2],
             modelPosition[2,0], modelPosition[2,1], modelPosition[2,2],
@@ -1043,7 +1215,7 @@ static void parseMaquetteCommand(char *buf, int len) {
        break;
 
     case 'A': // analog read of the joints. Sanity check
-      sprintf(outBuf, "[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]",
+      sprintf(outBuf, "<!mA[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]>",
         readJointPos(0,0), readJointPos(0,1), readJointPos(0,2),
         readJointPos(1,0), readJointPos(1,1), readJointPos(1,2),
         readJointPos(2,0), readJointPos(2,1), readJointPos(2,2),
@@ -1069,7 +1241,7 @@ static void parseMaquetteCommand(char *buf, int len) {
                 Serial.print(",");
             }
         }
-        Serial.print("]>\r\n");   
+        Serial.print("]>");   
     default:
       break; 
     }
@@ -1199,8 +1371,6 @@ static void Write485(char *buf)
     Serial.println(buf);
     fprintf(NETWORKFILE, buf);
 }
-
-
 
 
 // CAN stuff here...

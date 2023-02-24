@@ -38,29 +38,36 @@ class AsyncRequest:
         self.joint_id = -1
         self.tower_id = -1
         self.response = None
-        self.response_filter = ResponseFilter(command) 
+        self.response_filter = ResponseFilter(command, to_maquette=to_maquette) 
         self.to_maquette = to_maquette
         self.command = command
-        if command in [GENERAL_STATUS_REQUEST,
-                       TOWER_POSITION_REQUEST,
-                       VALVE_DRIVE_REQUEST,
-                       PID_VALUES_REQUEST,
-                       EXTENDED_STATUS_REQUEST]:
-           if (isinstance(args, list)):
-               self. tower_id = args[0]
-           else:
-               self.tower_id = args
-        elif command in [JOINT_STATUS_REQUEST,
-                         JOINT_LIMITS_REQUEST]:
-           if (isinstance(args, list)):
-               self.tower_id = args[0]
-               self.joint_id = args[1]
-           else:
-               raise RuntimeError("no joint for joint request")
+        if self.to_maquette:
+            if command in [SET_MAQUETTE_TOWER_CENTER_COMMAND,
+                           SET_MAQUETTE_MODE_COMMAND]:
+                # I note here that we currently don't use AsyncRequest for the above.
+                self.tower_id = args[0]
         else:
-            raise RuntimeError("Unknown request type")
+            if command in [GENERAL_STATUS_REQUEST,
+                           TOWER_POSITION_REQUEST,
+                           VALVE_DRIVE_REQUEST,
+                           PID_VALUES_REQUEST,
+                           EXTENDED_STATUS_REQUEST]:
+                if (isinstance(args, list)):
+                    self.tower_id = args[0]
+                else:
+                    self.tower_id = args
+            elif command in [JOINT_STATUS_REQUEST,
+                             JOINT_LIMITS_REQUEST]:
+                if (isinstance(args, list)):
+                    self.tower_id = args[0]
+                    self.joint_id = args[1]
+                else:
+                    raise RuntimeError("no joint for joint request")
+            else:
+                raise RuntimeError("Unknown request type")
    
-    def make_request(self): 
+    def make_request(self):
+        print(f"Sending message to sculpture, command is {self.command}, to_maquette is {self.to_maquette}") 
         send_sculpture_message(self.command, tower_id=self.tower_id, joint_id=self.joint_id, to_maquette=self.to_maquette)
     
     def filter(self, message):
@@ -181,39 +188,45 @@ MAQUETTE_CALIBRATION_REQUEST = 'c'
 MAQUETTE_STATUS_REQUEST = 's'
 SET_MAQUETTE_MODE_COMMAND = 'M'
 SET_MAQUETTE_TOWER_CENTER_COMMAND = 'C'
+SET_MAQUETTE_TOWER_ENABLE_COMMAND = 'E'
+SET_MAQUETTE_JOINT_ENABLE_COMMAND = 'e'
+SET_MAQUETTE_TOWER_DECALIBRATE_COMMAND = 'X'
 
 class ResponseFilter:
     """ ResponseFilter
         Used to check whether a response on the serial bus is the response
         to a previous request. For reasons I am uncertain of, I am not using
         an incrementing serial number. XXX CSW
+        XXX - This is a terrible terrible protocol, or perhaps just a terrible implementation.
+        I should not have to put the information for where the request starts in 
+        the filter infrastructure.
     """
-    def __init__(self, request_type):
+    def __init__(self, request_type, to_maquette=False):
         self.request_type = request_type
-        self.maquette_request = False
+        self.maquette_request = to_maquette
         self.command_idx = 1
         self.tower_idx = 2
         self.joint_idx = 3
-        if self.request_type in [JOINT_LIMITS_REQUEST, JOINT_STATUS_REQUEST]:
-            self.start_idx = 4
-            self.filter_joint = True
-        elif self.request_type in [GENERAL_STATUS_REQUEST,
-                                   TOWER_POSITION_REQUEST,
-                                   PID_VALUES_REQUEST,
-                                   VALVE_DRIVE_REQUEST,
-                                   MAQUETTE_STATUS_REQUEST,
-                                   MAQUETTE_CALIBRATION_REQUEST,
-                                   EXTENDED_STATUS_REQUEST]:
+        self.filter_joint = False
+        if self.maquette_request:
             self.start_idx = 3
-            self.filter_joint = False
-        else:
-            raise RuntimeError(f"Unknown request {request_type}, aborting")
-        if self.request_type in [MAQUETTE_STATUS_REQUEST, MAQUETTE_CALIBRATION_REQUEST]:
-            self.maquette_request = True
             # NB - maquette commands all start with 'm'
             self.command_idx += 1
             self.tower_idx += 1
             self.joint_idx += 1
+        else:                             
+            if self.request_type in [JOINT_LIMITS_REQUEST, JOINT_STATUS_REQUEST]:
+                self.start_idx = 4
+                self.filter_joint = True
+            elif self.request_type in [GENERAL_STATUS_REQUEST,
+                                   TOWER_POSITION_REQUEST,
+                                   PID_VALUES_REQUEST,
+                                   VALVE_DRIVE_REQUEST,
+                                   EXTENDED_STATUS_REQUEST]:
+                self.start_idx = 3
+                self.filter_joint = False
+            else:
+                raise RuntimeError(f"Unknown request {request_type}, aborting")
     
     def filter(self, message, args):
         """ If this message is a response to the request, return message stripped of header
@@ -238,7 +251,7 @@ class ResponseFilter:
 
         if self.maquette_request:
             if message[1] != 'm':
-                print("Message is maquette message, but doesn't start with m")
+                print("Looking for maquette message, but response doesn't start with m")
                 return False
         
         if message[self.command_idx] != self.request_type:
@@ -259,22 +272,38 @@ class ResponseFilter:
 
 
 def send_sculpture_message(command, args=[""], tower_id=-1, joint_id=-1, to_maquette=False):
+    ''' send_sculpture_message
+        Send a message to the arduino that talks to the sculpture driver and
+        the maquette hardware.
+        Both tower_id and joint_id are ints.
+        XXX - There is an open question whether the numbering is zero based or one-based.
+        I believe I'm using both
+    '''
     if joint_id is None or joint_id < 0:
         joint_local = ""
     else:
-        joint_local = joint_id
+        joint_local = str(joint_id)
 
     if tower_id is None or tower_id < 0:
         tower_local = ""
     else:
-        tower_local = tower_id
+        tower_local = str(tower_id)
 
     if not isinstance(args, Iterable):
         args = [args]
 
-    maquette_char = "m" if to_maquette else ""
+    if not to_maquette:
+        serial.write(f"<{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
+    else:
+        # NB - I can't change the tower serial protocol for legacy reasons. But I can change the maquette protocol
+        if joint_local:
+            joint_local = ":" + joint_local
+        args_local = ','.join(map(str,args))
+        if args_local:
+            args_local = ":" + args_local
+        print(f" Writing <m{command}{tower_local}{joint_local}{args_local}>")
+        serial.write(f"<m{command}{tower_local}{joint_local}{args_local}>")
 
-    serial.write(f"<{maquette_char}{tower_local}{joint_local}{command}{','.join(args)}>")
 
 
 @app.route("/crown/sculpture", methods=["GET"])
@@ -521,15 +550,16 @@ def crown_get_maquette_state():
         return _simple_web_async_request(MAQUETTE_STATUS_REQUEST, to_maquette=True)
     else:
         """Only valid POST currently is to set the mode"""
-        if "mode" in request.values:
-            mode = request.values["mode"]
+        mode = request.values.get("mode")
+        if mode:  # in request.values:
+            # mode = request.values["mode"]
             modeInt = -1
             if mode == "pose":
-                modeInt = "2"
+                modeInt = 2
             elif mode == "off":
-                modeInt = "0"
+                modeInt = 0
             elif mode == "immediate":
-                modeInt = "1"
+                modeInt = 1
             if modeInt >= 0:
                 send_sculpture_message(SET_MAQUETTE_MODE_COMMAND, [modeInt], to_maquette=True)
                 return make_response("Success", 200)
@@ -544,11 +574,40 @@ def requestMaquetteCalibration():
     return _simple_web_async_request(MAQUETTE_CALIBRATION_REQUEST, to_maquette=True)
  
 
-@app.route("/crown/maquette/towers/<tower_id>/calibrate", methods=["PUT"]) 
+@app.route("/crown/maquette/towers/<int:tower_id>/calibrate", methods=["PUT"]) 
 def maquette_calibrate(tower_id):
+    print("calibrate tower called")
     send_sculpture_message(SET_MAQUETTE_TOWER_CENTER_COMMAND, tower_id=tower_id, to_maquette=True)
-  
+    return make_response("Success", 200) 
 
+@app.route("/crown/maquette/towers/<int:tower_id>", methods=["PUT"])
+def maquette_set_tower(tower_id):
+    print("set tower is called")
+    if "enable" in request.values:
+        print("enable/disable")
+        tf = request.values.get("enable")
+        tf = 1 if tf in ["True", "true"] else 0
+        print(f"setting tower enable {tf} on tower {tower_id}")
+        send_sculpture_message(SET_MAQUETTE_TOWER_ENABLE_COMMAND, [tf], tower_id=tower_id, to_maquette=True)
+        return make_response("Success", 200)
+    elif "calibrate" in request.values:
+        print("calibrate")
+        return _simple_web_async_request(SET_MAQUETTE_TOWER_CENTER_COMMAND, tower_id=tower_id, to_maquette=True)
+    elif "decalibrate" in request.values:
+        print("decalibrate")
+        return _simple_web_async_request(SET_MAQUETTE_TOWER_DECALIBRATE_COMMAND, tower_id=tower_id, to_maquette=True)
+    return make_response("Invalid Parameter", 400)
+  
+@app.route("/crown/maquette/towers/<int:tower_id>/joints/<int:joint_id>", methods=["PUT"])
+def maquette_set_joint(tower_id, joint_id):
+    print("set joint is called")
+    if "enable" in request.values:
+        tf = request.values.get("enable")
+        tf = 1 if tf in ["True", "true"] else 0
+        send_sculpture_message(SET_MAQUETTE_JOINT_ENABLE_COMMAND, [tf], tower_id=tower_id, joint_id=joint_id, to_maquette=True)
+        return make_response("Success", 200)
+    return make_response("Invalid Parameter", 400)
+    
 # @app.route("/crown/playback", methods=["GET"])
 # def crown_get_playback_state():
 #    response = getPlaybackState()
