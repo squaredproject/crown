@@ -139,10 +139,10 @@ uint16_t maquetteJointCenter[NUM_TOWERS][NUM_JOINTS] = {{POT_RANGE/2,POT_RANGE/2
 
 // Maquette jointRange. Again, relative to the maquette center. I'm believing here I can just 
 // set the range and then forget about it - this may or may not be correct. XXX - Check this.
-int16_t maquetteJointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 300}, {-300, 300}, {-300, 300}},
-                                                      {{-300, 300}, {-300, 300}, {-300, 300}},
-                                                      {{-300, 300}, {-300, 300}, {-300, 300}},
-                                                      {{-300, 300}, {-300, 300}, {-300, 300}}};
+int16_t maquetteJointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-100, 100}, {-60, 60}, {-50, 50}},
+                                                      {{-100, 100}, {-60, 60}, {-50, 50}},
+                                                      {{-100, 100}, {-60, 60}, {-50, 50}},
+                                                      {{-100, 100}, {-60, 60}, {-50, 50}}};
 
 // Canonical position is in the range [-1.0, 1.0], where -1.0 is all the way out, and 1.0 is all the way
 // in. 0 is the center. This is calculated on the maquette.
@@ -160,7 +160,7 @@ int pinMapping[NUM_TOWERS][NUM_JOINTS] = { {A0, A1, A3},
 
 // 'Pose' mode sets the towers to the current maquette state, and holds the pose for
 // some number of seconds. It is triggered by a button press
-int posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+float posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
                                              {0,0,0},
                                              {0,0,0},
                                              {0,0,0}};
@@ -172,10 +172,10 @@ uint8_t poseState = POSE_STATE_WAITING;
 // In 'Slave' mode, we're reading poses from some external source (such as 
 // a pose list on the rpi) and adjusting the towers to match the current
 // pose.
-int slavePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
-                                              {0,0,0},
-                                              {0,0,0},
-                                              {0,0,0} };
+float slavePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+                                                {0,0,0},
+                                                {0,0,0},
+                                                {0,0,0} };
 
 uint8_t slaveValidBitmask = 0x00; 
 
@@ -216,7 +216,7 @@ int modeIsLocal = TRUE; // could control via serial, or via local button
 
 static int16_t maquetteToModel(uint16_t pos, int i, int j);
 static int16_t clamp(int16_t value, int16_t max, int16_t min);
-static void sendToSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]);
+static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]);
 static void broadcastModelPosition();
 static void setModeFromSwitch();
 static int slaveDataValid();
@@ -452,12 +452,21 @@ void loop() {
        //  }
   
         for (int i=0; i<NUM_TOWERS; i++) {
+            /* if (i == 0 && timerIdx%50 == 0) {
+                Serial.print("Tower pot values: ");
+            }*/
             for (int j=0; j<NUM_JOINTS; j++) {
                 // For each joint, read the value from the maquette, and check whether that value
                 // has changed more than the accepted delta from the previous position
                 uint16_t potValue  = readJointPos(i, j);
                 canonicalJointPosition[i][j] = maquetteRawToCanonical((int16_t)potValue, i, j);
                 modelPosition[i][j] = maquetteToModel(potValue, i, j);
+                /*if (i == 0 && timerIdx%50 == 0) {
+                    Serial.print(potValue);
+                    Serial.print(" ");
+                    Serial.print(int(canonicalJointPosition[i][j]*128));
+                    Serial.print(" ");
+                }*/
 /*                if (j == 1) {
                   char buf[512];
                   sprintf(buf, "pot val: %d, center: %d, model: %d\n", potValue, maquetteJointCenter[0][1], modelPosition[0][1]);
@@ -473,6 +482,11 @@ void loop() {
                     staticModelPosition[i][j] = modelPosition[i][j];
                 }
             }
+/*
+            if (i==0 && timerIdx%50==0) {
+                Serial.println("");
+            }
+*/
         }
    
     
@@ -482,7 +496,8 @@ void loop() {
                 break;
             case MODE_FREE_PLAY:
                 if (isCentered()) {
-                    sendToSculpture(modelPosition);
+                    // sendToSculpture(modelPosition);
+                    sendToSculpture(canonicalJointPosition);  // XXX de-noise?
                 }
                 break;
             case MODE_POSE:
@@ -546,7 +561,7 @@ static void getPoseData() {
       // get pose data
       for (int i=0; i<NUM_TOWERS; i++) {
         for (int j=0; j<NUM_JOINTS; j++) {
-          posePosition[i][j] = modelPosition[i][j];
+          posePosition[i][j] = canonicalJointPosition[i][j];
         }
       }
       poseDataValid = TRUE;
@@ -704,8 +719,6 @@ static float maquetteRawToCanonical(int16_t potValue, int towerId, int jointId) 
 static int16_t maquetteCanonicalToSculpture(int towerId, int jointId) {
    return (int16_t)(canonicalJointPosition[towerId][jointId]*SCULPTURE_RANGE/2) + SCULPTURE_RANGE/2; 
 }
-
-
 static int16_t maquetteToModel(uint16_t potValue, int towerId, int jointId) {
 // Potentiometer has a range of POT_RANGE (1K)  XXX check this!!
 // Sculpture has a range of SCULPTURE_RANGE (8K)
@@ -735,7 +748,7 @@ static int16_t clamp(int16_t value, int16_t min, int16_t max) {
 }
 
 // Send target position to sculpture
-static void sendToSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]) {
+static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
     char modelString[256];
     char smallModelString[64];
     char *ptr = modelString;
@@ -753,7 +766,9 @@ static void sendToSculpture(int positionArray[NUM_TOWERS][NUM_JOINTS]) {
             if (!jointEnabled[i][j]) {
               continue;
             }
-            sprintf(ptr, "<%d%dt%d>", i+1, j+1, positionArray[i][j]);
+            char floatStr[10]; // float converted to string
+            dtostrf(positionArray[i][j], 2, 3, floatStr);
+            sprintf(ptr, "<%d%df%s>", i+1, j+1, floatStr);
             ptr += strlen(ptr);
             
 /*            if (i==0 && j==1) {
@@ -1023,9 +1038,16 @@ static void parseMaquetteCommand(char *buf, int len) {
         sprintf(outBuf, "<!ms{\"mode\": %d, \"poseState\": %d, \"towerState\": [", mode, poseState);
         Serial.print(outBuf);
         for (int i=0; i<NUM_TOWERS; i++) {
-            // XXX
-            sprintf(outBuf, "{\"tower\": %d, \"jointPos\" : [%d, %d, %d], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerEnabled\":%s, \"jointEnabled\" : [%s, %s, %s]},",
-                                i, modelPosition[i][0], modelPosition[i][1], modelPosition[i][2],
+            // XXX NB - I'm splitting this printf up into several parts because the Arduino folks, in their infinite
+            // wisdom, have decided that sprintf should not support float formatting. Serial.print(), however, does. Mfkers.
+            sprintf(outBuf, "{\"tower\": %d, \"jointPos\" : [", i);
+            Serial.print(outBuf);
+            Serial.print(canonicalJointPosition[i][0]);
+            Serial.print(", ");
+            Serial.print(canonicalJointPosition[i][1]);
+            Serial.print(", ");
+            Serial.print(canonicalJointPosition[i][2]);
+            sprintf(outBuf, "], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerEnabled\":%s, \"jointEnabled\" : [%s, %s, %s]},",
                                 maquetteJointCenter[i][0], maquetteJointCenter[i][1], maquetteJointCenter[i][2],
                                 maquetteJointRange[i][0][0], maquetteJointRange[i][0][1], maquetteJointRange[i][1][0], maquetteJointRange[i][1][1], maquetteJointRange[i][2][0], maquetteJointRange[i][2][1],
                                 (towerEnabled[i] ? "true" : "false"),
@@ -1040,22 +1062,28 @@ static void parseMaquetteCommand(char *buf, int len) {
         Serial.println("]}>");
         break;
     case 'P':  // set slave (pose) data
+        // XXX - this is much better done in canonical values rather than in raw values. This eliminates the
+        // calibration issue.
+        float target[3];
+        // It does, however, cause problems because Arduino can't sscanf floats. 
         ntokens = sscanf (ptr,"t%hhu:%hu,%hu,%hu", 
-                          &towerId, &jtarget[0], &jtarget[1], &jtarget[2]); 
+                          &towerId, &target[0], &target[1], &target[2]); 
         if (ntokens != 4 || towerId > 4 || towerId < 1) {
           log_error("Invalid tower");
           break;
         }
         towerId--; // 0 based idx
         for (int i=0; i<3; i++) {
-          slavePosition[towerId][i] = clamp(jtarget[i], maquetteJointRange[towerId][i][0], maquetteJointRange[towerId][i][1]);
-          sprintf(outBuf, "Clamping %d between %d and %d, result %d\n", jtarget[i], maquetteJointRange[towerId][i][0], 
+          slavePosition[towerId][i] = clamp(target[i], -1.0, 1.0);
+          /* sprintf(outBuf, "Clamping %d between %d and %d, result %d\n", jtarget[i], maquetteJointRange[towerId][i][0], 
                                                                                     maquetteJointRange[towerId][i][1], 
                                                                                     slavePosition[towerId][i]);
           log_debug(outBuf);
+          */
         } 
         slaveValidBitmask |= (1 << towerId);
 
+        /*
         if (debug) {
            sprintf(outBuf, "Set pose data for tower %d to %d, %d, %d\n", towerId+1, slavePosition[towerId][0], 
                                                                                     slavePosition[towerId][1],
@@ -1064,6 +1092,7 @@ static void parseMaquetteCommand(char *buf, int len) {
            sprintf(outBuf, "Slave bitmask is %x\n", slaveValidBitmask);
            log_debug(outBuf);
         }
+        */
         Serial.println("<!mP+>");
         break;  
     case 'C': 
