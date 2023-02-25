@@ -18,22 +18,34 @@
 </head>
 <body>
 <div id="maquette">
-<h3> Maquette Control </h3>
-    Maquette Mode:
-    <select id="maquetteMode">
+<h3> Maquette </h3>
+    <div id="maquette_control">
+      <div>
+      Maquette Mode:
+      <select id="maquetteMode">
         <option value="off" selected="selected">OFF</option>
         <option value="pose">pose</option>
         <option value="immediate" disabled>copy</option>
         <option value="playback" disabled>playback</option>
-        <button type="button" id="centerM1">Calibrate T1</button> <&nbsp;> <&nbsp;> <&nbsp;>
-        <button type="button" id="centerM2">Calibrate T2</button> <&nbsp;> <&nbsp;> <&nbsp;>
-        <button type="button" id="centerM3">Calibrate T3</button> <&nbsp;> <&nbsp;> <&nbsp;>
-        <button type="button" id="centerM4">Calibrate T4</button> <&nbsp;> <&nbsp;> <&nbsp;><br>
-        <button type="button" id="getMCalibration">Get Calibration Status</button>
-        To use maquette: Calibrate the system by setting a tower straight upright, then<br>
-        pushing the 'Center' button for the tower. Do this for all four towers <br>
-        Maquette will not work without all towers calibrated
-    </select>
+      </select>
+      </div>
+      <div>
+      <button type="button" id="centerM1">Calibrate T1</button> <br>
+      <button type="button" id="centerM2">Calibrate T2</button> <br>
+      <button type="button" id="centerM3">Calibrate T3</button> <br>
+      <button type="button" id="centerM4">Calibrate T4</button> <br>
+      <button type="button" id="getMCalibration">Get Calibration Status</button>
+      </div>
+      <div>
+      To use maquette: Calibrate the system by setting a tower straight upright, then<br>
+      pushing the 'Center' button for the tower. Do this for all four towers <br>
+      Maquette will not work without all towers calibrated
+      </div>
+   </div>
+   <div id="maquette_status">
+     <span id="maquette_tower_status">
+     </span>
+   </div>
 </div><br><br>
 <div id="sculpture">
 <h3> Sculpture Control</h3>
@@ -45,6 +57,9 @@
     <br>Return Status </br>
     <textarea id="feedbackText" style="width:400px; height:200px"></textarea>
     </div>
+</div>
+<div id="Maquette Status">
+    <span id="maquette_status"></span> 
 </div>
 </body>
 <script type="text/javascript" src="js/jquery-1.4.3.min.js"></script>
@@ -126,6 +141,19 @@ function enableTower(towerId) {
 
 var CROWN_SCULPTURE_BASE = "/crown/sculpture";
 var CROWN_MAQUETTE_BASE = "/crown/maquette";
+
+function getMaquetteStatus() {
+    $.ajax({
+        type: 'GET',
+        url: CROWN_MAQUETTE_BASE  + "/maquette/towers/",
+        success: function(data, status, req) {
+            $("#maquette_status").text(data);
+            },
+        error: function(data, status, req) {
+            console.log("Error getting maquette status")
+        }
+    });
+}
 
 function towerResponseToTower(towerJson, towerIdx)
 {
@@ -385,10 +413,12 @@ function init() {
         getMaquetteCalibrationStatus();
     });
     $("#maquetteMode").change(function(){
+        console.log("Changed maquette mode");
         var stateValue = $("#maquetteMode option:selected").val();
         $.ajax({
-            type: 'POST',
-            url: CROWN_SCULPTURE_BASE  + "/maquette/mode/" + stateValue;
+            type: 'PUT',
+            url: CROWN_MAQUETTE_BASE,
+            data: {"mode" : stateValue},
             success: function(data, status, req) {
                 console.log("Changed maquette state to " + stateValue);
                 maquetteMode = stateValue;
@@ -408,7 +438,7 @@ function init() {
 function getMaquetteCalibrationStatus() {
     $.ajax({
         type: 'GET',
-        url: CROWN_MAQUETTE_BASE  + "/maquette/calibration;
+        url: CROWN_MAQUETTE_BASE  + "/calibration",
         success: function(data, status, req) {
             if ((data[0] == 1) && (data[1] == 1) && (data[2] == 1) && (data[3] == 1)){
                 displayText("Maquette Calibrated", "STATUS: ");
@@ -436,8 +466,9 @@ function getMaquetteCalibrationStatus() {
 
 function calibrateMaquetteTower(towerId) {
     $.ajax({
-        type: 'POST',
-        url: CROWN_MAQUETTE_BASE  + "/maquette/towers/" + towerId + "/calibrate;
+        type: 'PUT',
+        url: CROWN_MAQUETTE_BASE  + "/towers/" + towerId,
+        data: {"calibrate" : true},
         success: function(data, status, req) {
             console.log("Centered maquette tower " + towerId);
             },

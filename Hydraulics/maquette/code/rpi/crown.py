@@ -8,19 +8,20 @@ import threading
 import traceback
 
 from flask import Flask, request, abort, make_response, jsonify
-# from flask_utils import jsonify, make_response, jsonify
+from flask_cors import CORS
 
-import CrownSerial
-import CrownSerialMock
 
 test = False
 if test:
+    import CrownSerialMock
     serial = CrownSerialMock
 else:
+    import CrownSerial
     serial = CrownSerial
 
 
-app = Flask("crown", static_url_path="", static_folder="/home/pi/crown/maquette/Hydraulics/code/rpi/static")
+app = Flask("crown", static_url_path="/") # , static_folder="/home/pi/crown/maquette/Hydraulics/code/rpi/static")
+CORS(app)
 
 def serve_forever(httpPort=5000):
     print(f"CROWN webserver serving on port {httpPort}")
