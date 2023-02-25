@@ -407,6 +407,7 @@ def _simple_web_async_request(command, tower_id=None, joint_id=None, to_maquette
     except Exception as e:
         print(f"Exception in simple_web_async_request! {e}\n")
         traceback.print_exc()
+    return make_response("Internal error", 500)
 
 
 @app.route("/crown/sculpture/towers/<int:tower_id>/position", methods=["GET"])
@@ -561,7 +562,7 @@ def crown_get_maquette_state():
             elif mode == "immediate":
                 modeInt = 1
             if modeInt >= 0:
-                send_sculpture_message(SET_MAQUETTE_MODE_COMMAND, [modeInt], to_maquette=True)
+                _simple_web_async_request(SET_MAQUETTE_MODE_COMMAND, [modeInt], to_maquette=True)
                 return make_response("Success", 200)
             else:
                 return make_response("Invalid mode", 400)
