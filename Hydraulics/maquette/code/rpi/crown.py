@@ -35,41 +35,18 @@ def serve_forever(httpPort=5000):
 # implementation of the various requests/filters is bound up in the infrastructure 
 # definition - the usage is sufficiently limited that this makes sense.
 class AsyncRequest:
-    def __init__(self, command, args, to_maquette=False):
-        self.joint_id = -1
-        self.tower_id = -1
+    def __init__(self, command, tower_id=-1, joint_id=-1, args=[""], to_maquette=False):
+        self.joint_id = joint_id
+        self.tower_id = tower_id
         self.response = None
         self.response_filter = ResponseFilter(command, to_maquette=to_maquette) 
         self.to_maquette = to_maquette
         self.command = command
-        if self.to_maquette:
-            if command in [SET_MAQUETTE_TOWER_CENTER_COMMAND,
-                           SET_MAQUETTE_MODE_COMMAND]:
-                # I note here that we currently don't use AsyncRequest for the above.
-                self.tower_id = args[0]
-        else:
-            if command in [GENERAL_STATUS_REQUEST,
-                           TOWER_POSITION_REQUEST,
-                           VALVE_DRIVE_REQUEST,
-                           PID_VALUES_REQUEST,
-                           EXTENDED_STATUS_REQUEST]:
-                if (isinstance(args, list)):
-                    self.tower_id = args[0]
-                else:
-                    self.tower_id = args
-            elif command in [JOINT_STATUS_REQUEST,
-                             JOINT_LIMITS_REQUEST]:
-                if (isinstance(args, list)):
-                    self.tower_id = args[0]
-                    self.joint_id = args[1]
-                else:
-                    raise RuntimeError("no joint for joint request")
-            else:
-                raise RuntimeError("Unknown request type")
+        self.args = args
    
     def make_request(self):
         print(f"Sending message to sculpture, command is {self.command}, to_maquette is {self.to_maquette}") 
-        send_sculpture_message(self.command, tower_id=self.tower_id, joint_id=self.joint_id, to_maquette=self.to_maquette)
+        send_sculpture_message(self.command, tower_id=self.tower_id, joint_id=self.joint_id, args=self.args, to_maquette=self.to_maquette)
     
     def filter(self, message):
         filtered_response = self.response_filter.filter(message, [self.tower_id, self.joint_id])
@@ -272,7 +249,7 @@ class ResponseFilter:
     
 
 
-def send_sculpture_message(command, args=[""], tower_id=-1, joint_id=-1, to_maquette=False):
+def send_sculpture_message(command, tower_id=-1, joint_id=-1, args=[""], to_maquette=False):
     ''' send_sculpture_message
         Send a message to the arduino that talks to the sculpture driver and
         the maquette hardware.
@@ -334,11 +311,11 @@ def _getSculptureState(towers):
     if not isinstance(towers, Iterable):
         towers = [towers]
     for tower_id in towers:
-        calls.append(AsyncRequest(TOWER_POSITION_REQUEST, [tower_id]))
-        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, [tower_id, 0]))
-        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, [tower_id, 1]))
-        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, [tower_id, 2]))
-        calls.append(AsyncRequest(GENERAL_STATUS_REQUEST, [tower_id]))
+        calls.append(AsyncRequest(TOWER_POSITION_REQUEST, tower_id=tower_id))
+        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=0))
+        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=1))
+        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=2))
+        calls.append(AsyncRequest(GENERAL_STATUS_REQUEST, tower_id=tower_id))
             
     requester = AsyncRequester(calls)
     results = requester.run()
@@ -392,13 +369,13 @@ def _getSculptureState(towers):
         return make_response("No data from towers", 500)
 
 
-def _simple_web_async_request(command, tower_id=None, joint_id=None, to_maquette=False):
-    if tower_id is not None and tower_id not in gTowerRange:
+def _simple_web_async_request(command, tower_id=-1, joint_id=-1, args=[""], to_maquette=False):
+    if tower_id != -1 and tower_id not in gTowerRange:
         return make_response("Invalid tower", 404)
-    if joint_id is not None and joint_id not in gJointRange:
+    if joint_id != -1 and joint_id not in gJointRange:
         return make_response("Invalid joint", 404)
     try: 
-        call = AsyncRequest(command, [tower_id, joint_id], to_maquette=to_maquette)
+        call = AsyncRequest(command, tower_id=tower_id, joint_id=joint_id, args=args, to_maquette=to_maquette)
         requester = AsyncRequester(call)
         results = requester.run()
         if (results):
@@ -414,7 +391,7 @@ def _simple_web_async_request(command, tower_id=None, joint_id=None, to_maquette
 @app.route("/crown/sculpture/towers/<int:tower_id>/position", methods=["GET"])
 def crown_get_tower_position(tower_id):
     """ Get current position of all joints (as much as we can tell) """
-    return _simple_web_async_request(TOWER_POSITION_REQUEST, tower_id)
+    return _simple_web_async_request(TOWER_POSITION_REQUEST, tower_id=tower_id)
 
 
 @app.route("/crown/sculpture/towers/<int:tower_id>/PID", methods=["GET", "PUT"])
@@ -422,7 +399,7 @@ def crown_get_set_tower_pid(tower_id):
     """ Get current PI values for all joints, or set PI values for selected joints
         Returns {"p":[xx,xx,xx],"i":[xx,xx,xx]}"""
     if request.method == "GET":
-        return _simple_web_async_request(PID_VALUES_REQUEST, tower_id)
+        return _simple_web_async_request(PID_VALUES_REQUEST, tower_id=tower_id)
     else:  # method "PUT"
         if not _validate_tower(tower_id):
             return make_response("Must have valid tower id", 400)
@@ -445,7 +422,7 @@ def crown_get_set_tower_pid(tower_id):
 def crown_get_tower_drive(tower_id):
     """ Get current drive values for all joints
         Returns [xx,xx,xx] """
-    return _simple_web_async_request(VALVE_DRIVE_REQUEST, tower_id)
+    return _simple_web_async_request(VALVE_DRIVE_REQUEST, tower_id=tower_id)
               
 
 @app.route("/crown/sculpture/towers/<int:tower_id>/limits", methods=["GET", "PUT"])
@@ -453,7 +430,7 @@ def crown_get_set_joint_limits(tower_id):
     """ Get limits (left, center, right) for all joints.
         Returns [[left,center,right],[left,center,right],[left,center,right]]"""
     if request.method == "GET":
-        return _simple_web_async_request(TOWER_LIMITS_REQUEST, tower_id)
+        return _simple_web_async_request(TOWER_LIMITS_REQUEST, tower_id=tower_id)
     else:
         if "j1_min" in request.values:
             send_sculpture_message(SET_MIN_COMMAND, tower_id=tower_id, joint_id=1, args=[request.values["j1_min"]])
@@ -556,15 +533,17 @@ def crown_get_maquette_state():
         if mode:  # in request.values:
             # mode = request.values["mode"]
             modeInt = -1
-            if mode == "pose":
+            if mode == "POSE":
                 modeInt = 2
-            elif mode == "off":
+            elif mode == "OFF":
                 modeInt = 0
-            elif mode == "immediate":
+            elif mode == "IMMEDIATE":
                 modeInt = 1
+            elif mdoe == "PLAYBACK":
+                modeInt = 3
             if modeInt >= 0:
-                _simple_web_async_request(SET_MAQUETTE_MODE_COMMAND, [modeInt], to_maquette=True)
-                return make_response("Success", 200)
+                print(f"Setting mode to {modeInt}")
+                return _simple_web_async_request(SET_MAQUETTE_MODE_COMMAND, args=[modeInt], to_maquette=True)
             else:
                 return make_response("Invalid mode", 400)
         else:
@@ -590,8 +569,7 @@ def maquette_set_tower(tower_id):
         tf = request.values.get("enable")
         tf = 1 if tf in ["True", "true"] else 0
         print(f"setting tower enable {tf} on tower {tower_id}")
-        send_sculpture_message(SET_MAQUETTE_TOWER_ENABLE_COMMAND, [tf], tower_id=tower_id, to_maquette=True)
-        return make_response("Success", 200)
+        return _simple_web_async_request(SET_MAQUETTE_TOWER_ENABLE_COMMAND, tower_id=tower_id, args=[tf], to_maquette=True)
     elif "calibrate" in request.values:
         print("calibrate")
         return _simple_web_async_request(SET_MAQUETTE_TOWER_CENTER_COMMAND, tower_id=tower_id, to_maquette=True)
@@ -606,7 +584,7 @@ def maquette_set_joint(tower_id, joint_id):
     if "enable" in request.values:
         tf = request.values.get("enable")
         tf = 1 if tf in ["True", "true"] else 0
-        send_sculpture_message(SET_MAQUETTE_JOINT_ENABLE_COMMAND, [tf], tower_id=tower_id, joint_id=joint_id, to_maquette=True)
+        send_sculpture_message(SET_MAQUETTE_JOINT_ENABLE_COMMAND, args=[tf], tower_id=tower_id, joint_id=joint_id, to_maquette=True)
         return make_response("Success", 200)
     return make_response("Invalid Parameter", 400)
     

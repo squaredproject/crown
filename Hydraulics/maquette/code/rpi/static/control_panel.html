@@ -21,31 +21,87 @@
 <h3> Maquette </h3>
     <div id="maquette_control">
       <div>
-      Maquette Mode:
+      Maquette Mode:<br>
       <select id="maquetteMode">
-        <option value="off" selected="selected">OFF</option>
-        <option value="pose">pose</option>
-        <option value="immediate" disabled>copy</option>
-        <option value="playback" disabled>playback</option>
+        <option value="OFF" selected="selected">OFF</option>
+        <option value="POSE">pose</option>
+        <option value="IMMEDIATE" disabled>copy</option>
+        <option value="PLAYBACK" disabled>playback</option>
       </select>
+      </div> <!-- maquette mode-->
+      <div>
+      Maquette Calibration:<br>
+      <div>
+      Current Calibration State:<br>
+         Tower 1 Calibrated: <span id="mT1Calibrated"></span><br>
+         Tower 2 Calibrated: <span id="mT2Calibrated"></span><br>
+         Tower 3 Calibrated: <span id="mT3Calibrated"></span><br>
+         Tower 4 Calibrated: <span id="mT4Calibrated"></span><br>
       </div>
       <div>
-      <button type="button" id="centerM1">Calibrate T1</button> <br>
-      <button type="button" id="centerM2">Calibrate T2</button> <br>
-      <button type="button" id="centerM3">Calibrate T3</button> <br>
-      <button type="button" id="centerM4">Calibrate T4</button> <br>
-      <button type="button" id="getMCalibration">Get Calibration Status</button>
+      Calibrate Maquette:<br>
+      <button type="button" id="mT1Center">Calibrate T1</button> &nbsp;
+      <button type="button" id="mT2Center">Calibrate T2</button> &nbsp;
+      <button type="button" id="mT3Center">Calibrate T3</button> &nbsp;
+      <button type="button" id="mT4Center">Calibrate T4</button> &nbsp;
       </div>
+      </div> <!-- maquette calibration -->
       <div>
       To use maquette: Calibrate the system by setting a tower straight upright, then<br>
-      pushing the 'Center' button for the tower. Do this for all four towers <br>
-      Maquette will not work without all towers calibrated
-      </div>
-   </div>
-   <div id="maquette_status">
-     <span id="maquette_tower_status">
-     </span>
-   </div>
+      pushing the 'Center' button for the tower. Do this for all four towers. <br>
+      Maquette will not work without all towers calibrated.
+      </div> <!-- maquette calibration instructions -->
+   </div> <!-- maquette control -->
+   <div id="maquettePosition">
+     <button type="button" id="mStatusRefresh">Refresh</button>
+     <button type="button" id="mStatusLive">Go Live</button> 
+     <div>
+       T1 Postion
+       <span id="mT1Position"></span>
+     </div>
+     <div>
+       T2 Position
+       <span id="mT2Position"></span>
+     </div>
+     <div>
+       T3 Position
+       <span id="mT3Position"></span>
+     </div>
+     <div>
+       T4 Position
+       <span id="mT4Position"></span>
+     </div>
+   </div> <!-- maquette position -->
+   <div id="maquetteStatus">
+     <div id="maquetteTowerEnable">
+        <span> Maquette Enable </span>
+        Tower 1: &nbsp; <select id="mT1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        Tower 2: &nbsp; <select id="mT2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        Tower 3: &nbsp; <select id="mT3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        Tower 4: &nbsp; <select id="mT4Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+     </div>
+     <div id="maquetteJointEnable">
+     <div class="jointEnable">
+        <select id="mT1J1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        <select id="mT1J2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        <select id="mT1J3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+     </div>
+     <div class="jointEnable">
+        <select id="mT2J1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        <select id="mT2J2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        <select id="mT2J3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+     </div>
+     <div class="jointEnable">
+        <select id="mT3J1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        <select id="mT3J2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        <select id="mT3J3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+     </div>
+     <div class="jointEnable">
+        <select id="mT4J1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        <select id="mT4J2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+        <select id="mT4J3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
+     </div>
+   </div> <!-- maquette status -->
 </div><br><br>
 <div id="sculpture">
 <h3> Sculpture Control</h3>
@@ -145,9 +201,10 @@ var CROWN_MAQUETTE_BASE = "/crown/maquette";
 function getMaquetteStatus() {
     $.ajax({
         type: 'GET',
+        dataType: 'json',
         url: CROWN_MAQUETTE_BASE  + "/maquette/towers/",
         success: function(data, status, req) {
-            $("#maquette_status").text(data);
+            $("#maquette_status").text(data);  // XXX I shouldn't have to cal parse json, but for the moment
             },
         error: function(data, status, req) {
             console.log("Error getting maquette status")
@@ -379,7 +436,54 @@ function getTowerByIdx(towerIdx){
 //    xmlHttp.open("GET", "localhost:5050"  + "/towers/" + towerIdx, true); // true for asynchronous
 }
 
+function requestMaquetteStatus(){
+    $.ajax({
+       type: 'GET',
+       url: CROWN_MAQUETTE_BASE,
+       dataType: 'json',
+       success: function(data, status, req) {
+          renderMaquetteStatus($.parseJSON(data));
+          },
+       error: function(data, status,req) {
+          console.log("Error getting maquette status");
+          }
+     });
+}
+
+function enableMaquetteTower(towerId, enabletf){
+    $.ajax({
+        type: 'PUT',
+        url: CROWN_MAQUETTE_BASE + "/towers/" + (towerId),
+        data: {"enable" : enabletf.toString()},
+        success: function(data, status, req) {
+            console.log("Changed tower " + towerId + " enable state to "  + enabletf);
+            },
+        error: function(data, status, req) {
+            console.log("Fail to change tower enable state");
+            $('#mT' + towerId + 'Enable').val(!enabletf);
+        }
+    });
+}
+    
+function enableMaquetteJoint(towerId, jointId, enabletf){
+    $.ajax({
+        type: 'PUT',
+        url: CROWN_MAQUETTE_BASE + "/towers/" + (towerId) + "/joints/" + jointId,
+        data: {"enable" : enabletf.toString()},
+        success: function(data, status, req) {
+            console.log("Changed joint MT" + towerId + "J" + jointId + " enable state to "  + enabletf);
+            },
+        error: function(data, status, req) {
+            console.log("Fail to change joint enable state");
+            $('#mT' + towerId + "J" + jointId + 'Enable').val(!enabletf);
+        }
+    });
+}
+    
+    
+
 gTowers = [];
+gRefreshStatusInterval = -1;
 maquetteMode = "off"  // should do a get first...
 function init() {
     console.log("init called");
@@ -396,25 +500,65 @@ function init() {
         enableTower(4);
     });
 
-    $('#centerM1').click(function() {
+    $('#mT1Center').click(function() {
         calibrateMaquetteTower(1);
     });
-    $('#centerM2').click(function() {
+    $('#mT2Center').click(function() {
         calibrateMaquetteTower(2);
     });
-    $('#centerM3').click(function() {
+    $('#mT3Center').click(function() {
         calibrateMaquetteTower(3);
     });
-    $('#centerM4').click(function() {
+    $('#mT4Center').click(function() {
         calibrateMaquetteTower(4);
     });
-    
-    $('#getMCalibration').click(function() {
-        getMaquetteCalibrationStatus();
+   
+    $('#mStatusRefresh').click(function() {
+        requestMaquetteStatus();
     });
+ 
+    $('#mStatusLive').click(function() {
+        // What happens here depends on whether we are
+        // currently live...
+        if ($('#mStatusLive').text() == 'Go Live') {
+            // XXX dependent on value from above, this is trouble
+            if (gRefreshStatusInterval >= 0) {
+                clearInterval(gRefreshStatusInterval);
+            }
+            gRefreshStatusInterval = setInterval(requestMaquetteStatus, 500);
+            $('#mStatusLive').text('Stop Live');
+        } else {
+            clearInterval(gRefreshStatusInterval);
+            gRefreshStatusInterval = -1;
+            $('#mStatusLive').text('Go Live');
+        }
+    });
+
+    // Set up tower and joint enable/disable
+    for (var tIdx=0; tIdx<4; tIdx++) {
+        let towerIdx = tIdx + 1;  // Tower idx in API is one-based. 
+        var enableTowerId = '#mT' + towerIdx + 'Enable';
+        console.log("Setting change function for " + enableTowerId + " using tower idx " + towerIdx);
+        $(enableTowerId).change(function(){
+            const id = '#mT' + towerIdx + 'Enable';
+            const tf = $(id).find(":selected").val();
+            enableMaquetteTower(towerIdx, tf);
+        });
+        for (var jIdx=0; jIdx<3; jIdx++) {
+            let jointIdx = jIdx + 1;  // As above, joint idx in API is one-based
+            var enableJointId = '#mT' + towerIdx + 'J' + jointIdx + 'Enable';
+            $(enableJointId).change(function() {
+                const id = $('#mT' + towerIdx + 'J' + jointIdx + 'Enable');
+                const tf = $(id).find(":selected").val();
+                enableMaquetteJoint(towerIdx, jointIdx, tf);
+            });
+        }
+    };
+
     $("#maquetteMode").change(function(){
         console.log("Changed maquette mode");
         var stateValue = $("#maquetteMode option:selected").val();
+        console.log("Selected value is " + stateValue);
         $.ajax({
             type: 'PUT',
             url: CROWN_MAQUETTE_BASE,
@@ -477,6 +621,26 @@ function calibrateMaquetteTower(towerId) {
             console.log("Error centering maquette tower " + towerId);
         }
     });
+}
+
+
+function renderMaquetteStatus(status){
+    // Set mode
+    $('#maquetteMode').val(status["mode"]);
+    // Set tower information
+    for (var idx=0; idx<4; idx++) {
+        var tower = status["towerState"][idx];
+        // position
+        $("#mT" + (idx+1) + "Position").text(tower["jointPos"].toString());
+        // enable/disable
+        $("#mT" + (idx+1) + "Enable").val(tower["towerEnabled"].toString());
+        // calibrated
+        $("#mT" + (idx+1) + "Calibrated").text(tower["calibrated"].toString());
+        // joint enabled/disable
+        for (var jIdx=0; jIdx<3; jIdx++) {
+            $("#mT" + (idx+1) + "J" + (jIdx+1) + "Enable").val(tower["jointEnabled"][jIdx].toString());
+        }
+    } 
 }
 
 

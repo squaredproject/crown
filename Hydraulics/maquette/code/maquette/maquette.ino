@@ -85,9 +85,9 @@
 
 typedef enum {
    MODE_OFF = 0,
-   MODE_FREE_PLAY = 1,
+   MODE_IMMEDIATE = 1,
    MODE_POSE = 2,
-   MODE_SLAVE = 3,
+   MODE_PLAYBACK = 3,
 } Mode;
 Mode mode = MODE_OFF;
 
@@ -209,10 +209,11 @@ uint8_t ButtonArray[NBUTTONS] = {POSE_BUTTON};
 
 static ButtonState buttonState[NBUTTONS];
 
+// XXX - we've got a level violation here. The input to the mode API is a number
+// but the output is a string. This means that number to string translations
+// take place at both this level and the level above, which is problematic. FIXME
 static const char *modeStr[] = {"OFF", "IMMEDIATE", "POSE", "PLAYBACK"};
 
-int modeIsLocal = TRUE; // could control via serial, or via local button                                          
-                                          
 
 static int16_t maquetteToModel(uint16_t pos, int i, int j);
 static int16_t clamp(int16_t value, int16_t max, int16_t min);
@@ -263,7 +264,7 @@ void log_debug(char *str);
 #define DBG_LEVEL_ERROR 1
 static const char *debugString[] = {"OFF", "ERROR", "INFO", "DEBUG"};
 
-int debug = 1;  // debug on/off
+int debug = 0;  // debug on/off
 //#define SIMULATE_JOINTS
 
 void log_info(char *str) 
@@ -494,7 +495,7 @@ void loop() {
         switch (mode) {
             case MODE_OFF:
                 break;
-            case MODE_FREE_PLAY:
+            case MODE_IMMEDIATE:
                 if (isCentered()) {
                     // sendToSculpture(modelPosition);
                     sendToSculpture(canonicalJointPosition);  // XXX de-noise?
@@ -511,7 +512,7 @@ void loop() {
                     }
                 }
                 break;
-            case MODE_SLAVE:
+            case MODE_PLAYBACK:
                 if (slaveDataValid()  && isCentered()) {
                     sendToSculpture(slavePosition);
                 }
@@ -760,10 +761,15 @@ static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
 
     for (int i=0; i<NUM_TOWERS; i++){
         if (!towerEnabled[i]) {
+          Serial.print("Tower not enabled: ");
+          Serial.println(i);
           continue;
         }
         for (int j=0; j<NUM_JOINTS; j++) {
             if (!jointEnabled[i][j]) {
+              Serial.print("Joint not enabled: ");
+              Serial.print(i);
+              Serial.println(j);
               continue;
             }
             char floatStr[10]; // float converted to string
@@ -933,6 +939,7 @@ static void parseMaquetteCommand(char *buf, int len) {
     uint16_t jtarget[3];  /* joint target data */
     uint16_t jcenter[3];  /* joint center data. Raw units from the potentiometer */
     int ntokens;
+    int error = FALSE; // XXX kill this
     
     if (bufEnd <= buf) return;
     
@@ -940,7 +947,8 @@ static void parseMaquetteCommand(char *buf, int len) {
     log_debug("maquette command!!!");
     Serial.print("maquette command ");
     Serial.println(c);
-    
+   
+    Serial.println("switching on char..."); 
     switch(c) {
     case 'b':  // toggle led on button... testing
       gLEDOn = 1 - gLEDOn;
@@ -985,6 +993,7 @@ static void parseMaquetteCommand(char *buf, int len) {
       break; 
     case 'D':  // set debug level
       Serial.println("Setting debug level"); 
+      ptr++; // XXX skipping ':', see note about parsing better globally
       c = *ptr++;
       if (((c - '0') >= 0) && ((c - '0') <= 3)) {
         debug = c - '0';
@@ -997,50 +1006,54 @@ static void parseMaquetteCommand(char *buf, int len) {
       Serial.println("<!mD+>");
       break; 
     case 'M':  // set mode
+      Serial.println("Setting mode...");
+      // skip to arguments. XXX I really out to parse them out up front.
+      ptr++;  // skip the ':'
       c =*ptr++;
       val = c - '0';
       sprintf(outBuf, "Setting mode to %d", val);
       log_debug(outBuf);
-      modeIsLocal = FALSE;
+      
       switch(val) {
         case 0:
             mode = MODE_OFF;
             break;
         case 1:
-            mode = MODE_FREE_PLAY;
+            mode = MODE_IMMEDIATE;
             break;
         case 2:
             initPoseMode();
-           break;
+            break;
         case 3:
-            mode = MODE_SLAVE;
+            mode = MODE_PLAYBACK;
             break;
         default:
-            modeIsLocal = TRUE;
-            log_debug("Restoring mode control to switch");
+            Serial.println("<!mM-Invalid Mode>");
+            error = TRUE;
             break;
       }
 
-      if (mode != MODE_SLAVE) {
+      if (mode != MODE_PLAYBACK) {
         slaveValidBitmask = 0x00;
       }
 
-      if (!modeIsLocal) {
-        if (debug ) {
-          sprintf(outBuf, "Mode set to %s\n", modeStr[mode]);
-          log_debug(outBuf);
-        }     
+      if (debug ) {
+        sprintf(outBuf, "Mode set to %s\n", modeStr[mode]);
+        log_debug(outBuf);
+      }     
+      if (!error) { // XXX this is a terrible way to handle errors here, but I want to refactor most of this case shit.
+        Serial.println("<!mM+>");
       }
-      Serial.println("<!mM+>");
       break; 
     case 's': // Get status
+        Serial.println("Getting status");
         // Note that I'm being very careful here not to overrun outBuf, which can't be very big because we have a small stack.
-        sprintf(outBuf, "<!ms{\"mode\": %d, \"poseState\": %d, \"towerState\": [", mode, poseState);
+        sprintf(outBuf, "<!ms{\"mode\": \"%s\", \"poseState\": %d, \"towerState\": [", modeStr[mode], poseState);
         Serial.print(outBuf);
         for (int i=0; i<NUM_TOWERS; i++) {
             // XXX NB - I'm splitting this printf up into several parts because the Arduino folks, in their infinite
             // wisdom, have decided that sprintf should not support float formatting. Serial.print(), however, does. Mfkers.
-            sprintf(outBuf, "{\"tower\": %d, \"jointPos\" : [", i);
+            sprintf(outBuf, "{\"tower\": %d, \"calibrated\": %s, \"jointPos\" : [", i, (maquetteTowerCenterCalibrated[i] ? "true" : "false"));
             Serial.print(outBuf);
             Serial.print(canonicalJointPosition[i][0]);
             Serial.print(", ");
@@ -1106,11 +1119,15 @@ static void parseMaquetteCommand(char *buf, int len) {
         
         if (ntokens != 1 && ntokens != 4) {
           log_error("Invalid number of center tokens. Require 3 or none");
+          Serial.print("<!mC");
+          Serial.print(towerId);
+          Serial.println("-Invalid number of centers>");
           break; 
         }
 
         if (towerId > 4 || towerId < 1) {
           log_error("Invalid tower");
+          Serial.println("<!mC-Invalid tower>");
           break;
         }
 
@@ -1124,12 +1141,15 @@ static void parseMaquetteCommand(char *buf, int len) {
         } else if (ntokens == 4) {
           if (jcenter[0] > POT_RANGE || jcenter[0] < 0) {
               log_error("Joint 1 center out of range\n");
+              Serial.println("<!mC-Center 1 out of range>");
               break;
           } else if (jcenter[1] > POT_RANGE || jcenter[1] < 0) {
               log_error("Joint 2 center out of range\n");
+              Serial.println("<!mC-Center 2 out of range>");
               break;
           } else if (jcenter[2] > POT_RANGE || jcenter[2] < 0) {
               log_error("Joint 3 center out of range\n");
+              Serial.println("<!mC-Center 3 out of range>");
               break;
           } 
        } 
@@ -1138,10 +1158,12 @@ static void parseMaquetteCommand(char *buf, int len) {
           maquetteJointCenter[towerId][i] = jcenter[i];   
        }
        maquetteTowerCenterCalibrated[towerId] = TRUE;
-       Serial.println(maquetteToModel(jcenter[0], towerId, 0));
+       // Serial.println(maquetteToModel(jcenter[0], towerId, 0));
 
        writeTowerCalibrationData(towerId);
-       Serial.println("<!mC+>");  // XXX see comments below
+       Serial.print("<!mC");
+       Serial.print(towerId+1);
+       Serial.println("+>");  // XXX see comments below
        
        break;
     case 'c': // Get calibration status
@@ -1149,16 +1171,28 @@ static void parseMaquetteCommand(char *buf, int len) {
       Serial.println(outBuf);
       break;
     case 'X': // uncalibrate
-      for (int i=0; i<NUM_TOWERS; i++) { 
-        maquetteTowerCenterCalibrated[i] = FALSE;
+      ntokens = sscanf(ptr, "%hhu", &towerId);
+      if (ntokens == 1 && (towerId < 1 || towerId > 4)) {
+        Serial.println("<!mX-Bad Tower ID>");
+        break;
       }
-      // Okay. So let's assume that I can write the protocol for the maquette. What do I want it to be?
+      if (ntokens == 1) {
+        Serial.print("Setting tower center calibrated to FALSE for tower");
+        Serial.println(towerId);
+        maquetteTowerCenterCalibrated[towerId-1] = FALSE;
+      } else {
+        Serial.println("Setting center calibrated to false for all towers");
+        for (int i=0; i<NUM_TOWERS; i++) { 
+           maquetteTowerCenterCalibrated[i] = FALSE;
+        }
+      }
+      // XXX - Notes for better things. Okay. So let's assume that I can write the protocol for the maquette. What do I want it to be?
       // Let's keep it of the form <mxxxx>
       // Then we can do <m<0-99><c>:<t>:<j>:<args>>  And here t and j and args can be blank, but we always have the ':' in them. Then the response is
       // <!m<0-99><c>:<success/failure>:response>>  And *that* is a lot more reasonable.
       // But first shall I figure out the storage problem? 
       writeCalibrationData();
-      Serial.println("<!mX+>");  // XXX - for the moment, a positive response
+      Serial.println("<!mX+>");
       break;
     case 'q':
       // Nuke eeprom.
@@ -1203,7 +1237,9 @@ static void parseMaquetteCommand(char *buf, int len) {
       }
       towerEnabled[towerId-1] = val;
       writeCalibrationData();
-      Serial.println("<!mE+>");  // XXX fixme - return different success/error codes
+      Serial.print("<!mE");
+      Serial.print(towerId);
+      Serial.println("+>"); // XXX fixme better return codes
       break;
        
     case 'e': // enable/disable joint
@@ -1231,7 +1267,9 @@ static void parseMaquetteCommand(char *buf, int len) {
       }
       jointEnabled[towerId-1][jointId-1] = val;
       writeCalibrationData();
-      Serial.println("<m!me+>"); // XXX fixme above
+      Serial.print("<!me");
+      Serial.print(towerId);
+      Serial.println("+>"); // XXX fixme above
       break;
         
     case 'S': // simulation. Get the position that we would be sending the towers
@@ -1271,9 +1309,12 @@ static void parseMaquetteCommand(char *buf, int len) {
             }
         }
         Serial.print("]>");   
+        break;
     default:
+      Serial.println("Couldn not find case for char");
       break; 
     }
+    Serial.println("Finish parse maquette command");
 } 
 
 static void parseTowerCommand(char *buf, int len) {
