@@ -158,16 +158,6 @@ int pinMapping[NUM_TOWERS][NUM_JOINTS] = { {A0, A1, A3},
                                           {A8, A9, A11},
                                           {A12, A13, A15} };
 
-// 'Pose' mode sets the towers to the current maquette state, and holds the pose for
-// some number of seconds. It is triggered by a button press
-float posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
-                                             {0,0,0},
-                                             {0,0,0},
-                                             {0,0,0}};
-uint8_t poseDataValid = FALSE; 
-#define POSE_STATE_WAITING 0
-#define POSE_STATE_HOLD 1
-uint8_t poseState = POSE_STATE_WAITING;
 
 // In 'Slave' mode, we're reading poses from some external source (such as 
 // a pose list on the rpi) and adjusting the towers to match the current
@@ -180,34 +170,30 @@ float slavePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
 uint8_t slaveValidBitmask = 0x00; 
 
 
-typedef struct _ButtonState {
+typedef struct _Button {
   uint8_t externalState;
   uint8_t internalState;
   uint8_t justPressed;
   uint8_t justReleased;
   int settleTime;
   int pin;
-} ButtonState;
-
-enum {
-  BTN_MODE_0,
-  BTN_MODE_1,
-  BTN_MODE_2,
-  BTN_MODE_3,
-  BTN_MODE_4,
-  BTN_POSE = 4
-};
+} Button;
 
 #define POSE_BUTTON_LED 13
 #define POSE_BUTTON     12
 #define POSE_LENGTH_MILLIS 10000
 
+static Button poseButton;
 
+// External button API..
+static void ButtonInit(int pin, Button &button);
+static void buttonRead(Button &button);
+static bool buttonJustPressed(Button &button, bool consume);
+static bool buttonJustReleased(Button &button, bool consume);
 
-#define NBUTTONS 1
-uint8_t ButtonArray[NBUTTONS] = {POSE_BUTTON};
+// External poseMode API
+static void poseModeRunStateMachine();
 
-static ButtonState buttonState[NBUTTONS];
 
 // XXX - we've got a level violation here. The input to the mode API is a number
 // but the output is a string. This means that number to string translations
@@ -221,14 +207,10 @@ static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]);
 static void broadcastModelPosition();
 static void setModeFromSwitch();
 static int slaveDataValid();
-static void readAllButtons();
-static void InitButtons();
-static ButtonState *readButtonState(int button);
-static void readSerialCommand();
 static void readCAN();
 static uint8_t accumulateCommandString(uint8_t c);
 static void parseSerialCommand();
-static uint8_t isCentered();
+static uint8_t maquetteCalibrated();
 static uint16_t readJointPos(int towerIdx, int jointIdx);
 
 static void Write485(char *buf);
@@ -246,13 +228,6 @@ static void HandleCANHomingStatus(uint8_t towerId, uint8_t *buf);
 static void HandleCANExtendedStatus(uint8_t towerId, uint8_t *buf);
 static void HandleCANPIDValues(uint8_t towerId, uint8_t *buf);
 static void HandleCANIntegrators(uint8_t towerId, uint8_t *buf);
-
-#define BLINK_TIME 400
-static int blinkOnOff = 1;
-static unsigned long blinkTransitionTime = 0;
-static void blinkPoseButton();
-static void getPoseData();
-static void initPoseMode();
 
 
 void log_info(char *str);
@@ -399,7 +374,6 @@ void invalidateCalibration(int tower)
 }
 
 
-
 // 485 bus here...
 #define NETWORKFILE   &uart1file
 
@@ -408,7 +382,7 @@ void setup(){
   UART1_Init(UART_115200);  // Network Baud out to nodes
   wdt_disable();  // Disable watchdog
   delay(100);
-  InitButtons();
+  ButtonInit(POSE_BUTTON, poseButton);
   InitLEDs();
   CAN_init();
   Serial.println("Starting maquette...");
@@ -431,8 +405,7 @@ void loop() {
 
 
 //    secIdx++;
-    
-    readAllButtons();
+    buttonRead(poseButton);  
     readSerialCommand();
     readCAN();
     wdt_reset();  // Tell watchdog not to bark
@@ -496,24 +469,21 @@ void loop() {
             case MODE_OFF:
                 break;
             case MODE_IMMEDIATE:
-                if (isCentered()) {
-                    // sendToSculpture(modelPosition);
-                    sendToSculpture(canonicalJointPosition);  // XXX de-noise?
+                if (!maquetteCalibrated()) {
+                    break;
                 }
+                // sendToSculpture(modelPosition);
+                sendToSculpture(canonicalJointPosition);  // XXX de-noise?
                 break;
             case MODE_POSE:
-                getPoseData(); // Get pose data, if ready.  
-                if (poseDataValid && isCentered() ) {
-                    sendToSculpture(posePosition);
-                    if (curTime > poseTimeout) {
-                      poseState = POSE_STATE_WAITING;
-                    } else {
-                      blinkPoseButton();                      
-                    }
-                }
+                if (!maquetteCalibrated())
+                    break;  // Safety valve - do not send data from maquette if maquette is not calibrated.
+                poseModeRunStateMachine();
+        
+// FIXME  And if we decalibrate/calibrate anything we immediately leave pose mode.
                 break;
             case MODE_PLAYBACK:
-                if (slaveDataValid()  && isCentered()) {
+                if (slaveDataValid() && maquetteCalibrated()) {
                     sendToSculpture(slavePosition);
                 }
                 break;
@@ -527,7 +497,7 @@ void loop() {
    }
 }
 
-static uint8_t isCentered(void)
+static uint8_t maquetteCalibrated(void)
 {
   uint8_t centerVal = TRUE;
   for (int i=0; i<NUM_TOWERS; i++){
@@ -538,84 +508,9 @@ static uint8_t isCentered(void)
 }
 
 
-static void setPoseButtonLED(int onOff)
-{
-    Serial.print("Pose button LED ");
-    Serial.print(onOff);
-    digitalWrite(POSE_BUTTON_LED, onOff?HIGH:LOW);
-}
-
-static void blinkPoseButton() 
-{
-   unsigned long curTime = millis();
-   if (curTime > blinkTransitionTime) {
-      blinkOnOff = 1 - blinkOnOff;
-      setPoseButtonLED(blinkOnOff);
-      blinkTransitionTime = curTime + BLINK_TIME;
-   }
-}
-
-static void getPoseData() {
-  if (poseState == POSE_STATE_WAITING) {
-    // check for button press
-    if (buttonState[0].justReleased) { // XXX NB - note that pose button is currently first in array. Should be a better thing than hard coding like this
-      // get pose data
-      for (int i=0; i<NUM_TOWERS; i++) {
-        for (int j=0; j<NUM_JOINTS; j++) {
-          posePosition[i][j] = canonicalJointPosition[i][j];
-        }
-      }
-      poseDataValid = TRUE;
-      
-      // change state, set timeout
-      poseState = POSE_STATE_HOLD; 
-      poseTimeout = millis() + POSE_LENGTH_MILLIS;
-    }
-  } 
-  
-  // reset button state - throw away any presses that 
-  // happen when state is not WAITING.
-  buttonState[0].justReleased = FALSE;
-}
-
-
 static int slaveDataValid() {
   return slaveValidBitmask == 0x0F;
 }
-
-/*
-static void setModeFromSwitch() {
-  int newMode;
-  if (buttonState[BTN_MODE_0].externalState) {
-    newMode = MODE_OFF;
-  } else if (buttonState[BTN_MODE_1].externalState) {
-    newMode = MODE_FREE_PLAY;
-  } else if (buttonState[BTN_MODE_2].externalState) {
-    newMode = MODE_POSE;
-  } else if (buttonState[BTN_MODE_3].externalState) {
-    newMode = MODE_SLAVE;
-  } else {
-    return; // This is likely a debug state - no mode set externally
-  }
-
-  if (mode != newMode) {
-    if (debug) {
-      char strBuf[256];
-      sprintf(strBuf, "Changing mode from %s to %s\n", modeStr[mode], modeStr[newMode]);
-      Serial.print(strBuf);
-    }
-    
-    if (newMode == MODE_POSE) {
-      poseValidBitmask = 0x00;
-    } else if (newMode == MODE_SLAVE) {
-      slaveValidBitmask = 0x00;
-    }
-  }
-  mode = newMode;
-  
-  return;
-}
-*/
 
 static uint16_t simulatedJointPos = 100;
 static uint16_t readJointPos(int towerIdx, int jointIdx) {
@@ -635,65 +530,74 @@ static void InitLEDs() {
 }
 
 
-static void InitButtons() {
-  for (int i=0; i<NBUTTONS; i++) {
-    pinMode(ButtonArray[i], INPUT_PULLUP);
-    buttonState[i].pin = ButtonArray[i];
-    buttonState[i].externalState = 0;
-    buttonState[i].internalState = 0;
-    buttonState[i].settleTime = 0;
-    buttonState[i].justPressed = FALSE;
-    buttonState[i].justReleased = FALSE;
-  }
-}
-
-static void readAllButtons() {
-  for (int i=0; i<NBUTTONS; i++) {
-    readButtonState(i);
-  }
-}
-
-static ButtonState *readButtonState(int button)
+static void ButtonInit(int pin, Button &button)
 {
-  if (button >= NBUTTONS) {
-    return NULL;
-  }
-  
-  ButtonState *state = &buttonState[button];
-  int curState = digitalRead(state->pin);
+    button.pin = pin; 
+    button.externalState = 0;
+    button.internalState = 0;
+    button.settleTime = 0;
+    button.justPressed = FALSE;
+    button.justReleased = FALSE;
+    pinMode(pin, INPUT_PULLUP);
+}
+
+
+static void buttonRead(Button &button)
+{
+  // NB - most of this code handles debouncing. The
+  // button must read the same value for a certain period of time
+  // before its externally facing state changes.
+
+  int curState = digitalRead(button.pin);
   curState = 1-curState; // invert meaning, since we use a pull up
 
   // if the state is not the currently reported state of the button,
   // change either the externally reported state, or update
   // our settling counter
-  if (curState != state->externalState) {
-    if (curState == state->internalState) {
-      state->settleTime++;
+  if (curState != button.externalState) {
+    if (curState == button.internalState) {
+      button.settleTime++;
     } else {
-      state->settleTime = 0;
-      state->internalState = curState;
+      button.settleTime = 0;
+      button.internalState = curState;
     }
     
-    if (state->settleTime > SETTLE_TIME) {
-      state->externalState = curState;
-      state->settleTime = 0;
+    if (button.settleTime > SETTLE_TIME) {
+      button.externalState = curState;
+      button.settleTime = 0;
       if (curState) {
-        state->justPressed = TRUE;
-        state->justReleased = FALSE;
+        button.justPressed = TRUE;
+        button.justReleased = FALSE;
       } else {
-        state->justPressed = FALSE;
-        state->justReleased = TRUE;
+        button.justPressed = FALSE;
+        button.justReleased = TRUE;
       }
       if (debug) {
         char strBuf[256];
-        sprintf(strBuf, "%s button %d\n", state->justPressed ? "PRESSED" : "RELEASED", button);
+        sprintf(strBuf, "%s button %d\n", button.justPressed ? "PRESSED" : "RELEASED", button.pin);
         Serial.print(strBuf);
       }
     }
   }
-  return state;
 }
 
+static bool buttonJustPressed(Button &button, bool consume)
+{
+    int ret = button.justPressed;
+    if (consume) {
+        button.justPressed = FALSE;
+    }
+    return ret;
+}
+
+static bool buttonJustReleased(Button &button, bool consume)
+{
+    int ret = button.justReleased;
+    if (consume) {
+        button.justReleased = FALSE;
+    }
+    return ret;
+}
 
 
 /* Translate between potentiometer reading [0, 1204) 
@@ -754,7 +658,7 @@ static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
     char smallModelString[64];
     char *ptr = modelString;
 
-    if (!isCentered()) {
+    if (!maquetteCalibrated()) {
       log_error("Target sculpture called on uncalibrated sculpture. Center first!!");
       return;
     }
@@ -914,14 +818,118 @@ static void parseSerialCommand()
   }
 }
 
-static void initPoseMode()
+/** POSE MODE FUNCTIONS ***/
+
+// 'Pose' mode sets the towers to the current maquette state, and holds the pose for
+// some number of seconds. It is triggered by a button press
+static float posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+                                             {0,0,0},
+                                             {0,0,0},
+                                             {0,0,0}};
+#define BLINK_TIME 400
+#define POSE_STATE_WAITING 0
+#define POSE_STATE_HOLD 1
+
+uint8_t poseState = POSE_STATE_WAITING;
+uint8_t poseDataValid = FALSE; 
+static void poseLEDSet(int onOff);
+static void poseLEDBlinkOnTimeout();
+static bool poseGetPoseData();
+static void poseModeInit();
+static void poseModeSetWaiting();
+static void poseModeSetHolding();
+
+static void poseModeInit()
 {
-  mode = MODE_POSE;
   poseState = POSE_STATE_WAITING;
   poseDataValid = FALSE;
-  blinkTransitionTime = 0;
-  blinkOnOff = 0;
+  poseLEDSet(1);
 }
+
+static int poseLEDOnOff = 0;
+static unsigned long poseBlinkTransitionTime = 0;
+static void poseLEDSet(int onOff)
+{
+    digitalWrite(POSE_BUTTON_LED, onOff?HIGH:LOW);
+    poseLEDOnOff = onOff;
+}
+
+static void poseLEDBlinkOnTimeout() 
+{
+   unsigned long curTime = millis();
+   if (curTime > poseBlinkTransitionTime) {
+      poseLEDOnOff = 1 - poseLEDOnOff;
+      poseLEDSet(poseLEDOnOff);
+      poseBlinkTransitionTime = curTime + BLINK_TIME;
+   }
+}
+
+
+static void poseModeSetWaiting()
+{
+  Serial.println("Transition - to pose mode waiting");
+  poseState = POSE_STATE_WAITING;
+  poseLEDSet(1);
+}
+
+
+static void poseModeSetHolding()
+{
+  Serial.println("Transition - to pose mode holding");
+  poseState = POSE_STATE_HOLD;
+  poseLEDSet(0);
+  poseTimeout = millis() + POSE_LENGTH_MILLIS;
+}
+
+
+static bool poseModeGetPoseData()
+{
+  bool haveNewPose = FALSE;
+  if (poseState == POSE_STATE_WAITING) {
+    // check for button press
+    if (buttonJustPressed(poseButton, TRUE)) {
+      // get pose data
+      for (int i=0; i<NUM_TOWERS; i++) {
+        for (int j=0; j<NUM_JOINTS; j++) {
+          posePosition[i][j] = canonicalJointPosition[i][j];
+        }
+      }
+      haveNewPose = TRUE;
+    }
+  } else if (poseState == POSE_STATE_HOLD) {
+    // throw away button presses in hold state
+    buttonJustPressed(poseButton, TRUE);
+  }
+
+  return haveNewPose;
+}
+
+
+static void poseModeRunStateMachine()
+{
+    // If we have valid pose data, pose the machine.
+    // This is true no matter whether we're in waiting state or hold state -
+    // even if we're for a new pose, we continue to send the previous pose
+    // until told otherwise
+    if (poseDataValid) {
+        sendToSculpture(posePosition);
+    }
+    // Check the state transitions
+    if (poseState == POSE_STATE_HOLD) {
+        // Back to wait state if we've been holding too long
+        if (millis() > poseTimeout) {
+            poseModeSetWaiting();
+        // Otherwise blink the button
+        } else {
+            poseLEDBlinkOnTimeout();    
+        }
+    } else if (poseState == POSE_STATE_WAITING) {
+        if (poseModeGetPoseData()) { // Button pressed, new pose data
+            poseModeSetHolding();
+        }
+    }
+}
+
 
 static int gLEDOn = 0;  // XXX testing LED blink...
 
@@ -952,7 +960,7 @@ static void parseMaquetteCommand(char *buf, int len) {
     switch(c) {
     case 'b':  // toggle led on button... testing
       gLEDOn = 1 - gLEDOn;
-      setPoseButtonLED(gLEDOn);
+      poseLEDSet(gLEDOn);
       Serial.println("<!mb+>");
       break;
     case 'L':  // set limits for a tower on maquette 
@@ -1017,15 +1025,34 @@ static void parseMaquetteCommand(char *buf, int len) {
       switch(val) {
         case 0:
             mode = MODE_OFF;
+            poseLEDSet(0);
             break;
         case 1:
-            mode = MODE_IMMEDIATE;
+            if (!maquetteCalibrated()) {
+                Serial.println("<!mM-Invalid State>");
+                error = TRUE;
+            } else {
+                poseLEDSet(0);
+                mode = MODE_IMMEDIATE;
+            }
             break;
         case 2:
-            initPoseMode();
+            if (!maquetteCalibrated()) {
+                Serial.println("<!mM-Invalid State>");
+                error = TRUE;
+            } else {
+                mode = MODE_POSE;
+                poseModeInit();
+            }
             break;
         case 3:
-            mode = MODE_PLAYBACK;
+            if (!maquetteCalibrated()) {
+                Serial.println("<!mM-Invalid State>");
+                error = TRUE;
+            } else {
+                poseLEDSet(0);
+                mode = MODE_PLAYBACK;
+            }
             break;
         default:
             Serial.println("<!mM-Invalid Mode>");
@@ -1038,8 +1065,10 @@ static void parseMaquetteCommand(char *buf, int len) {
       }
 
       if (debug ) {
-        sprintf(outBuf, "Mode set to %s\n", modeStr[mode]);
-        log_debug(outBuf);
+        if (!error) {
+            sprintf(outBuf, "Mode set to %s\n", modeStr[mode]);
+            log_debug(outBuf);
+        }
       }     
       if (!error) { // XXX this is a terrible way to handle errors here, but I want to refactor most of this case shit.
         Serial.println("<!mM+>");
