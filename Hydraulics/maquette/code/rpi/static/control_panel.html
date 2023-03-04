@@ -31,7 +31,11 @@
       </div> <!-- maquette mode-->
       <div id="towerControl" class="pane"> 
       <span class="subhead1"> Maquette Tower Control:<br> </span>
-      <div class="flex_container" id="towerControlBlock">
+      <div id="calibration_instructions">
+      Maquette must be calibrated before it will work. To calibrate a tower, position it
+      fully upright on the maquette, and select 'Calibrate' from the drop down.
+      </div> <!-- maquette calibration instructions -->
+      <div class="flex-container" id="towerControlBlock">
         <div class="towerControl" id="mT1Control">
           <div class="tower-control-inner">
           <span class="towerhead">Tower 1</span>
@@ -174,32 +178,75 @@
         </div> <!-- mT4Control -->
       </div>
       </div>
-      <div>
-      To use maquette: Calibrate the system by setting a tower straight upright, then<br>
-      pushing the 'Center' button for the tower. Do this for all four towers. <br>
-      Maquette will not work without all towers calibrated.
-      </div> <!-- maquette calibration instructions -->
    </div> <!-- maquette control -->
    <div id="maquettePosition" class="pane">
-     <span class="subhead1">Maquette Position</span><br>
-     <button type="button" id="mStatusRefresh">Refresh</button>
-     <button type="button" id="mStatusLive">Go Live</button> 
-     <div>
-       T1 Postion
-       <span id="mT1Position"></span>
+     <span class="subhead1">Maquette Position:</span><br>
+     <div class="maquette-refresh-buttons">
+       <button type="button" id="mStatusRefresh">Refresh</button>
+       <button type="button" id="mStatusLive">Go Live</button> 
      </div>
-     <div>
-       T2 Position
-       <span id="mT2Position"></span>
+     <div class="flex-container">
+     <div id="mT1Position" class="tower-display">
+       <div class="tower-display-inner">
+          <span class="towerhead">Tower 1 Position</span>
+          <div>
+          <div class="tower-canvas-pane">
+            <canvas id="mT1Canvas" class="tower-canvas">
+          </div>
+          <div class="tower-position-pane">
+            <div class="tower-position-detail"><span id="mT1J1Position"></span></div>
+            <div class="tower-position-detail"><span id="mT1J2Position"></span></div>
+            <div class="tower-position-detail"><span id="mT1J3Position"></span></div>
+          </div>
+          </div>
+       </div>
      </div>
-     <div>
-       T3 Position
-       <span id="mT3Position"></span>
+     <div id="mT2Position" class="tower-display">
+       <div class="tower-display-inner">
+          <span class="towerhead">Tower 2 Position</span>
+          <div>
+          <div class="tower-canvas-pane">
+            <canvas id="mT2Canvas" class="tower-canvas">
+          </div>
+          <div class="tower-position-pane">
+            <div class="tower-position-detail"><span id="mT2J1Position"></span></div>
+            <div class="tower-position-detail"><span id="mT2J2Position"></span></div>
+            <div class="tower-position-detail"><span id="mT2J3Position"></span></div>
+          </div>
+          </div>
+       </div>
      </div>
-     <div>
-       T4 Position
-       <span id="mT4Position"></span>
+     <div id="mT3Position" class="tower-display">
+       <div class="tower-display-inner">
+          <span class="towerhead">Tower 3 Position</span>
+          <div>
+          <div class="tower-canvas-pane">
+            <canvas id="mT3Canvas" class="tower-canvas">
+          </div>
+          <div class="tower-position-pane">
+            <div class="tower-position-detail"><span id="mT3J1Position"></span></div>
+            <div class="tower-position-detail"><span id="mT3J2Position"></span></div>
+            <div class="tower-position-detail"><span id="mT3J3Position"></span></div>
+          </div>
+          </div>
+       </div>
      </div>
+     <div id="mT4Position" class="tower-display">
+       <div class="tower-display-inner">
+          <span class="towerhead">Tower 4 Position</span>
+          <div>
+          <div class="tower-canvas-pane">
+            <canvas id="mT4Canvas" class="tower-canvas">
+          </div>
+          <div class="tower-position-pane">
+            <div class="tower-position-detail"><span id="mT4J1Position"></span></div>
+            <div class="tower-position-detail"><span id="mT4J2Position"></span></div>
+            <div class="tower-position-detail"><span id="mT4J3Position"></span></div>
+          </div>
+          </div>
+       </div>
+     </div>
+   </div> <!-- flex container -->
    </div> <!-- maquette position -->
 </div><!-- maquette div -->
 <div id="sculpture_div">
@@ -748,8 +795,7 @@ function renderMaquetteStatus(status){
     // Set tower information
     for (var idx=0; idx<4; idx++) {
         var tower = status["towerState"][idx];
-        // position
-        $("#mT" + (idx+1) + "Position").text(tower["jointPos"].toString());
+        // $("#mT" + (idx+1) + "Position").text(tower["jointPos"].toString());
         // enable/disable
         let towerEnableElem = $("#mT" + (idx+1) + "Enable");
         towerEnableElem.val(tower["towerEnabled"].toString());
@@ -764,7 +810,15 @@ function renderMaquetteStatus(status){
             let jointEnableElem = $("#mT" + (idx+1) + "J" + (jIdx+1) + "Enable");
             jointEnableElem.val(tower["jointEnabled"][jIdx].toString());
             setColorOnSelect(jointEnableElem);
+            let jointPosElem = $("#mT" + (idx+1) + "J" + (jIdx+1) + "Position");
+            jointPosElem.text(Number(tower["jointPos"][jIdx]).toFixed(2));
         }
+        // render the tower
+        let jointAngle0 = tower["jointPos"][0]*Math.PI/9;
+        let jointAngle1 = tower["jointPos"][1]*Math.PI/9;
+        let jointAngle2 = tower["jointPos"][2]*Math.PI/9;
+        let canvas = document.getElementById("mT" + (idx+1) + "Canvas");
+        drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);
     } 
 }
 
@@ -864,6 +918,9 @@ function setPosition(tid, j1, j2, j3) {
 }
 
 
+const SEGMENT_LENGTH_LOWER=50;
+const SEGMENT_LENGTH_MIDDLE=40;
+const SEGMENT_LENGTH_UPPER=40;
 function drawTower(canvas, theta1, theta2, theta3)
 {
     const r1 = SEGMENT_LENGTH_LOWER;
@@ -871,9 +928,13 @@ function drawTower(canvas, theta1, theta2, theta3)
     const r3 = SEGMENT_LENGTH_UPPER;
     const startPoint = [canvas.width/2, canvas.height];
     var ctx = canvas.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform();
     ctx.translate(startPoint[0], startPoint[1]);
     ctx.rotate(theta1);
+    ctx.beginPath();
     ctx.moveTo(0,0);
     ctx.lineTo(0, -r1);
     ctx.translate(0, -r1);

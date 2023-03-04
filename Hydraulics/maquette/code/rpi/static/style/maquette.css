@@ -28,7 +28,7 @@
   margin-bottom: 0.6em;
 }
 
-.tower-control-inner {
+.tower-control-inner, .tower-display-inner {
   border: 2px;
   background-color:#efe0e0;
   display: inline-block;
@@ -36,20 +36,48 @@
   padding: 0.5em;
 }
 
+.tower-canvas {
+  width: 10em;
+  height: 15em;
+  border-style: solid;
+  border: 2xp;
+}
+
+.tower-canvas-pane {
+  float: left;
+}
+
+.tower-position-pane {
+  float: left;
+  padding-top: 4em;
+  width: 4em;
+  text-align: right;
+}
+
 .ui-widget-header {
-   background:#b9cd6d;
-   border: 1px solid #b9cd6d;
-   color: #FFFFFF;
-   font-weight: bold;
+  background:#b9cd6d;
+  border: 1px solid #b9cd6d;
+  color: #FFFFFF;
+  font-weight: bold;
 }
 
-.flex_container {
-    display:flex;
+.flex-container {
+  display:flex;
 }
 
-.towerControl {
-    flex:1;
-    margin-right:20px;
+#calibration_instructions{ 
+ padding-bottom: 1em;
+ font-size: 80%;
+ font-style: italic;
+}
+
+.towerControl, .tower-display{
+  flex:1;
+  margin-right:20px;
+}
+
+.maquette-refresh-buttons{
+  padding-bottom: 0.5em;
 }
 .goodtogo {
   background-color:#70ffa0;
