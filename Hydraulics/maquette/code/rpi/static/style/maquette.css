@@ -1,0 +1,60 @@
+#tabs-1{font-size: 14px;}
+
+.tower-select {
+   width: 10em;
+   margin-bottom: 0.3em;
+}
+
+.towerhead {
+   display:inline-block;
+   font-weight:bold;
+   margin-bottom: 0.5em;
+}
+
+.pane {
+  margin-left: 2em;
+  border-style:solid;
+  border: 2px;
+  padding: 0.5em;
+  margin-bottom: 1em;
+  background-color:#ffe0e0;
+  border-radius: 0.5em;
+}
+
+.subhead1 {
+  font-size:%120;
+  font-weight:bold;
+  display: inline-block;
+  margin-bottom: 0.6em;
+}
+
+.tower-control-inner {
+  border: 2px;
+  background-color:#efe0e0;
+  display: inline-block;
+  border-style:solid;
+  padding: 0.5em;
+}
+
+.ui-widget-header {
+   background:#b9cd6d;
+   border: 1px solid #b9cd6d;
+   color: #FFFFFF;
+   font-weight: bold;
+}
+
+.flex_container {
+    display:flex;
+}
+
+.towerControl {
+    flex:1;
+    margin-right:20px;
+}
+.goodtogo {
+  background-color:#70ffa0;
+}
+
+.notgoodtogo {
+  background-color:#ff8080;
+}

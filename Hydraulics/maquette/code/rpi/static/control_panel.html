@@ -7,21 +7,21 @@
   <title>Crown Control</title>
   <meta name="description" content="Control Panel for Crown Sculpture">
 
-<!--  <link rel="stylesheet" type="text/css" href="jquery-ui-min-1.8.24.css"> -->
-
-  <!--[if lt IE 9]
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
-  [endif]-->
   <link rel="stylesheet" type="text/css" href="style/jquery-ui-min-1.8.24.css">
-
+  <link rel="stylesheet" type="text/css" href="style/maquette.css">
 
 </head>
 <body>
-<div id="maquette">
-<h3> Maquette </h3>
+<div id="tabs">
+   <ul>
+       <li><a href="#maquette_div">Maquette</a></li>
+       <li><a href="#sculpture_div">Sculpture</a></li>
+   </ul>
+    <div id="maquette_div">
+    <h3> Maquette </h3>
     <div id="maquette_control">
-      <div>
-      Maquette Mode:<br>
+      <div id="maquette_mode" class="pane">
+      <span class="subhead1">Maquette Mode:<br></span>
       <select id="maquetteMode">
         <option value="OFF" selected="selected">OFF</option>
         <option value="POSE">pose</option>
@@ -29,30 +29,159 @@
         <option value="PLAYBACK" disabled>playback</option>
       </select>
       </div> <!-- maquette mode-->
-      <div>
-      Maquette Calibration:<br>
-      <div>
-      Current Calibration State:<br>
-         Tower 1 Calibrated: <span id="mT1Calibrated"></span><br>
-         Tower 2 Calibrated: <span id="mT2Calibrated"></span><br>
-         Tower 3 Calibrated: <span id="mT3Calibrated"></span><br>
-         Tower 4 Calibrated: <span id="mT4Calibrated"></span><br>
+      <div id="towerControl" class="pane"> 
+      <span class="subhead1"> Maquette Tower Control:<br> </span>
+      <div class="flex_container" id="towerControlBlock">
+        <div class="towerControl" id="mT1Control">
+          <div class="tower-control-inner">
+          <span class="towerhead">Tower 1</span>
+          <div>
+          <select id="mT1Enable" class="tower-select">
+            <option value="true">ENABLED</option>
+            <option value="false">DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT1Center" class="tower-select">
+            <option value="true">CALIBRATED</option>
+            <option value="false">DECALIBRATED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT1J1Enable" class="tower-select">
+            <option value="true">J1 ENABLED</option>
+            <option value="false">J1 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT1J2Enable" class="tower-select">
+            <option value="true">J2 ENABLED</option>
+            <option value="false">J2 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT1J3Enable" class="tower-select">
+            <option value="true">J3 ENABLED</option>
+            <option value="false">J3 DISABLED</option>
+          </select>
+          </div>
+          </div>
+        </div> <!-- mT1Control -->
+        <div class="towerControl" id="mT2Control">
+          <div class="tower-control-inner">
+          <span class="towerhead">Tower 2</span>
+          <div>
+          <select id="mT2Enable" class="tower-select">
+            <option value="true">ENABLED</option>
+            <option value="false">DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT2Center" class="tower-select">
+            <option value="true">CALIBRATED</option>
+            <option value="false">DECALIBRATED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT2J1Enable" class="tower-select">
+            <option value="true">J1 ENABLED</option>
+            <option value="false">J1 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT2J2Enable" class="tower-select">
+            <option value="true">J2 ENABLED</option>
+            <option value="false">J2 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT2J3Enable" class="tower-select">
+            <option value="true">J3 ENABLED</option>
+            <option value="false">J3 DISABLED</option>
+          </select>
+          </div>
+          </div>
+        </div><!-- mT2Control -->
+        <div class="towerControl" id="mT3Control">
+          <div class="tower-control-inner">
+          <span class="towerhead">Tower 3</span>
+          <div>
+          <select id="mT3Enable" class="tower-select">
+            <option value="true">ENABLED</option>
+            <option value="false">DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT3Center" class="tower-select">
+            <option value="true">CALIBRATED</option>
+            <option value="false">DECALIBRATED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT3J1Enable" class="tower-select">
+            <option value="true">J1 ENABLED</option>
+            <option value="false">J1 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT3J2Enable" class="tower-select">
+            <option value="true">J2 ENABLED</option>
+            <option value="false">J2 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT3J3Enable" class="tower-select">
+            <option value="true">J3 ENABLED</option>
+            <option value="false">J3 DISABLED</option>
+          </select>
+          </div>
+          </div>
+        </div> <!--mT3Control-->
+        <div class="towerControl" id="mT4Control">
+          <div class="tower-control-inner">
+          <span class="towerhead">Tower 4</span>
+          <div>
+          <select id="mT4Enable" class="tower-select">
+            <option value="true">ENABLED</option>
+            <option value="false">DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT4Center" class="tower-select">
+            <option value="true">CALIBRATED</option>
+            <option value="false">DECALIBRATED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT4J1Enable" class="tower-select">
+            <option value="true">J1 ENABLED</option>
+            <option value="false">J1 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT4J2Enable" class="tower-select">
+            <option value="true">J2 ENABLED</option>
+            <option value="false">J2 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="mT4J3Enable" class="tower-select">
+            <option value="true">J3 ENABLED</option>
+            <option value="false">J3 DISABLED</option>
+          </select>
+          </div>
+          </div>
+        </div> <!-- mT4Control -->
       </div>
-      <div>
-      Calibrate Maquette:<br>
-      <button type="button" id="mT1Center">Calibrate T1</button> &nbsp;
-      <button type="button" id="mT2Center">Calibrate T2</button> &nbsp;
-      <button type="button" id="mT3Center">Calibrate T3</button> &nbsp;
-      <button type="button" id="mT4Center">Calibrate T4</button> &nbsp;
       </div>
-      </div> <!-- maquette calibration -->
       <div>
       To use maquette: Calibrate the system by setting a tower straight upright, then<br>
       pushing the 'Center' button for the tower. Do this for all four towers. <br>
       Maquette will not work without all towers calibrated.
       </div> <!-- maquette calibration instructions -->
    </div> <!-- maquette control -->
-   <div id="maquettePosition">
+   <div id="maquettePosition" class="pane">
+     <span class="subhead1">Maquette Position</span><br>
      <button type="button" id="mStatusRefresh">Refresh</button>
      <button type="button" id="mStatusLive">Go Live</button> 
      <div>
@@ -72,38 +201,8 @@
        <span id="mT4Position"></span>
      </div>
    </div> <!-- maquette position -->
-   <div id="maquetteStatus">
-     <div id="maquetteTowerEnable">
-        <span> Maquette Enable </span>
-        Tower 1: &nbsp; <select id="mT1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        Tower 2: &nbsp; <select id="mT2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        Tower 3: &nbsp; <select id="mT3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        Tower 4: &nbsp; <select id="mT4Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-     </div>
-     <div id="maquetteJointEnable">
-     <div class="jointEnable">
-        <select id="mT1J1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        <select id="mT1J2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        <select id="mT1J3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-     </div>
-     <div class="jointEnable">
-        <select id="mT2J1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        <select id="mT2J2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        <select id="mT2J3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-     </div>
-     <div class="jointEnable">
-        <select id="mT3J1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        <select id="mT3J2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        <select id="mT3J3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-     </div>
-     <div class="jointEnable">
-        <select id="mT4J1Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        <select id="mT4J2Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-        <select id="mT4J3Enable"><option value=true>ENABLED</option><option value=false>DISABLED</option></select>
-     </div>
-   </div> <!-- maquette status -->
-</div><br><br>
-<div id="sculpture">
+</div><!-- maquette div -->
+<div id="sculpture_div">
 <h3> Sculpture Control</h3>
     <div id="control">
     <button type="button" id="enableT1">Enable T1</button><br>
@@ -113,13 +212,20 @@
     <br>Return Status </br>
     <textarea id="feedbackText" style="width:400px; height:200px"></textarea>
     </div>
-</div>
-<div id="Maquette Status">
-    <span id="maquette_status"></span> 
-</div>
+    Test Canvas
+    <div>
+    <canvas id="testCanvas" width="200" height="200" style="border:1px solid #000000"/>
+    </div>
+</div> <!-- sculpture div -->
+</div> <!-- tabs -->
 </body>
 <script type="text/javascript" src="js/jquery-1.4.3.min.js"></script>
 <script type="text/javascript" src="js/jquery-ui-min-1.8.24.js"></script>
+<script>
+  $( function() {
+    $( "#tabs" ).tabs();
+  } );
+</script>
 <script type="text/javascript" >
 
 var feedbackTextLineCount = 0;
@@ -484,35 +590,33 @@ function enableMaquetteJoint(towerId, jointId, enabletf){
 
 gTowers = [];
 gRefreshStatusInterval = -1;
-maquetteMode = "off"  // should do a get first...
-function init() {
-    console.log("init called");
-    $('#enableT1').click(function() {
-        enableTower(1);
-    });
-    $('#enableT2').click(function() {
-        enableTower(2);
-    });
-    $('#enableT3').click(function() {
-        enableTower(3);
-    });
-    $('#enableT4').click(function() {
-        enableTower(4);
-    });
+maquetteMode = "off";
 
-    $('#mT1Center').click(function() {
-        calibrateMaquetteTower(1);
-    });
-    $('#mT2Center').click(function() {
-        calibrateMaquetteTower(2);
-    });
-    $('#mT3Center').click(function() {
-        calibrateMaquetteTower(3);
-    });
-    $('#mT4Center').click(function() {
-        calibrateMaquetteTower(4);
-    });
-   
+function initData() {
+    requestMaquetteStatus();
+    // requestSculptureStatus();  // XXX - not doing this just yet. FIXME write code for it anyway
+}
+
+function setColorOnSelect(elem) {
+    var onClass;
+    var offClass;
+    if (elem.val() == undefined) {
+        console.log("Undefined value, elem is " + elem) ;
+    }
+    if (elem.val() == "true") {
+        onClass = "goodtogo";
+        offClass = "notgoodtogo";
+    } else {
+        onClass = "notgoodtogo";
+        offClass = "goodtogo";
+    }
+    elem.removeClass(offClass);
+    elem.addClass(onClass);
+}
+
+
+function initControls() {
+    console.log("init called");
     $('#mStatusRefresh').click(function() {
         requestMaquetteStatus();
     });
@@ -537,20 +641,27 @@ function init() {
     // Set up tower and joint enable/disable
     for (var tIdx=0; tIdx<4; tIdx++) {
         let towerIdx = tIdx + 1;  // Tower idx in API is one-based. 
-        var enableTowerId = '#mT' + towerIdx + 'Enable';
-        console.log("Setting change function for " + enableTowerId + " using tower idx " + towerIdx);
+        let enableTowerId = '#mT' + towerIdx + 'Enable';
         $(enableTowerId).change(function(){
             const id = '#mT' + towerIdx + 'Enable';
             const tf = $(id).find(":selected").val();
-            enableMaquetteTower(towerIdx, tf);
+            setColorOnSelect($(this));
+            enableMaquetteTower(towerIdx, $(this).val());
+        });
+
+        var centerTowerId = '#mT' + towerIdx + 'Center';
+        $(centerTowerId).change(function(){
+            setColorOnSelect($(this));
+            calibrateMaquetteTower(towerIdx, $(this).val());
         });
         for (var jIdx=0; jIdx<3; jIdx++) {
             let jointIdx = jIdx + 1;  // As above, joint idx in API is one-based
-            var enableJointId = '#mT' + towerIdx + 'J' + jointIdx + 'Enable';
+            let enableJointId = '#mT' + towerIdx + 'J' + jointIdx + 'Enable';
             $(enableJointId).change(function() {
-                const id = $('#mT' + towerIdx + 'J' + jointIdx + 'Enable');
-                const tf = $(id).find(":selected").val();
-                enableMaquetteJoint(towerIdx, jointIdx, tf);
+                // const id = $('#mT' + towerIdx + 'J' + jointIdx + 'Enable');
+                // const tf = $(id).find(":selected").val();
+                setColorOnSelect($(this));
+                enableMaquetteJoint(towerIdx, jointIdx, $(this).val());
             });
         }
     };
@@ -608,11 +719,18 @@ function getMaquetteCalibrationStatus() {
     });
 }
 
-function calibrateMaquetteTower(towerId) {
+function calibrateMaquetteTower(towerId, tf) {
+    var calibrate_tf = {};
+    if (tf) {
+        calibrate_tf['calibrate'] = true;
+    } else {
+        calibrate_tf['decalibrate'] = true;
+    }
+        
     $.ajax({
         type: 'PUT',
         url: CROWN_MAQUETTE_BASE  + "/towers/" + towerId,
-        data: {"calibrate" : true},
+        data: calibrate_tf,
         success: function(data, status, req) {
             console.log("Centered maquette tower " + towerId);
             },
@@ -633,12 +751,19 @@ function renderMaquetteStatus(status){
         // position
         $("#mT" + (idx+1) + "Position").text(tower["jointPos"].toString());
         // enable/disable
-        $("#mT" + (idx+1) + "Enable").val(tower["towerEnabled"].toString());
+        let towerEnableElem = $("#mT" + (idx+1) + "Enable");
+        towerEnableElem.val(tower["towerEnabled"].toString());
+        setColorOnSelect(towerEnableElem);
         // calibrated
-        $("#mT" + (idx+1) + "Calibrated").text(tower["calibrated"].toString());
+        console.log("tower center " + idx);
+        let towerCenterElem = $("#mT" + (idx+1) + "Center");
+        towerCenterElem.select(tower["calibrated"]);
+        setColorOnSelect(towerCenterElem);
         // joint enabled/disable
         for (var jIdx=0; jIdx<3; jIdx++) {
-            $("#mT" + (idx+1) + "J" + (jIdx+1) + "Enable").val(tower["jointEnabled"][jIdx].toString());
+            let jointEnableElem = $("#mT" + (idx+1) + "J" + (jIdx+1) + "Enable");
+            jointEnableElem.val(tower["jointEnabled"][jIdx].toString());
+            setColorOnSelect(jointEnableElem);
         }
     } 
 }
@@ -738,8 +863,58 @@ function setPosition(tid, j1, j2, j3) {
     // PUT /crown/sculpture/tower/[tid]/position
 }
 
+
+function drawTower(canvas, theta1, theta2, theta3)
+{
+    const r1 = SEGMENT_LENGTH_LOWER;
+    const r2 = SEGMENT_LENGTH_MIDDLE;
+    const r3 = SEGMENT_LENGTH_UPPER;
+    const startPoint = [canvas.width/2, canvas.height];
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform();
+    ctx.translate(startPoint[0], startPoint[1]);
+    ctx.rotate(theta1);
+    ctx.moveTo(0,0);
+    ctx.lineTo(0, -r1);
+    ctx.translate(0, -r1);
+    ctx.rotate(theta2);
+    ctx.lineTo(0, -r2);
+    ctx.translate(0, -r2);
+    ctx.rotate(theta2);
+    ctx.lineTo(0,-r3);
+    ctx.stroke();
+}
+
+function doTests() {
+// sandbox for playing with canvas, at the moment...
+    var mycanvas = document.getElementById("testCanvas");
+    // mycanvas.setTransform(); // zero the transform
+    var theta1 = Math.PI/18;
+    var theta2 = Math.PI/9;
+    var theta3 = Math.PI/6;
+    var r1 = 50;
+    var r2 = 40;
+    var r3 = 40;
+    var startPoint = [100, 200];
+    var ctx = mycanvas.getContext("2d");
+    ctx.setTransform();
+    ctx.translate(startPoint[0], startPoint[1]);
+    ctx.rotate(theta1);
+    ctx.moveTo(0,0);
+    ctx.lineTo(0, -r1);
+    ctx.translate(0, -r1);
+    ctx.rotate(theta2);
+    ctx.lineTo(0, -r2);
+    ctx.translate(0, -r2);
+    ctx.rotate(theta2);
+    ctx.lineTo(0,-r3);
+    ctx.stroke();
+}
+
 $(document).ready(function() {
-    init();
+    initControls();
+    initData();
+    doTests();
 });
 
 /*
