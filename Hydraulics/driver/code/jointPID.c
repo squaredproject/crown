@@ -354,7 +354,7 @@ void Joint_Init_JCB(joint_control_block *j,uint8_t id)
   j->center = 4200;		/* roughly halfway */
   j->direction = 0;		/* invert sense of drive*/ 
   j->homed = 0;		    /* not homed yet */
-
+  j->enabled = 1;       /* by default, software enabled */
 
   // XXX - NB - the following max and min positions are derived from manually homing 
   // the particular test rig that we have in the shop.

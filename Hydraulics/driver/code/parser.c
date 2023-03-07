@@ -169,7 +169,24 @@ void parseCommand(uint8_t ptr){
     }
     break;
  
-
+  case 'f': /* Joint target value, but in canonical form (float, [-1.0, 1.0] */
+    if (joint_num) {
+        float canonical_pos  = atof(cmd_str[charPos+1]);  // XXX returns 0 on error, which is operationally safe, if annoying
+        if (canonical_pos < -1.0) canonical_pos = -1.0;
+        if (canonical_pos > 1.0) canonica_pos = 1.0;
+        int targetPos = 0;
+        int minPos = jcb[joint_num - 1]->minpos;
+        int maxPos = jcb[joint_num - 1]->maxpos;
+        int center = jcb[joint_num - 1]->center;
+        if (floatData < 0) {
+            targetPos = center - (int)(canonical_pos*minPos);
+        } else {
+            targetPos = center + (int)(canonical_pos*maxPos);
+        }
+            
+        jcb[joint_num - 1]->targetPos = targetPos; 
+    }
+    break;
 
   case 't': /* API  joint target value */
     if (joint_num) {            /* if we specified one */
@@ -246,7 +263,7 @@ void parseCommand(uint8_t ptr){
     break;
 */
 
-  case 'P': /* API  joint PID P value */
+  case 'P': /* API: set joint PID P value */
     if (joint_num) {            /* if we specified one */
       if (debug_out) {
         putstr("\r\nP: ");
@@ -256,7 +273,7 @@ void parseCommand(uint8_t ptr){
     }
     break;
 
-  case 'I': /* API  joint PID I value */
+  case 'I': /* API: set joint PID I value */
     if (joint_num) {            /* if we specified one */
       if (debug_out) {
         putstr("\r\nI: ");
@@ -266,15 +283,17 @@ void parseCommand(uint8_t ptr){
     }
     break;
 
-  case 'T': /* API  joint PID trace value */
+  case 'T': /* API: set joint PID trace value */
     if (joint_num) {            /* if we specified one */
-      putstr("\r\nT: ");
-      putint(intData);
+      if (debug_out) {
+        putstr("\r\nT: ");
+        putint(intData);
+      }
       jcb[joint_num - 1]->trace = intData;
     }
     break;
     
-  case 'm': /* Set joint minimum position */
+  case 'm': /* API: Set joint minimum position. Note that '0' is not a valid value */
     if(joint_num) {
       if (debug_out) {
         putstr("\r\nm: ");
@@ -283,12 +302,13 @@ void parseCommand(uint8_t ptr){
       if (intData) {   
         jcb[joint_num - 1]->minpos = intData;
       } else {
+        // Minimum position here is current position (counts) minus the center position
         jcb[joint_num - 1]->minpos = counts[joint_num - 1] - jcb[joint_num-1]->center;
       }
     }
     break;
     
-  case 'M': /* Set joint maximum position */
+  case 'M': /* API: Set joint maximum position. Note that 0 is not a valid value */
     if(joint_num){
       if (debug_out) {
         putstr("\r\nM: ");
@@ -297,6 +317,7 @@ void parseCommand(uint8_t ptr){
       if (intData) {
         jcb[joint_num - 1]->maxpos = intData;
       } else {
+        // Maximu position ins current position (counts) minus the center position
         jcb[joint_num - 1]->maxpos = counts[joint_num - 1] - jcb[joint_num-1]->center;
       }
     }
@@ -310,7 +331,7 @@ void parseCommand(uint8_t ptr){
 //      }
 //      break;
 
-  case 'r':
+  case 'r': /* API: Turn on/off sculpture run */
     if (debug_out) {
       putstr("\r\nr: ");
       putint(intData);
@@ -365,7 +386,16 @@ void parseCommand(uint8_t ptr){
   case 'e': /* clear error */
     clearError();
     break;
-
+  case 'E': /* enable/disable */
+    if (joint_num) {
+        if (intData) {
+            jcb[joint_num-1].enabled = 1;
+        } else {
+            Neuter_Joint(jcb[joint_num-1]);
+            jcb[joint_num-1].enabled = 0;
+        }
+    }
+    break;
 
   default: 			/* poorly formed command string, ignore */
     if(debug_out){

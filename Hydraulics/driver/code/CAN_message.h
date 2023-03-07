@@ -111,7 +111,8 @@ typedef struct {
     uint8_t state;
     uint8_t homed[3];
     uint8_t sw[3];
-    uint8_t jointEnable[3];
+    uint8_t jointEnable[3];    // enabled in hardware
+    uint8_t jointSWEnable[3];  // enabled in software
 } CAN_StatusStruct;
 
 #ifdef __cplusplus
@@ -129,7 +130,7 @@ int CAN_RequestValves(uint8_t towerId);
 int CAN_RequestIntegrators(uint8_t towerId);
 
 int CAN_SendGeneralStatus(CAN_StatusStruct *status);
-int CAN_SendJointStatus(uint8_t jointId, int16_t pos, int16_t target, uint8_t valve, uint8_t sw, uint8_t homed, uint8_t enabled);
+int CAN_SendJointStatus(uint8_t jointId, int16_t pos, int16_t target, uint8_t valve, uint8_t sw, uint8_t homed, uint8_t hw_enabled, uint8_t sw_enabled);
 int CAN_SendJointLimits(uint8_t jointId, int16_t minVal, int16_t maxVal, int16_t centerVal);
 int CAN_SendPosition(int16_t j1, int16_t j2, int16_t j3);
 int CAN_SendPIDValues(int8_t p1, int8_t p2, int8_t p3, int8_t i1, int8_t i2, int8_t i3);
@@ -169,6 +170,7 @@ typedef struct {
   int16_t target;
   uint8_t valve;
   uint8_t enabled;
+  uint8_t sw_enabled;
   uint8_t homed;
   uint8_t switches;
 } CAN_JointStatus;

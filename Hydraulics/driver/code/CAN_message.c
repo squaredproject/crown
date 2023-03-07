@@ -383,7 +383,7 @@ typedef struct __attribute__((__packed__)) {
 } CAN_Data_Valves;
 
 
-int CAN_SendJointStatus(uint8_t jointId, int16_t pos, int16_t target, uint8_t valve, uint8_t sw, uint8_t homed, uint8_t enabled) {
+int CAN_SendJointStatus(uint8_t jointId, int16_t pos, int16_t target, uint8_t valve, uint8_t sw, uint8_t homed, uint8_t hw_enabled, uint8_t sw_enabled) {
     uint8_t cmd[8];
     uint8_t cmdLen = 8;
     cmd[CAN_CMD_BYTE]         = CAN_MSG_JOINT_STATUS;
@@ -393,7 +393,7 @@ int CAN_SendJointStatus(uint8_t jointId, int16_t pos, int16_t target, uint8_t va
     cmd[CAN_DATA+2]       = (uint8_t)((target & 0xFF00) >> 8);
     cmd[CAN_DATA+3]       = (uint8_t)(target & 0x00FF);
     cmd[CAN_DATA+4]       = valve;
-    cmd[CAN_DATA+5]       = ((enabled & 0x01) << 4) | ((homed & 0x01) << 3) | (sw & 0x7);
+    cmd[CAN_DATA+5]       = ((sw_enabled & 0x01) << 5 | (hw_enabled & 0x01) << 4) | ((homed & 0x01) << 3) | (sw & 0x7);
 
     // push into CAN
     return (mcp_can_send(g_txId, 1, cmdLen, cmd));
@@ -540,6 +540,9 @@ void CAN_BufferToStatus(uint8_t *buf, CAN_StatusStruct *canStatus)
     canStatus->jointEnable[0] = (buf[CAN_DATA + 4] & 0x04) >> 2;
     canStatus->jointEnable[1] = (buf[CAN_DATA + 4] & 0x02) >> 1;
     canStatus->jointEnable[2] = (buf[CAN_DATA + 4] & 0x01);
+    canStatus->jointSWEnable[0] = (buf[CAN_DATA + 4) & 0x08) >> 3;
+    canStatus->jointSWEnable[1] = (buf[CAN_DATA + 4) & 0x10) >> 4;
+    canStatus->jointSWEnable[2] = (buf[CAN_DATA + 4) & 0x20) >> 5;
 }
 
 void CAN_BufferToValves(uint8_t *buf, CAN_Valves *valves)
@@ -554,6 +557,7 @@ void CAN_BufferToJointStatus(uint8_t *buf, CAN_JointStatus *joint)
   joint->pos     =  buf[CAN_DATA + 0] << 8 | buf[CAN_DATA + 1];
   joint->target  =  buf[CAN_DATA + 2] << 8 | buf[CAN_DATA + 3];
   joint->valve   =  buf[CAN_DATA + 4];
+  joint->sw_enabled = ((buf[CAN_DATA + 5] >> 5) & 0x01);
   joint->enabled = ((buf[CAN_DATA+5] >> 4) & 0x01);
   joint->homed   = ((buf[CAN_DATA+5] >> 3) & 0x01);
   joint->switches = buf[CAN_DATA+5] & 0x07;

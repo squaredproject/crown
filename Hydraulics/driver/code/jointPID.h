@@ -31,7 +31,7 @@ typedef struct {
   uint8_t direction;		/* non-zero to INVERT sense of PID */
   uint8_t switches;		    /* last measured value of limit switches */
   uint8_t homed;		    /* set to 1 if we are homed (center = OK) */
-  
+  uint8_t sw_enabled;          /* software enable/disable. There is also a physical switch that we also check */  
 } joint_control_block;
 
 

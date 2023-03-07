@@ -58,7 +58,14 @@ intensity of the LED indicates the degree of deviation from the 0 point (63).
 Joint Enabling
 Each driver board controls three hydraulic valves which are attached to their respective
 joints. Output to the valves can be enabled (or disabled) by putting a jumper to ground on
-pins A8-A10. 
+pins A8-A10.
+
+Code
+The state of the system is largely contained in a structure called the Joint Control Block (jcb) 
+There is one jcb for each joint. It contains information on the valve configuration and state
+(PI values, target values, current values); joint max, min, and center values; homing and on/off
+state as well as other values. Min and max values are *relative* to the center value.
+
 */
 
 
@@ -374,8 +381,6 @@ int main( void ){
       }
     }
     
-
-
     // Parser for data on the 485 bus
     if (UART1_data_in_ring_buf()) { // check for waiting UART data from SPU
       //char buf[16];
@@ -387,7 +392,6 @@ int main( void ){
 		    parseCommand(1); // parse and execute commands
       }
     }
-
 
     // and on the CAN bus
     while (CAN_WRAPPER_MSGAVAIL == mcp_can_check_receive()){
@@ -414,7 +418,7 @@ int main( void ){
     }
 
     
-	  /* roughly 976 hz at 16Mhz clock */
+	/* roughly 976 hz at 16Mhz clock */
     if (KHZ_Flag) {	
       KHZ_Flag = 0;
       char outBuf[128];
@@ -434,7 +438,7 @@ int main( void ){
         }
         
         /* first, check enable pins PORTK 0, 1, 2
-         only test and control a joint if corresponing enable is set */
+           only test and control a joint if corresponing enable is set */
         enable = ~PINK;
         
         /* get current values for limit switches */
@@ -467,7 +471,7 @@ int main( void ){
         else if (state == NORMAL) { /* no error, operate normally */
           int bLimitReached = FALSE;
           for(i=0;i<3;i++){     /* for each joint, get inputs, set output */
-            if (enable & _BV(i)){
+            if ((enable & _BV(i)) && jcb[i]->sw_enabled){ /* joint enabled from switches. XXX - also want a joint enabled via software. jcb enabled? */
                // Sanity test that the encoders are giving us good data
               if (Test_encoder_limits(counts[i])) { /* encoders in range ? */
                                 char buf[128];
@@ -608,7 +612,8 @@ static void sendStatus(void) {
     for (int i=0; i<3; i++) {
         status.homed[i] = jcb[i]->homed;
         status.sw[i] = jcb[i]->switches;
-        status.jointEnable[i] = (enable & _BV(i)) ? 1 : 0;
+        status.jointEnable[i] = (enable & _BV(i) ? 1 : 0;
+        status.jointSWEnable[i] = (jcb[i]->sw_enabled) ? 1 : 0;
     }
     putstr("About to send general status!\n");
     ret = CAN_SendGeneralStatus(&status);
@@ -634,7 +639,7 @@ static void sendValves(void) {
 
 static void sendJointStatus(uint8_t jointId) {
     uint8_t enable = ~PINK;
-    CAN_SendJointStatus(jointId+1, counts[jcb[jointId]->id] - jcb[jointId]->center /*jcb[jointId]->currentPos*/, jcb[jointId]->targetPos, jcb[jointId]->drive, jcb[jointId]->switches, jcb[jointId]->homed, (enable & _BV(jointId)) ? 1:0);
+    CAN_SendJointStatus(jointId+1, counts[jcb[jointId]->id] - jcb[jointId]->center /*jcb[jointId]->currentPos*/, jcb[jointId]->targetPos, jcb[jointId]->drive, jcb[jointId]->switches, jcb[jointId]->homed, (enable & _BV(jointId)) ? 1:0, jcb[jointId]->sw_enabled);
 }
 
 static void sendExtendedStatus(void) {
