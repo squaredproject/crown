@@ -123,7 +123,7 @@ void Home_Joint(joint_control_block *j) {
   if (j->switches & LEFT_SW){  /* If we're already at the left limit, move right*/
     putstr("\r\nLEFT_SW, homing right");
     minpos_raw = counts[j->id];
-    if (!j->direction) 
+    if (!j->direction)
       speed = HOME_SPEED + j->homespeed;  /* creep to the right */
     else
       speed = HOME_SPEED - j->homespeed;
@@ -135,13 +135,13 @@ void Home_Joint(joint_control_block *j) {
       speed = HOME_SPEED - j->homespeed;
     } else {
       speed = HOME_SPEED + j->homespeed;
-    }  
+    }
     putstr("\r\nRIGHT_SW, homing left");
     maxpos_raw = counts[j->id];
     limit_mask  = LEFT_SW; 			/* ignore (pressed) right sw */
   }
   else {  /* Not at any limit, move right by default */
-    speed = HOME_SPEED - j->homespeed;  
+    speed = HOME_SPEED - j->homespeed;
     putstr("\r\nNo SW: default right");
     limit_mask  = LEFT_SW | RIGHT_SW; /* change direction on hitting any limit sw */
   }
@@ -153,9 +153,9 @@ void Home_Joint(joint_control_block *j) {
   int numStalls = 0;
   int lastLimit = 0;
   uint16_t lastPos = counts[j->id];
-  while((limit_mask || !(j->switches & HOME_SW)) && 
+  while((limit_mask || !(j->switches & HOME_SW)) &&
       (numLimits <= MAX_LIMITS_IN_HOME) && (numStalls <= MAX_STALLS_IN_HOME)){
-    
+
     if (ESTOP_PORT & _BV(ESTOP_PIN)) {
       CAN_SendHomingResult(j->id+1, 0, HOMING_RESULT_ESTOP, limit_mask);
       pause_error(ESTOP_ERROR);
@@ -172,10 +172,10 @@ void Home_Joint(joint_control_block *j) {
 
     /* not homed yet, move in the creep direction until we hit home sw */
     Poll_Limit_Switches(); 	/* get limit sw status */
-    
+
     /* check if we've hit opposite switch, meaning we change direction */
     if (j->switches /*& limit_mask*/) {
-      putstr("\r\nLimit found, may reverse");	  
+      putstr("\r\nLimit found, may reverse");
       if (j->switches & LEFT_SW && (lastLimit != LEFT_SW)){
         /* found min, go right */
         putstr("\r\nLEFT_SW, homing right, limit mask ");
@@ -193,7 +193,7 @@ void Home_Joint(joint_control_block *j) {
       else if (j->switches & RIGHT_SW && (lastLimit != RIGHT_SW)){
         /* found max, go to left */
         if (!j->direction) {
-          speed = HOME_SPEED - j->homespeed;  
+          speed = HOME_SPEED - j->homespeed;
         } else {
           speed = HOME_SPEED + j->homespeed;
         }
@@ -223,7 +223,7 @@ void Home_Joint(joint_control_block *j) {
       puthex(limit_mask);
       putstr(" stalls: ");
       putint(numStalls);
-      
+
       CAN_SendHomingStatus(j->id+1, counts[j->id], j->switches, limit_mask, numStalls);
     }	
 
@@ -246,19 +246,19 @@ void Home_Joint(joint_control_block *j) {
        if ((speed > HOME_SPEED) && (limit_mask & RIGHT_SW)) { // going right, and looking for right switch
             speed = HOME_SPEED - j->homespeed;
             limit_mask  &= ~RIGHT_SW;
-            maxpos_raw = counts[j->id] - 100;         
+            maxpos_raw = counts[j->id] - 100;
             numStalls = 0;
             lastLimit = RIGHT_SW;
        } else if ((speed < HOME_SPEED) && (limit_mask & LEFT_SW)){ // going left, looking for left switch
             speed = HOME_SPEED + j->homespeed;
             limit_mask  &= ~LEFT_SW;
-            minpos_raw = counts[j->id] + 100;         
+            minpos_raw = counts[j->id] + 100;
             numStalls = 0;
             lastLimit = LEFT_SW;
        }
     }
   }
-  
+
   if (numStalls > MAX_STALLS_IN_HOME) {
     /*  Hydraulics stalled out - could not get to limits! */
     putstr("\r\n HOME failed. Stall error");
@@ -354,7 +354,7 @@ void Joint_Init_JCB(joint_control_block *j,uint8_t id)
   j->center = 4200;		/* roughly halfway */
   j->direction = 0;		/* invert sense of drive*/ 
   j->homed = 0;		    /* not homed yet */
-  j->enabled = 1;       /* by default, software enabled */
+  j->sw_enabled = 1;       /* by default, software enabled */
 
   // XXX - NB - the following max and min positions are derived from manually homing 
   // the particular test rig that we have in the shop.

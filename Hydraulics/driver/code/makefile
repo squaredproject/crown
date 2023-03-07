@@ -103,9 +103,9 @@ ASRC =
 # down your Arduino environment and change this
 
 ARDUINO_ROOT = /Users/carolyn/Library/Arduino15/packages/arduino
-ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.6.14/cores/arduino
+ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.8.4/cores/arduino
 ARDUINO_VARIANT = mega
-ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.6.14/variants/$(ARDUINO_VARIANT)
+ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.8.4/variants/$(ARDUINO_VARIANT)
 
 
 # Optimization level, can be [0, 1, 2, 3, s]. 

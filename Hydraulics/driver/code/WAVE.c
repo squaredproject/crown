@@ -612,7 +612,7 @@ static void sendStatus(void) {
     for (int i=0; i<3; i++) {
         status.homed[i] = jcb[i]->homed;
         status.sw[i] = jcb[i]->switches;
-        status.jointEnable[i] = (enable & _BV(i) ? 1 : 0;
+        status.jointEnable[i] = (enable & _BV(i)) ? 1 : 0;
         status.jointSWEnable[i] = (jcb[i]->sw_enabled) ? 1 : 0;
     }
     putstr("About to send general status!\n");

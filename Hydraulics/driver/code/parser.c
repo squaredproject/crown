@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------
-// 
+//
 //	File: parser.c
 //	parser file for WAVE
 //      build code using WinAVR toolchain: see makefile
@@ -9,9 +9,10 @@
 // -----------------------------------------------------------------------
 
 #include <avr/io.h>
-#include <ctype.h> 
+#include <ctype.h>
 #include <avr/interrupt.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "AD7376.h"	
 #include "parser.h"	
@@ -47,7 +48,7 @@ uint8_t cmd1_len = 0;
 
 // --------------------------------------------------------------------
 // parse the command string
-// 
+//
 
 extern volatile int16_t counts[3];  // pulse width
 
@@ -87,11 +88,11 @@ void parseCommand(uint8_t ptr){
   //if(cmd_str[charPos++] != 'L') {
     //if(debug_out) putstr("\r\n no L command");
   //  return;
-  //}  
+  //}
 
   /* is the next char an address digit? */
   c = cmd_str[charPos];
-  if(isdigit(c)) { 
+  if(isdigit(c)) {
     /* if not our address then they ain't talking to us */
     /* should use parseInt to get multi-byte addr, but assume 0-9 for now */
     if ((c - '0') != addr) {
@@ -106,7 +107,7 @@ void parseCommand(uint8_t ptr){
     }
     // it was a digit, so move ahead
     charPos++;
-  } 
+  }
 
   /* next char may be a joint digit spec, if so get it (1 otherwise) */
   c = cmd_str[charPos];
@@ -168,23 +169,23 @@ void parseCommand(uint8_t ptr){
       jcb[joint_num - 1]->homespeed = (uint8_t)intData;
     }
     break;
- 
+
   case 'f': /* Joint target value, but in canonical form (float, [-1.0, 1.0] */
     if (joint_num) {
-        float canonical_pos  = atof(cmd_str[charPos+1]);  // XXX returns 0 on error, which is operationally safe, if annoying
+        float canonical_pos  = atof((const char *)&cmd_str[charPos+1]);  // XXX returns 0 on error, which is operationally safe, if annoying
         if (canonical_pos < -1.0) canonical_pos = -1.0;
-        if (canonical_pos > 1.0) canonica_pos = 1.0;
+        if (canonical_pos > 1.0) canonical_pos = 1.0;
         int targetPos = 0;
         int minPos = jcb[joint_num - 1]->minpos;
         int maxPos = jcb[joint_num - 1]->maxpos;
         int center = jcb[joint_num - 1]->center;
-        if (floatData < 0) {
-            targetPos = center - (int)(canonical_pos*minPos);
+        if (canonical_pos < 0) {
+            targetPos = center + (int)(canonical_pos*minPos);
         } else {
             targetPos = center + (int)(canonical_pos*maxPos);
         }
-            
-        jcb[joint_num - 1]->targetPos = targetPos; 
+
+        jcb[joint_num - 1]->targetPos = targetPos;
     }
     break;
 
@@ -307,7 +308,7 @@ void parseCommand(uint8_t ptr){
       }
     }
     break;
-    
+
   case 'M': /* API: Set joint maximum position. Note that 0 is not a valid value */
     if(joint_num){
       if (debug_out) {
@@ -335,7 +336,7 @@ void parseCommand(uint8_t ptr){
     if (debug_out) {
       putstr("\r\nr: ");
       putint(intData);
-    }        
+    }
     setRunning(intData);
     break;
   case 'w':
@@ -343,27 +344,27 @@ void parseCommand(uint8_t ptr){
       if (debug_out) {
         putstr("\r\nI: ");
         putint(intData);
-      }        
+      }
       jcb[joint_num-1]->homed = intData?TRUE:FALSE;
     }
     break;
-    
+
   case 'd': /* toggle debug */
-    if (debug_out) 
+    if (debug_out)
         debug_out = 0;
-    else 
+    else
         debug_out = 1;
     break;
-    
+
   case 'A': /* print all joint information, machine-friendly format */
     for (int i = 0; i < 3; i++) {
       char buf[128];
       sprintf(buf, "[%d, %d, %d, %d, %d, %d]\n", addr,i, jcb[i]->minpos, jcb[i]->maxpos, 
                                                    jcb[i]->center, jcb[i]->currentPos);
       putstr(buf);
-    }  
-    break; 
-  
+    }
+    break;
+
   case 'X': /* dump everything we can */
     for (int i = 0; i < 3; i++) {
       char buf[128];
@@ -373,7 +374,7 @@ void parseCommand(uint8_t ptr){
     }
     Dump_Status();
     break;
-    
+
   case 'N': /* neuter */
     if (joint_num) {
         Neuter_Joint(jcb[joint_num-1]);
@@ -389,10 +390,10 @@ void parseCommand(uint8_t ptr){
   case 'E': /* enable/disable */
     if (joint_num) {
         if (intData) {
-            jcb[joint_num-1].enabled = 1;
+            jcb[joint_num-1]->sw_enabled = 1;
         } else {
             Neuter_Joint(jcb[joint_num-1]);
-            jcb[joint_num-1].enabled = 0;
+            jcb[joint_num-1]->sw_enabled = 0;
         }
     }
     break;

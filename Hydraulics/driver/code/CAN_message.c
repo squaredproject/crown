@@ -540,9 +540,9 @@ void CAN_BufferToStatus(uint8_t *buf, CAN_StatusStruct *canStatus)
     canStatus->jointEnable[0] = (buf[CAN_DATA + 4] & 0x04) >> 2;
     canStatus->jointEnable[1] = (buf[CAN_DATA + 4] & 0x02) >> 1;
     canStatus->jointEnable[2] = (buf[CAN_DATA + 4] & 0x01);
-    canStatus->jointSWEnable[0] = (buf[CAN_DATA + 4) & 0x08) >> 3;
-    canStatus->jointSWEnable[1] = (buf[CAN_DATA + 4) & 0x10) >> 4;
-    canStatus->jointSWEnable[2] = (buf[CAN_DATA + 4) & 0x20) >> 5;
+    canStatus->jointSWEnable[0] = (buf[CAN_DATA + 4] & 0x08) >> 3;
+    canStatus->jointSWEnable[1] = (buf[CAN_DATA + 4] & 0x10) >> 4;
+    canStatus->jointSWEnable[2] = (buf[CAN_DATA + 4] & 0x20) >> 5;
 }
 
 void CAN_BufferToValves(uint8_t *buf, CAN_Valves *valves)
