@@ -296,17 +296,17 @@ def crown_get_tower_state():
     response = _getSculptureState(tower_id)
 
 
-def _getSculptureState(towers): 
+def _getSculptureState(towers):
     """Get the state of one or more towers
        Tower state is defined as the current joint position, the joint limits for each joint
         and the general state. It does not include PID values or current drive
-        Returns list of 
+        Returns list of
         {"towerId":towerId, "joints":[{"id":xx, "position":xx, 
                                        "center":xx, "rightLimit":xx, leftLimit":xx
                                        "homed":true|false, "enabled":true|false} ...],
                             "running":true|false,
                             "error":true:false}"""   
-        
+
     calls = []
     if not isinstance(towers, Iterable):
         towers = [towers]
@@ -316,7 +316,7 @@ def _getSculptureState(towers):
         calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=1))
         calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=2))
         calls.append(AsyncRequest(GENERAL_STATUS_REQUEST, tower_id=tower_id))
-            
+
     requester = AsyncRequester(calls)
     results = requester.run()
     if (results):

@@ -228,7 +228,7 @@ static void HandleCANHomingStatus(uint8_t towerId, uint8_t *buf);
 static void HandleCANExtendedStatus(uint8_t towerId, uint8_t *buf);
 static void HandleCANPIDValues(uint8_t towerId, uint8_t *buf);
 static void HandleCANIntegrators(uint8_t towerId, uint8_t *buf);
-
+static void HandleCANHomingResult(uint8_t towerId, uint8_t jointId, uint8_t *buf);
 
 void log_info(char *str);
 void log_error(char *str);
