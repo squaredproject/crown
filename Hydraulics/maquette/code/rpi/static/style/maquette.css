@@ -21,6 +21,10 @@
   border-radius: 0.5em;
 }
 
+.sculpture-bg{
+  background-color:#e0ffe0
+}
+
 .subhead1 {
   font-size:%120;
   font-weight:bold;

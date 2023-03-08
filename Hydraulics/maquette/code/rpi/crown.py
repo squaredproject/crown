@@ -158,8 +158,9 @@ SET_CENTER_COMMAND     = 'C'
 SET_I_VALUE_COMMAND    = 'I'
 SET_P_VALUE_COMMAND    = 'P'
 NEUTER_COMMAND         = 'n'  # Removes immediate input to joint - sets target to current value.
-SET_RUN_STATE_COMMAND  = 'r'  # Allow a joint to move... or not
+SET_RUN_STATE_COMMAND  = 'r'  # Allow a tower to move... or not
 SET_HOME_STATE_COMMAND = 'w'
+SET_JOINT_ENABLE_COMMAND    = 'E'  # software joint enable/disable
 
 # Maquette
 MAQUETTE_CALIBRATION_REQUEST = 'c'
@@ -271,9 +272,11 @@ def send_sculpture_message(command, tower_id=-1, joint_id=-1, args=[""], to_maqu
         args = [args]
 
     if not to_maquette:
+        print(f"Writing <{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
         serial.write(f"<{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
     else:
         # NB - I can't change the tower serial protocol for legacy reasons. But I can change the maquette protocol
+        # maquette protocol is <m{command}{tower}:{joint}:{command_separated_args}>
         if joint_local:
             joint_local = ":" + joint_local
         args_local = ','.join(map(str,args))
@@ -475,23 +478,31 @@ def crown_force_home(tower_id):
     return make_response("Success", 200)
 
 
-@app.route("/crown/sculpture/tower/<int:tower_id>/running", methods=["PUT"])
+@app.route("/crown/sculpture/towers/<int:tower_id>/running", methods=["PUT"])
 def crown_set_run_state(tower_id):
-    if "state" in request.values:
-        onOff = 1 if "state" in [1, "on", "running"] else 0
+    if "run_state" in request.values:
+        onOff = 1 if request.values['run_state'] in [True, "true", 1, "on", "running"] else 0
     if onOff:
-        crown_force_home(tower_id)
+        pass
+        # crown_force_home(tower_id)  # XXX - do I really want to force the home? This seems like a bad choice. FIXME
     send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_id, args=[onOff])
     return make_response("Success", 200)
 
+@app.route("/crown/sculpture/towers/<int:tower_id>/joints/<int:joint_id>", methods=["PUT"])
+def crown_set_joint_state(tower_id, joint_id):
+    print("Attemting to set joint state")
+    if "enable" in request.values:
+        onOff = 1 if request.values['enable'] in [1, "on", "true"] else 0
+    send_sculpture_message(SET_JOINT_ENABLE_COMMAND, tower_id=tower_id, joint_id=joint_id, args=[onOff])
+    return make_response("Success", 200)
 
-@app.route("/crown/sculpture/tower/<int:tower_id>/joint/<joint_id>/neuter", methods=["PUT"])
+@app.route("/crown/sculpture/towers/<int:tower_id>/joints/<joint_id>/neuter", methods=["PUT"])
 def commandNeuterValve(tower_id, joint_id):
     send_sculpture_message(NEUTER_COMMAND, tower_id=tower_id, joint_id=joint_id)
     return make_response("Success", 200)
 
     
-@app.route("/crown/sculpture/tower/<int:tower_id>/center", methods=["PUT"])
+@app.route("/crown/sculpture/towers/<int:tower_id>/center", methods=["PUT"])
 def crown_set_center(tower_id):
     """ Causes the current values of the tower joints to be set as the
         center values. This really *should* return the current values, and be
@@ -502,7 +513,7 @@ def crown_set_center(tower_id):
     return make_response("Success", 200)
 
 
-@app.route("/crown/sculpture/tower/<int:tower_id>/targets", methods=["PUT"])
+@app.route("/crown/sculpture/towers/<int:tower_id>/targets", methods=["PUT"])
 def crown_set_targets():
     """ Set the target values for the hydraulics. Fire and forget. """
     # XXX - I should also be able to get these values, even if I have to store them on the pi

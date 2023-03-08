@@ -248,7 +248,254 @@
      </div>
    </div> <!-- flex container -->
    </div> <!-- maquette position -->
+  </div><!-- maquette div -->
+  <div id="sculpture_div">
+    <h3> Sculpture </h3>
+    <div id="sculpture_control">
+      <div id="sculpture_mode" class="pane sculpture-bg">
+      <span class="subhead1">Sculpture Mode:<br></span>
+      <select id="sculptureMode">
+        <option value="false" selected="selected">OFF</option>
+        <option value="true">RUN</option>
+      </select>
+      <span class="subhead1">Input Source:</span>
+      <select id="sculptureInputSource">
+        <option value="MAQUETTE">Maquette</option>
+        <option value="MANUAL">Manual</option>
+        <option value="PLAYBACK">Playback</option>
+        <option value="PATTERN">Pattern</option>
+      </select>
+      </div> <!-- sculpture mode-->
+      <div id="sculptureTowerControl" class="pane sculpture-bg"> 
+      <span class="subhead1"> Sculpture Tower Control:<br> </span>
+      <div id="sculpture_calibration_instructions">
+      Sculpture must be calibrated before each use. To calibrate a tower, position it
+      upright on (set input source to 'Manual', and use the position sliders to move the tower), and select 'Calibrate' from the drop down.
+      </div> <!-- sculpture calibration instructions -->
+      <div class="flex-container" id="sculptureTowerControlBlock">
+        <div class="towerControl" id="T1Control">
+          <div class="tower-control-inner">
+          <span class="towerhead">Tower 1</span>
+          <div>
+          <select id="T1Enable" class="tower-select">
+            <option value="true">ENABLED</option>
+            <option value="false">DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T1Center" class="tower-select">
+            <option value="true">CALIBRATED</option>
+            <option value="false">DECALIBRATED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T1J1Enable" class="tower-select">
+            <option value="true">J1 ENABLED</option>
+            <option value="false">J1 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T1J2Enable" class="tower-select">
+            <option value="true">J2 ENABLED</option>
+            <option value="false">J2 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T1J3Enable" class="tower-select">
+            <option value="true">J3 ENABLED</option>
+            <option value="false">J3 DISABLED</option>
+          </select>
+          </div>
+          </div>
+        </div> <!-- T1Control -->
+        <div class="towerControl" id="T2Control">
+          <div class="tower-control-inner">
+          <span class="towerhead">Tower 2</span>
+          <div>
+          <select id="T2Enable" class="tower-select">
+            <option value="true">ENABLED</option>
+            <option value="false">DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T2Center" class="tower-select">
+            <option value="true">CALIBRATED</option>
+            <option value="false">DECALIBRATED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T2J1Enable" class="tower-select">
+            <option value="true">J1 ENABLED</option>
+            <option value="false">J1 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T2J2Enable" class="tower-select">
+            <option value="true">J2 ENABLED</option>
+            <option value="false">J2 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T2J3Enable" class="tower-select">
+            <option value="true">J3 ENABLED</option>
+            <option value="false">J3 DISABLED</option>
+          </select>
+          </div>
+          </div>
+        </div><!-- T2Control -->
+        <div class="towerControl" id="T3Control">
+          <div class="tower-control-inner">
+          <span class="towerhead">Tower 3</span>
+          <div>
+          <select id="T3Enable" class="tower-select">
+            <option value="true">ENABLED</option>
+            <option value="false">DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T3Center" class="tower-select">
+            <option value="true">CALIBRATED</option>
+            <option value="false">DECALIBRATED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T3J1Enable" class="tower-select">
+            <option value="true">J1 ENABLED</option>
+            <option value="false">J1 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T3J2Enable" class="tower-select">
+            <option value="true">J2 ENABLED</option>
+            <option value="false">J2 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T3J3Enable" class="tower-select">
+            <option value="true">J3 ENABLED</option>
+            <option value="false">J3 DISABLED</option>
+          </select>
+          </div>
+          </div>
+        </div> <!--T3Control-->
+        <div class="towerControl" id="T4Control">
+          <div class="tower-control-inner">
+          <span class="towerhead">Tower 4</span>
+          <div>
+          <select id="T4Enable" class="tower-select">
+            <option value="true">ENABLED</option>
+            <option value="false">DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T4Center" class="tower-select">
+            <option value="true">CALIBRATED</option>
+            <option value="false">DECALIBRATED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T4J1Enable" class="tower-select">
+            <option value="true">J1 ENABLED</option>
+            <option value="false">J1 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T4J2Enable" class="tower-select">
+            <option value="true">J2 ENABLED</option>
+            <option value="false">J2 DISABLED</option>
+          </select>
+          </div>
+          <div>
+          <select id="T4J3Enable" class="tower-select">
+            <option value="true">J3 ENABLED</option>
+            <option value="false">J3 DISABLED</option>
+          </select>
+          </div>
+          </div>
+        </div> <!-- T4Control -->
+      </div>
+      </div>
+   </div> <!-- sculpture control -->
+   <div id="sculpturePosition" class="pane sculpture-bg">
+     <span class="subhead1">Sculpture Position:</span><br>
+     <div class="maquette-refresh-buttons">
+       <button type="button" id="statusRefresh">Refresh</button>
+       <button type="button" id="statusLive">Go Live</button> 
+     </div>
+     <div class="flex-container">
+     <div id="T1Position" class="tower-display">
+       <div class="tower-display-inner">
+          <span class="towerhead">Tower 1 Position</span>
+          <div>
+          <div class="tower-canvas-pane">
+            <canvas id="T1Canvas" class="tower-canvas">
+          </div>
+          <div class="tower-position-pane">
+            <div class="tower-position-detail">
+                <span id="T1J1Position">1.0</span>
+                <input id="T1J1PositionSlider" type="range" min"-256" min=255/>
+            </div>
+            <div class="tower-position-detail">
+                <span id="T1J2Position">1.0</span>
+                <input id="T1J2PositionSlider" type="range" min"-256" min=255/>
+            </div>
+            <div class="tower-position-detail">
+                <span id="T1J3Position">1.0</span>
+                <input id="T1J3PositionSlider" type="range" min"-256" min=255/>
+            </div>
+          </div>
+          </div>
+       </div>
+     </div>
+     <div id="T2Position" class="tower-display">
+       <div class="tower-display-inner">
+          <span class="towerhead">Tower 2 Position</span>
+          <div>
+          <div class="tower-canvas-pane">
+            <canvas id="T2Canvas" class="tower-canvas">
+          </div>
+          <div class="tower-position-pane">
+            <div class="tower-position-detail"><span id="T2J1Position"></span></div>
+            <div class="tower-position-detail"><span id="T2J2Position"></span></div>
+            <div class="tower-position-detail"><span id="T2J3Position"></span></div>
+          </div>
+          </div>
+       </div>
+     </div>
+     <div id="T3Position" class="tower-display">
+       <div class="tower-display-inner">
+          <span class="towerhead">Tower 3 Position</span>
+          <div>
+          <div class="tower-canvas-pane">
+            <canvas id="mT3Canvas" class="tower-canvas">
+          </div>
+          <div class="tower-position-pane">
+            <div class="tower-position-detail"><span id="T3J1Position"></span></div>
+            <div class="tower-position-detail"><span id="T3J2Position"></span></div>
+            <div class="tower-position-detail"><span id="T3J3Position"></span></div>
+          </div>
+          </div>
+       </div>
+     </div>
+     <div id="T4Position" class="tower-display">
+       <div class="tower-display-inner">
+          <span class="towerhead">Tower 4 Position</span>
+          <div>
+          <div class="tower-canvas-pane">
+            <canvas id="mT4Canvas" class="tower-canvas">
+          </div>
+          <div class="tower-position-pane">
+            <div class="tower-position-detail"><span id="T4J1Position"></span></div>
+            <div class="tower-position-detail"><span id="T4J2Position"></span></div>
+            <div class="tower-position-detail"><span id="T4J3Position"></span></div>
+          </div>
+          </div>
+       </div>
+     </div>
+   </div> <!-- flex container -->
+   </div> <!-- sculpture position -->
 </div><!-- maquette div -->
+<!--
 <div id="sculpture_div">
 <h3> Sculpture Control</h3>
     <div id="control">
@@ -263,7 +510,7 @@
     <div>
     <canvas id="testCanvas" width="200" height="200" style="border:1px solid #000000"/>
     </div>
-</div> <!-- sculpture div -->
+</div> --> <!-- sculpture div -->
 </div> <!-- tabs -->
 </body>
 <script type="text/javascript" src="js/jquery-1.4.3.min.js"></script>
@@ -325,13 +572,19 @@ function displayText(text, prolog) {
     $("#feedbackText").text(currentText);
 }
 
-function enableTower(towerId) {
-    setTowerCenter(towerId, function(tf) {
-        if (!tf) return; 
-        console.log(tf);
-        setTowerLimits(towerId, 1, -250, 300, function(tf) {
-            if (!tf) return;   
-            setTowerLimits(towerId, 2, -250, 300, function(tf) {
+// XXX - Note that I'm assuming certain limits. Not sure
+// whether these are the limits that I should assume
+// Whatever the limits are, they probably shouldn't be set at this
+// level of the code. FIXME?
+function calibrateSculptureTower(towerId, calibrate_tf) {
+    var tf_cal = calibrate_tf == "true";
+    setTowerCenter(towerId, tf_cal, function(tf) {
+        console.log("Set tower center returns " + tf);
+        if (!tf || !tf_cal) return; 
+        setTowerLimits(towerId, -250, -250, -250, 300, 300, 300, function(tf) {
+           console.log("Set tower limits returns " + tf);  
+           if (!tf) return; 
+           /* setTowerLimits(towerId, 2, -250, 300, function(tf) {
                 if (!tf) return;
                 setTowerLimits(towerId, 3, -250, 300,  function(tf) {
                     if (!tf) return;
@@ -339,7 +592,7 @@ function enableTower(towerId) {
                         if (!tf) return;
                     });
                 });
-            });
+            }); */
         });
     });
 }    
@@ -380,41 +633,52 @@ function towerResponseToTower(towerJson, towerIdx)
     }
 }
 
-function setTowerCenter(towerId, callbackfn) {
+function setTowerCenter(towerId, calibrate_tf, callbackfn=null) {
     console.log("set tower " + towerId + " center");
     $.ajax({
-        type: 'POST',
+        type: 'PUT',
         url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerId) + "/center",
+        data: {'calibrate': calibrate_tf},  // XXX - not set up to handle in sculpture yet; make parallel to maquette
         success: function(data, status, req) {
             //checkTowerCenter(towerId); // I don't know how to check the tower center, so punting here
-            callbackfn(true);
+            if (callbackfn != null) {
+                callbackfn(true);
+            }
             },
         error: function(data, status, req) {
             displayError("Internal error " + status + " setting tower " + towerId + " center");
             console.log("Error requesting data\n");
-            callbackfn(false);
+            if (callbackfn != null) {
+                callbackfn(false);
+            }
         }
     });
 }
 
-function setTowerLimits(towerId, jointId, min, max, callbackfn) {
-    console.log("set tower " + towerId + " center");
+function setTowerLimits(towerId, j1_min, j2_min, j3_min, j1_max, j2_max, j3_max, callbackfn) {
+    console.log("set tower " + towerId + " limits");
     $.ajax({
-        type: 'POST',
-        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerId) + "/joints/" + jointId + "/limits",
-        data: {'min': min,
-               'max': max },
+        type: 'PUT',
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerId) + "/limits",
+        data: {'j1_min': j1_min,
+               'j2_min': j2_min,
+               'j3_min': j3_min,
+               'j1_max': j1_max,
+               'j2_max': j2_max,
+               'j3_max': j3_max},
         success: function(data, status, req) {
-            checkTowerLimits(towerId, jointId, min, max, callbackfn);
+            //checkTowerLimits(towerId, jointId, min, max, callbackfn);
         },
         error: function(data, status, req) {
             displayError("Internal error " + status + " setting tower " + towerId + " limits");
-            console.log("Error requesting data\n");
+            console.log("Error setting tower limits\n");
             callbackfn(false);
         }
     });
 }
 
+// XXX - for the moment, I'm not doing this. The idea is to make very very sure that the limits
+// have been set correctly. XXX FIXME
 function checkTowerLimits(towerId, jointId, min, max, callbackfn) {
     var checkLimitsTimeout = 0;
     console.log("check tower limits " + towerId + ", joint " + jointId);
@@ -603,6 +867,21 @@ function requestMaquetteStatus(){
      });
 }
 
+
+function requestSculptureStatus() {
+    $.ajax({
+        type: 'GET',
+        url: CROWN_SCULPTURE_BASE,
+        dataType: 'json',
+        success: function(data, status, req) {
+            renderSculptureStatus($.parseJSON(data));
+            },
+        error: function(data, status, req) {
+            console.log("Error getting sculpture status");
+            }
+    });
+}
+
 function enableMaquetteTower(towerId, enabletf){
     $.ajax({
         type: 'PUT',
@@ -685,7 +964,7 @@ function initControls() {
         }
     });
 
-    // Set up tower and joint enable/disable
+    // Set up maquette tower and joint enable/disable
     for (var tIdx=0; tIdx<4; tIdx++) {
         let towerIdx = tIdx + 1;  // Tower idx in API is one-based. 
         let enableTowerId = '#mT' + towerIdx + 'Enable';
@@ -712,7 +991,8 @@ function initControls() {
             });
         }
     };
-
+    
+    // Set up maquette mode change functionality
     $("#maquetteMode").change(function(){
         console.log("Changed maquette mode");
         var stateValue = $("#maquetteMode option:selected").val();
@@ -730,11 +1010,45 @@ function initControls() {
             }
         });
     });
-/*    for (var i=0; i<1; i++) {
-        gTowers[i] = makeTower();
-        getTowerByIdx(i);
-    }
-*/
+
+    // Set up sculpture tower and joint enable/disable/calibrate
+    for (var tIdx=0; tIdx<4; tIdx++) {
+        let towerIdx = tIdx + 1;  // Tower idx in API is one-based. 
+        let enableTowerId = '#T' + towerIdx + 'Enable';
+        $(enableTowerId).change(function(){
+            const id = '#T' + towerIdx + 'Enable';
+            const tf = $(id).find(":selected").val();
+            setColorOnSelect($(this));
+            enableSculptureTower(towerIdx, $(this).val());
+        });
+
+        var centerTowerId = '#T' + towerIdx + 'Center';
+        $(centerTowerId).change(function(){
+            setColorOnSelect($(this));
+            calibrateSculptureTower(towerIdx, $(this).val());
+        });
+        for (var jIdx=0; jIdx<3; jIdx++) {
+            let jointIdx = jIdx + 1;  // As above, joint idx in API is one-based
+            let enableJointId = '#T' + towerIdx + 'J' + jointIdx + 'Enable';
+            $(enableJointId).change(function() {
+                // const id = $('#T' + towerIdx + 'J' + jointIdx + 'Enable');
+                // const tf = $(id).find(":selected").val();
+                setColorOnSelect($(this));
+                enableSculptureJoint(towerIdx, jointIdx, $(this).val());
+            });
+            let sliderPositionJointId = "#T" + towerIdx + 'J' + jointIdx + 'PositionSlider';
+            $(sliderPositionJointId).change(function() {
+                let val = this.value;
+                val = val/255;
+                if (val < -1.0) val = -1.0;
+                if (val > 1.0) val = 1.0;
+                setTowerCanonicalJointPosition(towerIdx, jointIx, val);
+            });
+            // Initially, let's turn all these things off
+            $(sliderPositionJointId).disabled = true;
+        }
+    };
+
 }
 
 function getMaquetteCalibrationStatus() {
@@ -768,10 +1082,13 @@ function getMaquetteCalibrationStatus() {
 
 function calibrateMaquetteTower(towerId, tf) {
     var calibrate_tf = {};
-    if (tf) {
+    // XXX - isn't tf always a string, so this is always true?
+    if (tf === "true") {
+        console.log("Calibrating tower");
         calibrate_tf['calibrate'] = true;
     } else {
         calibrate_tf['decalibrate'] = true;
+        console.log("Decalibrating tower");
     }
         
     $.ajax({
@@ -782,8 +1099,8 @@ function calibrateMaquetteTower(towerId, tf) {
             console.log("Centered maquette tower " + towerId);
             },
         error: function(data, status, req) {
-            $("#maquetteMode").val(maquetteMode);
-            console.log("Error centering maquette tower " + towerId);
+            $("#mT" + towerId + "Enable").val(!tf);
+            console.log("Error enabling maquette tower " + towerId);
         }
     });
 }
@@ -822,11 +1139,45 @@ function renderMaquetteStatus(status){
     } 
 }
 
+// XXX - add sw and hardware disable. I think this is at the joint level? It's in the jcb...
+// But I also think that it's only at the tower level? figure this out... FIXME
+function renderSculptureStatus()
+{
+    // Should be able to get all of this from a single call.
+    // XXX - make sure this is working
+}
 
-function renderTowerInfo(idx) {
-    var tower = gTowers[idx];
-    $("#status" + idx).text(tower.running);
-    $("#t" + idx + "Status[name=error]").text(tower.error);
+function renderTowerInfo(tIdx) {
+    var tower = gTowers[tIdx];
+    // XXX - sculpture mode is a whole sculpture value, but all of the towers are independent.
+    // what to do here?
+    // $("#T" + (idx+1) + "SculptureMode").val(tower.running);  // Check values - have I changed SculptureMode?
+    // $("#t" + idx + "Status[name=error]").text(tower.error);
+    let towerCentered = true;
+    for (let jIdx=0; jIdx<3; jIx++) {
+        let joint = tower.joints[jIdx];
+        let jointEnableElem = $("#T" + (tIdx+1) + "J" + (jIdx+1) + "Enable");
+        jointEnableItem.val(joint.enabled);
+        setColorOnSelect(jointEnableElem);
+        let jointPosElem = $("#T" + (tIdx+1) + "J" + (jIdx+1) + "Position");  // XXX - this is a slider here
+        jointPosElem.val(joint.pos); 
+        towerCentered = towerCentered && joint.homed;
+    }
+    let towerCenterElem = $("#T" + (tIdx+1) + "Center");
+    towerCenterElem.select(towerCentered);
+    setColorOnSelect(towerCenterElem);
+    let towerEnabledElem = $("#T" + (tIdx+1) + "Enable");
+    towerElem.select(tower.running);
+    setColorOnSelect(towerElem);
+
+    // render tower position // XXX - I need canonical values here...
+    let jointAngle0 = tower.joints[0] * Math.PI/9; // XXX what are the values, really?
+    let jointAngle1 = tower.joints[1] * Math.PI/9; // XXX what are the values, really?
+    let jointAngle2 = tower.joints[2] * Math.PI/9; // XXX what are the values, really?
+    let canvas = document.getElementById("T" + (tIdx+1) + "Canvas");
+    drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);  
+    
+    /*
     var jointEnabledText = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled + "]";
     $("#t" + idx + "Status[name=joint_enabled]").text(jointEnabledText);
     var homingStatusText =  "[" + tower.joints[0].homed + "," + tower.joints[1].homed + "," + tower.joints[2].homed + "]";
@@ -844,7 +1195,7 @@ function renderTowerInfo(idx) {
     $("#t" + idx + "Status[name=j3min]").text(tower.joints[2].min);
     $("#t" + idx + "Status[name=j3max]").text(tower.joints[2].max);
     $("#t" + idx + "Status[name=j3center]").text(tower.joints[2].center);
-    
+    */
 }
 // onselect - send to change mode
 // XXX - target position would be nice to know as well. I'm not sure I pull that out anywhere
@@ -901,13 +1252,38 @@ function getHomingStatus(tid, jid) {
     // GET /crown/sculpture/tower/[id]/joints/[id]/homingStatus
 }
 
-function setLimits(tid, jid, min, max, center) {
-    // PUT /crown/sculpture/tower/[tid]/joints/[jid]/limits
+function enableSculptureTower(towerId, tf) {
+    // PUT /crown/sculpture/tower/[towerId]/running
+    $.ajax({
+        type: 'PUT',
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + towerId + "/running",
+        data: {'run_state': tf},
+        success: function(data, status, req) {
+            console.log("Enabled sculpture tower " + towerId);
+            },
+        error: function(data, status, req) {
+            $("#mT" + towerId + "Enable").val(!tf);  // XXX - check if this is a string or a boolean
+            console.log("Error enabling sculpture tower " + towerId);
+        }
+    });
 }
 
-function enable(tid, tf) {
-    // PUT /crown/sculpture/tower/[tid]/running
+function enableSculptureJoint(towerId, jointId, enabletf){
+    $.ajax({
+        type: 'PUT',
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/joints/" + jointId,
+        data: {"enable" : enabletf.toString()},
+        success: function(data, status, req) {
+            console.log("Changed joint T" + towerId + "J" + jointId + " enable state to "  + enabletf);
+            },
+        error: function(data, status, req) {
+            console.log("Fail to change joint enable state");
+            // XXX - make sure enabletf is actually a boolean
+            $('#T' + towerId + "J" + jointId + 'Enable').val(!enabletf);
+        }
+    });
 }
+    
 
 function setHomeState(tid, tf) {
     // PUT /crown/sculpture/tower/[tid]/homed
@@ -975,7 +1351,6 @@ function doTests() {
 $(document).ready(function() {
     initControls();
     initData();
-    doTests();
 });
 
 /*
@@ -1010,6 +1385,18 @@ $(document).ready(function() {
         J3:  min: <input type="text">, max: <input type="text">, center: <input type="text"> <input type="button" value="Set J1 Limits"><br>
     </div>
 */
-
+/* 
+    Current Issues:
+    -- Want to be able to issue a global sculpture state command, have results aggregated at arduino level
+    -- Need to add sliders to sculpture tower position
+    -- Need to have driver return both absolute and canonical positions
+    -- Need a way to enable/disable a joint
+    -- Need a way to uncalibrate a tower
+    -- Need a way to set global running/not running state (?will this happen at arduino level? I don't think it can... Could find a way to switch out
+    --   who is talking over the RS485 line. I sort of remember having something like that. (There are midi switches with physical buttons. If I want to switch electronically, I have to make my own)
+    -- enable/disable slider based on selected mode (must be 'manual')
+    -- general grey for disabled/unavailable elements
+    -- General technical debt/code cleanup needs
+*/
 </script>
 </html>
