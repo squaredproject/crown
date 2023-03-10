@@ -429,18 +429,18 @@
           <div class="tower-canvas-pane">
             <canvas id="T1Canvas" class="tower-canvas">
           </div>
-          <div class="tower-position-pane">
+          <div class="sculpture-tower-position-pane">
             <div class="tower-position-detail">
                 <span id="T1J1Position">1.0</span>
-                <input class="towerPositionSlider" id="T1J1PositionSlider" type="range" min="0" min=255/>
+                <input class="tower-position-slider" id="T1J1PositionSlider" type="range" min="0" max="255"/>
             </div>
             <div class="tower-position-detail">
                 <span id="T1J2Position">1.0</span>
-                <input class="towerPositionSlider" id="T1J2PositionSlider" type="range" min="0" min=255/>
+                <input class="tower-position-slider" id="T1J2PositionSlider" type="range" min="0" max="255"/>
             </div>
             <div class="tower-position-detail">
                 <span id="T1J3Position">1.0</span>
-                <input class="towerPositionSlider" id="T1J3PositionSlider" type="range" min="0" min=255/>
+                <input class="tower-position-slider" id="T1J3PositionSlider" type="range" min="0" max="255"/>
             </div>
           </div>
           </div>
@@ -453,10 +453,19 @@
           <div class="tower-canvas-pane">
             <canvas id="T2Canvas" class="tower-canvas">
           </div>
-          <div class="tower-position-pane">
-            <div class="tower-position-detail"><span id="T2J1Position"></span></div>
-            <div class="tower-position-detail"><span id="T2J2Position"></span></div>
-            <div class="tower-position-detail"><span id="T2J3Position"></span></div>
+          <div class="sculpture-tower-position-pane">
+            <div class="tower-position-detail">
+                <span id="T21J1Position">1.0</span>
+                <input class="tower-position-slider" id="T2J1PositionSlider" type="range" min="0" max="255"/>
+            </div>
+            <div class="tower-position-detail">
+                <span id="T2J2Position">1.0</span>
+                <input class="tower-position-slider" id="T2J2PositionSlider" type="range" min="0" max="255"/>
+            </div>
+            <div class="tower-position-detail">
+                <span id="T2J3Position">1.0</span>
+                <input class="tower-position-slider" id="T2J3PositionSlider" type="range" min="0" max="255"/>
+            </div>
           </div>
           </div>
        </div>
@@ -468,10 +477,19 @@
           <div class="tower-canvas-pane">
             <canvas id="mT3Canvas" class="tower-canvas">
           </div>
-          <div class="tower-position-pane">
-            <div class="tower-position-detail"><span id="T3J1Position"></span></div>
-            <div class="tower-position-detail"><span id="T3J2Position"></span></div>
-            <div class="tower-position-detail"><span id="T3J3Position"></span></div>
+          <div class="sculpture-tower-position-pane">
+            <div class="tower-position-detail">
+                <span id="T3J1Position">1.0</span>
+                <input class="tower-position-slider" id="T3J1PositionSlider" type="range" min="0" max="255"/>
+            </div>
+            <div class="tower-position-detail">
+                <span id="T3J2Position">1.0</span>
+                <input class="tower-position-slider" id="T3J2PositionSlider" type="range" min="0" max="255"/>
+            </div>
+            <div class="tower-position-detail">
+                <span id="T3J3Position">1.0</span>
+                <input class="tower-position-slider" id="T3J3PositionSlider" type="range" min="0" max="255"/>
+            </div>
           </div>
           </div>
        </div>
@@ -483,10 +501,19 @@
           <div class="tower-canvas-pane">
             <canvas id="mT4Canvas" class="tower-canvas">
           </div>
-          <div class="tower-position-pane">
-            <div class="tower-position-detail"><span id="T4J1Position"></span></div>
-            <div class="tower-position-detail"><span id="T4J2Position"></span></div>
-            <div class="tower-position-detail"><span id="T4J3Position"></span></div>
+          <div class="sculpture-tower-position-pane">
+            <div class="tower-position-detail">
+                <span id="T4J1Position">1.0</span>
+                <input class="tower-position-slider" id="T4J1PositionSlider" type="range" min="0" max="255"/>
+            </div>
+            <div class="tower-position-detail">
+                <span id="T4J2Position">1.0</span>
+                <input class="tower-position-slider" id="T4J2PositionSlider" type="range" min="0" max="255"/>
+            </div>
+            <div class="tower-position-detail">
+                <span id="T4J3Position">1.0</span>
+                <input class="tower-position-slider" id="T4J3PositionSlider" type="range" min="0" max="255"/>
+            </div>
           </div>
           </div>
        </div>
@@ -1026,32 +1053,29 @@ function initControls() {
         let towerIdx = tIdx + 1;  // Tower idx in API is one-based. 
         let enableTowerId = '#T' + towerIdx + 'Enable';
         $(enableTowerId).change(function(){
-            const id = '#T' + towerIdx + 'Enable';
-            const tf = $(id).find(":selected").val();
-            setOptionText(id, this.value=="true" ? ["ENABLED", "DISABLE"] : ["ENABLE", "DISABLE"]);
+            setOptionText(this.id, this.value=="true" ? ["ENABLED", "DISABLE"] : ["ENABLE", "DISABLED"]);
             setColorOnSelect($(this));
-            enableSculptureTower(towerIdx, $(this).val());
+            enableSculptureTower(towerIdx, this.value);
         });
 
         var centerTowerId = '#T' + towerIdx + 'Center';
         $(centerTowerId).change(function(){
+            setOptionText(this.id, this.value=="true"?["CALIBRATED", "DECALIBRATE"]:["CALIBRATE", "DECALIBRATED"]);
             setColorOnSelect($(this));
-            calibrateSculptureTower(towerIdx, $(this).val());
+            calibrateSculptureTower(towerIdx, this.value);
         });
         for (var jIdx=0; jIdx<3; jIdx++) {
             let jointIdx = jIdx + 1;  // As above, joint idx in API is one-based
             let enableJointId = '#T' + towerIdx + 'J' + jointIdx + 'Enable';
             $(enableJointId).change(function() {
-                const id = $('#T' + towerIdx + 'J' + jointIdx + 'Enable');
-                // const tf = $(id).find(":selected").val();
-                setOptionText(id, this.value=="true"? ["J" + towerIdx + " ENABLED", "J" + towerIdx + " DISABLE"] : ["J" + towerIdx + " ENABLE", "J" + towerIdx + " DISABLED"]);
+                setOptionText(this.id, this.value=="true"? ["J" + towerIdx + " ENABLED", "J" + towerIdx + " DISABLE"] : ["J" + towerIdx + " ENABLE", "J" + towerIdx + " DISABLED"]);
                 setColorOnSelect($(this));
-                enableSculptureJoint(towerIdx, jointIdx, $(this).val());
+                enableSculptureJoint(towerIdx, jointIdx, this.value);
             });
             let sliderPositionJointId = "#T" + towerIdx + 'J' + jointIdx + 'PositionSlider';
             $(sliderPositionJointId).change(function() {
                 let val = this.value;
-                val = (val/50) - 1;  // 0-100 is normal range, changing to -1 to 1
+                val = (val/127) - 1;  // 0-255 is normal range, changing to -1 to 1
                 if (val < -1.0) val = -1.0;
                 if (val > 1.0) val = 1.0;
                 setTowerCanonicalJointPosition(towerIdx, jointIdx, val);
@@ -1115,9 +1139,9 @@ function enableMaquette(tf)
 
 function enableTowerPositionSliders(tf) {
     if (tf) {
-        $(".towerPositionSlider").removeAttr('disabled');
+        $(".tower-position-slider").removeAttr('disabled');
     } else {
-        $(".towerPositionSlider").attr('disabled', 'disabled');
+        $(".tower-position-slider").attr('disabled', 'disabled');
     }
 }
 

@@ -40,6 +40,10 @@
   padding: 0.5em;
 }
 
+.tower-position-slider {
+  width: 4em;
+}
+
 .tower-canvas {
   width: 10em;
   height: 15em;
@@ -51,11 +55,14 @@
   float: left;
 }
 
-.tower-position-pane {
+.tower-position-pane, .sculpture-tower-position-pane {
   float: left;
   padding-top: 4em;
-  width: 4em;
   text-align: right;
+}
+
+.tower-position-pane {
+  width: 4em;
 }
 
 .ui-widget-header {
