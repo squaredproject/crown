@@ -24,14 +24,13 @@
       <span class="subhead1">Maquette Mode:<br></span>
       <select id="maquetteMode">
         <option value="OFF" selected="selected">OFF</option>
-        <option value="POSE">pose</option>
-        <option value="IMMEDIATE" disabled>copy</option>
-        <option value="PLAYBACK" disabled>playback</option>
+        <option value="POSE">Pose</option>
+        <option value="IMMEDIATE" disabled>Mimic</option>
       </select>
       </div> <!-- maquette mode-->
       <div id="towerControl" class="pane"> 
       <span class="subhead1"> Maquette Tower Control:<br> </span>
-      <div id="calibration_instructions">
+      <div class="calibration_instructions">
       Maquette must be calibrated before it will work. To calibrate a tower, position it
       fully upright on the maquette, and select 'Calibrate' from the drop down.
       </div> <!-- maquette calibration instructions -->
@@ -41,8 +40,8 @@
           <span class="towerhead">Tower 1</span>
           <div>
           <select id="mT1Enable" class="tower-select">
-            <option value="true">ENABLED</option>
-            <option value="false">DISABLED</option>
+            <option value="true">ENABLE</option>
+            <option value="false">DISABLE</option>
           </select>
           </div>
           <div>
@@ -53,20 +52,20 @@
           </div>
           <div>
           <select id="mT1J1Enable" class="tower-select">
-            <option value="true">J1 ENABLED</option>
-            <option value="false">J1 DISABLED</option>
+            <option value="true">J1 ENABLE</option>
+            <option value="false">J1 DISABLE</option>
           </select>
           </div>
           <div>
           <select id="mT1J2Enable" class="tower-select">
-            <option value="true">J2 ENABLED</option>
-            <option value="false">J2 DISABLED</option>
+            <option value="true">J2 ENABLE</option>
+            <option value="false">J2 DISABLE</option>
           </select>
           </div>
           <div>
           <select id="mT1J3Enable" class="tower-select">
-            <option value="true">J3 ENABLED</option>
-            <option value="false">J3 DISABLED</option>
+            <option value="true">J3 ENABLE</option>
+            <option value="false">J3 DISABLE</option>
           </select>
           </div>
           </div>
@@ -262,13 +261,13 @@
       <select id="sculptureInputSource">
         <option value="MAQUETTE">Maquette</option>
         <option value="MANUAL">Manual</option>
-        <option value="PLAYBACK">Playback</option>
+        <option value="RECORDING">Recording</option>
         <option value="PATTERN">Pattern</option>
       </select>
       </div> <!-- sculpture mode-->
       <div id="sculptureTowerControl" class="pane sculpture-bg"> 
       <span class="subhead1"> Sculpture Tower Control:<br> </span>
-      <div id="sculpture_calibration_instructions">
+      <div class="calibration_instructions">
       Sculpture must be calibrated before each use. To calibrate a tower, position it
       upright on (set input source to 'Manual', and use the position sliders to move the tower), and select 'Calibrate' from the drop down.
       </div> <!-- sculpture calibration instructions -->
@@ -433,15 +432,15 @@
           <div class="tower-position-pane">
             <div class="tower-position-detail">
                 <span id="T1J1Position">1.0</span>
-                <input id="T1J1PositionSlider" type="range" min"-256" min=255/>
+                <input class="towerPositionSlider" id="T1J1PositionSlider" type="range" min="0" min=255/>
             </div>
             <div class="tower-position-detail">
                 <span id="T1J2Position">1.0</span>
-                <input id="T1J2PositionSlider" type="range" min"-256" min=255/>
+                <input class="towerPositionSlider" id="T1J2PositionSlider" type="range" min="0" min=255/>
             </div>
             <div class="tower-position-detail">
                 <span id="T1J3Position">1.0</span>
-                <input id="T1J3PositionSlider" type="range" min"-256" min=255/>
+                <input class="towerPositionSlider" id="T1J3PositionSlider" type="range" min="0" min=255/>
             </div>
           </div>
           </div>
@@ -940,6 +939,14 @@ function setColorOnSelect(elem) {
     elem.addClass(onClass);
 }
 
+function setOptionText(id, texts)
+{
+    if (!id.startsWith("#")) id = "#" + id; 
+    let optionTrue = $(id + " option[value='true']");
+    let optionFalse = $(id + " option[value='false']");
+    optionTrue.text(texts[0]);
+    optionFalse.text(texts[1]);
+}
 
 function initControls() {
     console.log("init called");
@@ -971,12 +978,14 @@ function initControls() {
         $(enableTowerId).change(function(){
             const id = '#mT' + towerIdx + 'Enable';
             const tf = $(id).find(":selected").val();
+            setOptionText(id, tf=="true"?["ENABLED", "DISABLE"]:["ENABLE", "DISABLED"]);
             setColorOnSelect($(this));
             enableMaquetteTower(towerIdx, $(this).val());
         });
 
         var centerTowerId = '#mT' + towerIdx + 'Center';
         $(centerTowerId).change(function(){
+            setOptionText(this.id, this.value=="true"?["CALIBRATED", "DECALIBRATE"]:["CALIBRATE", "DECALIBRATED"]);
             setColorOnSelect($(this));
             calibrateMaquetteTower(towerIdx, $(this).val());
         });
@@ -986,6 +995,7 @@ function initControls() {
             $(enableJointId).change(function() {
                 // const id = $('#mT' + towerIdx + 'J' + jointIdx + 'Enable');
                 // const tf = $(id).find(":selected").val();
+                setOptionText(this.id, this.value=="true"? ["J" + jointIdx + " ENABLED", "J" + jointIdx + " DISABLE"] : ["J" + jointIdx + " ENABLE", "J" + jointIdx + " DISABLED"]) 
                 setColorOnSelect($(this));
                 enableMaquetteJoint(towerIdx, jointIdx, $(this).val());
             });
@@ -1018,6 +1028,7 @@ function initControls() {
         $(enableTowerId).change(function(){
             const id = '#T' + towerIdx + 'Enable';
             const tf = $(id).find(":selected").val();
+            setOptionText(id, this.value=="true" ? ["ENABLED", "DISABLE"] : ["ENABLE", "DISABLE"]);
             setColorOnSelect($(this));
             enableSculptureTower(towerIdx, $(this).val());
         });
@@ -1031,24 +1042,83 @@ function initControls() {
             let jointIdx = jIdx + 1;  // As above, joint idx in API is one-based
             let enableJointId = '#T' + towerIdx + 'J' + jointIdx + 'Enable';
             $(enableJointId).change(function() {
-                // const id = $('#T' + towerIdx + 'J' + jointIdx + 'Enable');
+                const id = $('#T' + towerIdx + 'J' + jointIdx + 'Enable');
                 // const tf = $(id).find(":selected").val();
+                setOptionText(id, this.value=="true"? ["J" + towerIdx + " ENABLED", "J" + towerIdx + " DISABLE"] : ["J" + towerIdx + " ENABLE", "J" + towerIdx + " DISABLED"]);
                 setColorOnSelect($(this));
                 enableSculptureJoint(towerIdx, jointIdx, $(this).val());
             });
             let sliderPositionJointId = "#T" + towerIdx + 'J' + jointIdx + 'PositionSlider';
             $(sliderPositionJointId).change(function() {
                 let val = this.value;
-                val = val/255;
+                val = (val/50) - 1;  // 0-100 is normal range, changing to -1 to 1
                 if (val < -1.0) val = -1.0;
                 if (val > 1.0) val = 1.0;
-                setTowerCanonicalJointPosition(towerIdx, jointIx, val);
+                setTowerCanonicalJointPosition(towerIdx, jointIdx, val);
             });
             // Initially, let's turn all these things off
             $(sliderPositionJointId).disabled = true;
         }
     };
 
+    // Set up sculpture mode change
+    $("#sculptureInputSource").change(function() {
+        console.log("Change sculpture input source");
+        let curValue = this.value;
+        if (curValue == "MANUAL") {
+            // enable sliders, disable maquette
+            enableTowerPositionSliders(true);
+            enableMaquette(false);
+        } else if (curValue == "MAQUETTE") {
+            // disable sliders, enable maquette
+            enableTowerPositionSliders(false);
+            enableMaquette(true); 
+        } else if (curValue == "PATTERN" || curValue == "RECORDING") {
+            // disable sliders, disable maquette, show choose pattern dialog
+            enableTowerPositionSliders(false);
+            enableMaquette(true);
+        }
+    });
+}
+
+ 
+function setTowerCanonicalJointPosition(towerIdx, jointIdx, val)
+{
+    if (val < -1.0) val = -1.0;
+    if (val > 1.0) val = 1.0;
+
+    $.ajax({
+        type: 'PUT',
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + towerIdx + "/joints/" + jointIdx + "/position",
+        data: {"pos": val},
+        success: function(data, status, req) {
+        },
+        error: function(data, status, req) {
+            displayError("Problem setting tower joint position");
+        }
+    });
+}
+
+ 
+function enableMaquette(tf) 
+{
+    let maquetteMode = $("#maquetteMode");
+    if (tf) {
+        maquetteMode.removeAttr("disabled");
+    } else {
+        // set maquette mode to off, and grey out control
+        maquetteMode.val("OFF");
+        maquetteMode.attr("disabled", "disabled");
+    }
+}
+
+
+function enableTowerPositionSliders(tf) {
+    if (tf) {
+        $(".towerPositionSlider").removeAttr('disabled');
+    } else {
+        $(".towerPositionSlider").attr('disabled', 'disabled');
+    }
 }
 
 function getMaquetteCalibrationStatus() {
@@ -1116,6 +1186,15 @@ function renderMaquetteStatus(status){
         // enable/disable
         let towerEnableElem = $("#mT" + (idx+1) + "Enable");
         towerEnableElem.val(tower["towerEnabled"].toString());
+        let optionEnabled = $("#mT" + (idx+1) + "Enable" + " option[value='true']");
+        let optionDisabled = $("#mT" + (idx+1) + "Enable" + " option[value='false']");
+        if (tower["towerEnabled"] == true) {
+            optionDisabled.text('DISABLE');
+            optionEnabled.text('ENABLED');
+        } else {
+            optionEnabled.text('ENABLE');
+            optionDisabled.text('DISABLED');
+        }
         setColorOnSelect(towerEnableElem);
         // calibrated
         console.log("tower center " + idx);

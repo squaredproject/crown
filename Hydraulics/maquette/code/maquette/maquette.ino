@@ -1202,7 +1202,9 @@ static void parseMaquetteCommand(char *buf, int len) {
     case 'X': // uncalibrate
       ntokens = sscanf(ptr, "%hhu", &towerId);
       if (ntokens == 1 && (towerId < 1 || towerId > 4)) {
-        Serial.println("<!mX-Bad Tower ID>");
+        Serial.print("<!mX");
+        Serial.print(towerId);
+        Serial.println("-Bad Tower ID>");
         break;
       }
       if (ntokens == 1) {
@@ -1221,7 +1223,9 @@ static void parseMaquetteCommand(char *buf, int len) {
       // <!m<0-99><c>:<success/failure>:response>>  And *that* is a lot more reasonable.
       // But first shall I figure out the storage problem? 
       writeCalibrationData();
-      Serial.println("<!mX+>");
+      Serial.print("<!mX");
+      Serial.print(towerId);
+      Serial.println("+>");
       break;
     case 'q':
       // Nuke eeprom.
@@ -1455,8 +1459,20 @@ static void parseTowerCommand(char *buf, int len) {
         // set dead band
         Write485(buf);
         break;
-    case 'z':
+    case 'z':  // XXX - this is 'e' at the driver level...
         // clear error condition
+        Write485(buf);
+        break;
+    case 'E':
+        // Software joint enable/disable
+        Write485(buf);
+        break;
+    case 'F':
+        // Set canonical joint position. Pass through
+        Write485(buf);
+        break;
+    case 'f':
+        // Set tower canonical position (3 joints). Pass through
         Write485(buf);
         break;
     default:

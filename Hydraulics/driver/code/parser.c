@@ -170,11 +170,16 @@ void parseCommand(uint8_t ptr){
     }
     break;
 
-  case 'f': /* Joint target value, but in canonical form (float, [-1.0, 1.0] */
+  case 'F': /* Joint target value, but in canonical form (float, [0, 255] */
     if (joint_num) {
-        float canonical_pos  = atof((const char *)&cmd_str[charPos+1]);  // XXX returns 0 on error, which is operationally safe, if annoying
-        if (canonical_pos < -1.0) canonical_pos = -1.0;
-        if (canonical_pos > 1.0) canonical_pos = 1.0;
+        int pos  = atoi((const char *)&cmd_str[charPos+1]);  // XXX returns 0 on error, which is is operationally safe, if annoying
+        if pos < 0) pos = 0;
+        if pos > 255 pos = 255;
+        float canonical_pos;
+        if (pos < 127) {
+            canonical_pos = -(127-(float)pos)/128;
+        } else {
+            canonical_pos = ((float)pos - 127)/128;
         int targetPos = 0;
         int minPos = jcb[joint_num - 1]->minpos;
         int maxPos = jcb[joint_num - 1]->maxpos;

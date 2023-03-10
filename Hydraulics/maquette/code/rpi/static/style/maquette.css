@@ -69,7 +69,7 @@
   display:flex;
 }
 
-#calibration_instructions{ 
+.calibration_instructions{ 
  padding-bottom: 1em;
  font-size: 80%;
  font-style: italic;

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+
 from collections.abc import Iterable
 import logging
 import time
@@ -161,6 +161,8 @@ NEUTER_COMMAND         = 'n'  # Removes immediate input to joint - sets target t
 SET_RUN_STATE_COMMAND  = 'r'  # Allow a tower to move... or not
 SET_HOME_STATE_COMMAND = 'w'
 SET_JOINT_ENABLE_COMMAND    = 'E'  # software joint enable/disable
+SET_CANONICAL_TARGETS_COMMAND = 'f'
+SET_CANONICAL_JOINT_TARGETS_COMMAND = 'F'
 
 # Maquette
 MAQUETTE_CALIBRATION_REQUEST = 'c'
@@ -391,10 +393,30 @@ def _simple_web_async_request(command, tower_id=-1, joint_id=-1, args=[""], to_m
     return make_response("Internal error", 500)
 
 
-@app.route("/crown/sculpture/towers/<int:tower_id>/position", methods=["GET"])
+@app.route("/crown/sculpture/towers/<int:tower_id>/position", methods=["GET", "PUT"])
 def crown_get_tower_position(tower_id):
-    """ Get current position of all joints (as much as we can tell) """
-    return _simple_web_async_request(TOWER_POSITION_REQUEST, tower_id=tower_id)
+    if method == "GET":
+        """ Get current position of all joints (as much as we can tell) """
+        return _simple_web_async_request(TOWER_POSITION_REQUEST, tower_id=tower_id)
+    else:
+        """ Set the target values for the hydraulics. Fire and forget. """
+        # XXX - I should also be able to get these values, even if I have to store them on the pi
+        if not _validate_tower(tower_id):
+            return make_response("Must have valid tower id", 400)
+        elif set("j1", "j2", "j3") not in set(request.values):
+            return make_response("Must contain joint value parameters j1, j2, j3", 400)
+        # Convert -1.0 to 1.0 to -128 to 127, because the protocol doesn't do floats.
+        j_pos = []
+        for i in range(1,3):
+            j_pos[i] = float(request.values["j" + i])
+            j_pos[i] = j_pos[i] * 128
+            j_pos[i] = min(j_pos[i], 127)
+            j_pos[i] = max(j_pos[i], -128)
+    
+        send_sculpture_message(SET_CANONICAL_TARGETS_COMMAND, tower_id=tower_id, joint_id=1, args=int(j_pos[1]))
+        send_sculpture_message(SET_CANONICAL_TARGETS_COMMAND, tower_id=tower_id, joint_id=2, args=int(j_pos[2]))
+        send_sculpture_message(SET_CANONICAL_TARGETS__COMMAND, tower_id=tower_id, joint_id=3, args=int(j_pos[3]))
+        return make_response("Success", 200)
 
 
 @app.route("/crown/sculpture/towers/<int:tower_id>/PID", methods=["GET", "PUT"])
@@ -514,18 +536,39 @@ def crown_set_center(tower_id):
 
 
 @app.route("/crown/sculpture/towers/<int:tower_id>/targets", methods=["PUT"])
-def crown_set_targets():
+def crown_set_targets(tower_id):
     """ Set the target values for the hydraulics. Fire and forget. """
     # XXX - I should also be able to get these values, even if I have to store them on the pi
     if not _validate_tower(tower_id):
         return make_response("Must have valid tower id", 400)
     elif set("j1", "j2", "j3") not in set(request.values):
         return make_response("Must contain joint value parameters j1, j2, j3", 400)
+    # XXX - the values here are strings, but the protocol expects ints... FIXME
     send_sculpture_message(SET_TARGETS_COMMAND, tower_id=tower_id, joint_id=1, args=request.values["j1"])
     send_sculpture_message(SET_TARGETS_COMMAND, tower_id=tower_id, joint_id=2, args=request.values["j2"])
     send_sculpture_message(SET_TARGETS_COMMAND, tower_id=tower_id, joint_id=3, args=request.values["j3"])
     return make_response("Success", 200)
 
+
+@app.route("/crown/sculpture/towers/<int:tower_id>/joints/<int:joint_id>/position", methods=["PUT"])
+def crown_set_canonical_targets(tower_id, joint_id):
+    """ Set the target values for the hydraulics. Fire and forget. """
+    # XXX - I should also be able to get these values, even if I have to store them on the pi
+    if not _validate_tower(tower_id):
+        print("validate tower id fails")
+        return make_response("Must have valid tower id", 400)
+    if "pos" not in request.values:
+        return make_response("Must contain position", 500)
+    j_pos = float(request.values["pos"])
+    j_pos = (j_pos * 128) + 128
+    j_pos = min(255, j_pos)
+    j_pos = max(0, j_pos)
+
+    send_sculpture_message(SET_CANONICAL_JOINT_TARGETS_COMMAND, tower_id=tower_id, joint_id=joint_id, args=int(j_pos))
+    return make_response("Success", 200)
+
+def _validate_tower(tower_id):
+    return tower_id > 0 and tower_id < 5
 
 # XXX What are saved parameters here? 
 @app.route("/crown/savedParameters", methods=["GET"])
