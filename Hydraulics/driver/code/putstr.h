@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 void putstr(const char *str);
 void putchr(char c);
 void putU8(uint8_t number);
@@ -20,4 +22,3 @@ void putS16(int16_t number);
 #endif
 
 #endif // __PUTSTR_H__
-

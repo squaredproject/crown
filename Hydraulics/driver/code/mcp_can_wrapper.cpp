@@ -35,32 +35,24 @@
 #include "mcp_can_wrapper.h"
 #include "mcp_can.h"
 // Debugging for this project...
-//#include "putstr.h"
-
+// #include "putstr.h"
 
 MCP_CAN CAN(SPI_CS_PIN);
 
-
 byte mcp_can_begin(byte speedset, byte pin) {
-  return( CAN.begin(MCP_ANY, speedset, MCP_8MHZ) );
+  return (CAN.begin(MCP_ANY, speedset, MCP_8MHZ));
 }
 
-byte mcp_can_check_receive(void) {
-  return( CAN.checkReceive() );
+byte mcp_can_check_receive(void) { return (CAN.checkReceive()); }
+
+byte mcp_can_send(unsigned long id, byte ext, byte len, byte *buf) {
+  return (CAN.sendMsgBuf(id, ext, len, buf));
 }
 
-byte mcp_can_send(unsigned long id, byte ext, byte len, byte * buf) {
-  return( CAN.sendMsgBuf(id,ext,len,buf) );
+byte mcp_can_receive(unsigned long *id, unsigned char *len, byte *buf) {
+  return (CAN.readMsgBuf(id, len, buf));
 }
 
-byte mcp_can_receive(unsigned long *id, unsigned char *len, byte *buf){
-  return( CAN.readMsgBuf(id, len, buf) );
-}
+byte mcp_can_check_error(void) { return (CAN.checkError()); }
 
-byte mcp_can_check_error(void){
-  return( CAN.checkError());
-}
-
-byte mcp_can_set_mode(unsigned char mode) {
-  return (CAN.setMode(mode));
-}
+byte mcp_can_set_mode(unsigned char mode) { return (CAN.setMode(mode)); }

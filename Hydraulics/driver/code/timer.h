@@ -13,5 +13,4 @@ void ICP5_Init(void);
 #define CHC_PWM(x) OCR3CH=0; OCR3CL=(uint8_t)(x)
 */
 
-#define TIMER2_PWM(x)  OCR2B=(uint8_t)(x)
-
+#define TIMER2_PWM(x) OCR2B = (uint8_t)(x)
