@@ -203,7 +203,7 @@ static const char *modeStr[] = {"OFF", "IMMEDIATE", "POSE", "PLAYBACK"};
 
 static int16_t maquetteToModel(uint16_t pos, int i, int j);
 static int16_t clamp(int16_t value, int16_t max, int16_t min);
-static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]);
+static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINTS]);
 static void broadcastModelPosition();
 static void setModeFromSwitch();
 static int slaveDataValid();
@@ -473,7 +473,7 @@ void loop() {
                     break;
                 }
                 // sendToSculpture(modelPosition);
-                sendToSculpture(canonicalJointPosition);  // XXX de-noise?
+                setSculptureTargetPosition(canonicalJointPosition);  // XXX de-noise?
                 break;
             case MODE_POSE:
                 if (!maquetteCalibrated())
@@ -484,7 +484,7 @@ void loop() {
                 break;
             case MODE_PLAYBACK:
                 if (slaveDataValid() && maquetteCalibrated()) {
-                    sendToSculpture(slavePosition);
+                    setSculptureTargetPosition(slavePosition);
                 }
                 break;
             default:
@@ -652,8 +652,41 @@ static int16_t clamp(int16_t value, int16_t min, int16_t max) {
   return value;
 }
 
+// Safety module - flag unsafe actions. Only one tower can be targeted for the red
+// zone at a time.
+// XXX - Ideally, this would depend on the current state, rather than the current
+// target state. But in order to do that, I need to know the current state.
+// XXX - get values for R1, R2, and R3; convert between canonical position and
+// joint angle
+static int targetRedZoneTower = -1;
+static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos2, int tower)
+{
+  bool isSafe = TRUE;
+  /*
+  float theta1 = pos1;  // modulo some math here...
+  float theta2 = pos2;
+  float theta3 = pos3;
+
+  bool redZone = R1*sin(theta1) + R2*sin(theta1+theta2) + R3*sin(theta1+theta2+theta3) > RED_ZONE_EDGE;
+  if (redZone && targetRedZoneTower != -1 && targetRedZoneTower != tower) {
+    isSafe = FALSE;
+  } else if (redZone && targetRedZoneTower == -1) {
+    targetRedZoneTower = tower;
+    Serial.print("Tower entering red zone: ");
+    Serial.println(tower);
+    isSafe = TRUE;
+  } else if (!redZone && targetRedZoneTower == tower) {
+    Serial.print("Tower leaving red zone: ");
+    Serial.println(tower);
+    targetRedZoneTower = -1;
+    isSafe = TRUE;
+  }
+  */
+  return isSafe;
+}
+
 // Send target position to sculpture
-static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
+static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
     char modelString[256];
     char smallModelString[64];
     char *ptr = modelString;
@@ -669,6 +702,11 @@ static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
           Serial.println(i);
           continue;
         }
+        if (!sculptureTargetPositionSafe(positionArray[i][0], positionArray[i][1], positionArray[i][2], i)) {
+          Serial.print("Tower motion disallowed - safety: ");
+          Serial.println(tower);
+          continue;
+        }
         for (int j=0; j<NUM_JOINTS; j++) {
             if (!jointEnabled[i][j]) {
               Serial.print("Joint not enabled: ");
@@ -676,11 +714,12 @@ static void sendToSculpture(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
               Serial.println(j);
               continue;
             }
+            bool redZone = sculptureTargetInRedZone(
             char floatStr[10]; // float converted to string
             dtostrf(positionArray[i][j], 2, 3, floatStr);
             sprintf(ptr, "<%d%df%s>", i+1, j+1, floatStr);
             ptr += strlen(ptr);
-            
+
 /*            if (i==0 && j==1) {
               sprintf(smallModelString, "<%d%dt%d>\r\n", i+1, j+1, positionArray[i][j]);
               Serial.print(smallModelString);
@@ -912,7 +951,7 @@ static void poseModeRunStateMachine()
     // even if we're for a new pose, we continue to send the previous pose
     // until told otherwise
     if (poseDataValid) {
-        sendToSculpture(posePosition);
+        setSculptureTargetPosition(posePosition);
     }
     // Check the state transitions
     if (poseState == POSE_STATE_HOLD) {
