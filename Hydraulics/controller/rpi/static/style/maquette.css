@@ -1,0 +1,99 @@
+#tabs-1{font-size: 14px;}
+
+.tower-select {
+   width: 10em;
+   margin-bottom: 0.3em;
+}
+
+.towerhead {
+   display:inline-block;
+   font-weight:bold;
+   margin-bottom: 0.5em;
+}
+
+.pane {
+  margin-left: 2em;
+  border-style:solid;
+  border: 2px;
+  padding: 0.5em;
+  margin-bottom: 1em;
+  background-color:#ffe0e0;
+  border-radius: 0.5em;
+}
+
+.sculpture-bg{
+  background-color:#e0ffe0
+}
+
+.subhead1 {
+  font-size:%120;
+  font-weight:bold;
+  display: inline-block;
+  margin-bottom: 0.6em;
+}
+
+.tower-control-inner, .tower-display-inner {
+  border: 2px;
+  background-color:#efe0e0;
+  display: inline-block;
+  border-style:solid;
+  padding: 0.5em;
+}
+
+.tower-position-slider {
+  width: 4em;
+}
+
+.tower-canvas {
+  width: 10em;
+  height: 15em;
+  border-style: solid;
+  border: 2xp;
+}
+
+.tower-canvas-pane {
+  float: left;
+}
+
+.tower-position-pane, .sculpture-tower-position-pane {
+  float: left;
+  padding-top: 4em;
+  text-align: right;
+}
+
+.tower-position-pane {
+  width: 4em;
+}
+
+.ui-widget-header {
+  background:#b9cd6d;
+  border: 1px solid #b9cd6d;
+  color: #FFFFFF;
+  font-weight: bold;
+}
+
+.flex-container {
+  display:flex;
+}
+
+.calibration_instructions{ 
+ padding-bottom: 1em;
+ font-size: 80%;
+ font-style: italic;
+}
+
+.towerControl, .tower-display{
+  flex:1;
+  margin-right:20px;
+}
+
+.maquette-refresh-buttons{
+  padding-bottom: 0.5em;
+}
+.goodtogo {
+  background-color:#70ffa0;
+}
+
+.notgoodtogo {
+  background-color:#ff8080;
+}
