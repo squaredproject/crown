@@ -659,7 +659,7 @@ static int16_t clamp(int16_t value, int16_t min, int16_t max) {
 // XXX - get values for R1, R2, and R3; convert between canonical position and
 // joint angle
 static int targetRedZoneTower = -1;
-static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos2, int tower)
+static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos3, int tower)
 {
   bool isSafe = TRUE;
   /*
@@ -704,7 +704,7 @@ static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINT
         }
         if (!sculptureTargetPositionSafe(positionArray[i][0], positionArray[i][1], positionArray[i][2], i)) {
           Serial.print("Tower motion disallowed - safety: ");
-          Serial.println(tower);
+          Serial.println(i);
           continue;
         }
         for (int j=0; j<NUM_JOINTS; j++) {
@@ -714,7 +714,6 @@ static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINT
               Serial.println(j);
               continue;
             }
-            bool redZone = sculptureTargetInRedZone(
             char floatStr[10]; // float converted to string
             dtostrf(positionArray[i][j], 2, 3, floatStr);
             sprintf(ptr, "<%d%df%s>", i+1, j+1, floatStr);
