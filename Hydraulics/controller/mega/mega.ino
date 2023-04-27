@@ -145,7 +145,6 @@ static void setModeFromSwitch();
 static const char *modeStr[] = {"OFF", "IMMEDIATE", "POSE", "PLAYBACK"};
 
 
-
 // Reading commands and parsing bus commands
 #define MAX_COMMAND_LENGTH 32
 typedef struct {
@@ -375,10 +374,40 @@ void setup(){
 
 
 
-static positionInRedZone(int towerId, int jointId, int position)
+// Safety module - flag unsafe actions. Only one tower can be targeted for the red
+// zone at a time.
+// XXX - Ideally, this would depend on the current state, rather than the current
+// target state. But in order to do that, I need to know the current state.
+// XXX - get values for R1, R2, and R3; convert between canonical position and
+// joint angle
+// Getting theta from position information. Which I don't completely understand
+static int targetRedZoneTower = -1;
+#define ENCODER_RANGE 2048  // XXX - guessing, fixme
+#define PI 3.14159265f
+#define R1 72 
+#define R2 60
+#define R3 60
+#define RED_ZONE_EDGE 100
+// XXX - should do the same sine table trick that the conductor is doing.
+//  FIXME
+static float curJointAngles[NUM_TOWERS][NUM_JOINTS] = {{0.0, 0.0, 0.0},
+                                              {0.0, 0.0, 0.0},
+                                              {0.0, 0.0, 0.0}};
+static bool positionInRedZone(int towerId, int jointId, int position)
 {
-    return false;  // XXX fixme
+  // pos1, 2, and 3 are in units of the rotary encoder, which for the moment I'm going to claim
+  // is 4096 based
+  float theta1 = curJointAngles[towerId][jointId];
+  float theta2 = curJointAngles[towerId][jointId];
+  float theta3 = curJointAngles[towerId][jointId];
+
+  return R1*sin(theta1) + R2*sin(theta1+theta2) + R3*sin(theta1+theta2+theta3) > RED_ZONE_EDGE;
 }
+
+static float rawPositionToAngle(int raw) {
+    return (raw * PI)/ENCODER_RANGE;
+}
+
 #define INVALID_TOWER (-1)
 static int towerIdInRedZone = INVALID_TOWER;
 
@@ -409,6 +438,7 @@ static bool positionIsSafe(int towerId, int jointId, int position)
 
     if (positionOkay) {
         curJointTargets[towerId][jointId] = position;
+        curJointAngles[towerId][jointId] = rawPositionToAngle(position);
     }
 
     return positionOkay;
@@ -439,8 +469,8 @@ static void handleConductorInput() {
       uint8_t cData;
       cData = UART2_ring_buf_byte(); // get next char from ring buffer...
       if (accumulateCommandString(cData, &rs485Cmd)) { // ... and add to command string
-        Serial.print("Have a command on the 485 port!:\r\n  ");
-        Serial.println((char *)&rs485Cmd.cmd_str[0]);
+        // Serial.print("Have a command on the 485 port!:\r\n  ");
+        // Serial.println((char *)&rs485Cmd.cmd_str[0]);
         if (mode != MODE_CONDUCTOR) {
             clearCommandString(&rs485Cmd);
         } else {
@@ -454,7 +484,7 @@ static void handleConductorInput() {
                 }
             }
         }
-      }   // XXX - we need a provision to be able to parse strings coming from multiple places. add this FIXME
+      }
     }
 }
 
@@ -485,40 +515,6 @@ void loop() {
       // inputs and handling them when it becomes appropriate to do so... 
      }
    }
-}
-
-
-// Safety module - flag unsafe actions. Only one tower can be targeted for the red
-// zone at a time.
-// XXX - Ideally, this would depend on the current state, rather than the current
-// target state. But in order to do that, I need to know the current state.
-// XXX - get values for R1, R2, and R3; convert between canonical position and
-// joint angle
-static int targetRedZoneTower = -1;
-static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos3, int tower)
-{
-  bool isSafe = TRUE;
-  /*
-  float theta1 = pos1;  // modulo some math here...
-  float theta2 = pos2;
-  float theta3 = pos3;
-
-  bool redZone = R1*sin(theta1) + R2*sin(theta1+theta2) + R3*sin(theta1+theta2+theta3) > RED_ZONE_EDGE;
-  if (redZone && targetRedZoneTower != -1 && targetRedZoneTower != tower) {
-    isSafe = FALSE;
-  } else if (redZone && targetRedZoneTower == -1) {
-    targetRedZoneTower = tower;
-    Serial.print("Tower entering red zone: ");
-    Serial.println(tower);
-    isSafe = TRUE;
-  } else if (!redZone && targetRedZoneTower == tower) {
-    Serial.print("Tower leaving red zone: ");
-    Serial.println(tower);
-    targetRedZoneTower = -1;
-    isSafe = TRUE;
-  }
-  */
-  return isSafe;
 }
 
 
