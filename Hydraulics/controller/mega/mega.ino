@@ -13,37 +13,25 @@
 
 
 // Basic Architecture:
-// This embedded processor handles low level communication
-// to the sculpture towers, and to the maquette. It is controlled by a 
-// higher level processor (in this particular case, a Raspberry PI) that 
-// it communicates with over serial. The higher level processor sets
-// state, requests human-visible information, and is responsible for saving
-// and resetting any calibration values
+// The Controller acts as the main point of contact to the Crown
+// sculpture. There are multiple possible inputs - the maquette, the
+// conductor (manipulating sine waves), or playback of recorded data -
+// and the Controller is responsible for deciding which of these
+// inputs to use, filtering the input for safety, and input data on
+// to the sculpture.
 //
-// One of the oddities in the architecture is that we communicate to the 
-// towers both over RS485 and CAN. This is because the tower controllers were
-// originally built using RS485, but when we brought Crown out to BurningMan in
-// 2018, we wanted to to query for status as well as send commands. However, RS485
-// is not a particularly friendly for two way communication so we added CAN
-// for status and left the original RS485 code alone. This also allowed us
-// to fall back to an older control model if/when the maquette controls weren't
-// ready.
+// There are two separate buses that communicate with the sculpture. 
+// Simple input commands go over a 485 bus. Status queries go over 
+// a CAN bus. (The CAN bus was layered on top of an existing 485 bus.
+// The 485 bus operates in a single sender, multiple receivers mode, which
+// makes it inappropriate for request-response communication).
 //
-// The sculpture is designed to be operated in one of two states - Pose mode or 
-// Slave mode. In Pose mode, hitting the button in the center of the maquette 
-// causes the sculpture to take the position of the maquette. In Slave mode, the
-// position of the sculpture is controlled by position information coming from
-// the raspberry pi.
-// 
-// There is an additional (possibly dangerous) mode called Free Play, where the
-// sculpture attempts to immediately reflect any changes to the maquette.
-// 
-// Please note that as of this writing (2/6/23) there is no provision made to
-// keep the towers from hitting each other, assuming their ranges allow them to
-// do so.
+// Internally, the controller uses two separate SBCs: an Arduino Mega
+// and a Raspberry Pi. The Arduino Mega handles the buses and the input
+// selection. The Raspberry Pi provides a web interface for humans.
 
-// CSW, 2/6/23
- 
+// CSW 4/27/23
+
 
 // FIXME Issues when pulling apart maquette and controller:
 // - Who controls what eeprom. Information on which tower or joint of the
@@ -88,7 +76,6 @@
 #define TF_STRING(x) ((x) ? "true" : "false")
 #define SETTLE_TIME 2
 
-//const int SPI_CS_PIN = 53;
 
 typedef enum {
    MODE_OFF = 0,
@@ -135,31 +122,13 @@ int16_t jointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-300, 200}, {-532, 328}, {-27
 
 
 
-// In 'Slave' mode, we're reading poses from some external source (such as 
-// a pose list on the rpi) and adjusting the towers to match the current
-// pose.
-float slavePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
-                                                {0,0,0},
-                                                {0,0,0},
-                                                {0,0,0} };
-
-
-// XXX can we tell the difference between a playback command and a maquette command at this level?
-// The pi can. We've got another little complication here. XXX
-
-static float conductorPosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
-                                             {0,0,0},
-                                             {0,0,0},
-                                             {0,0,0}};
-static float playbackPosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
-                                             {0,0,0},
-                                             {0,0,0},
-                                             {0,0,0}};
-static float maquettePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+static int curJointTargets[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
                                              {0,0,0},
                                              {0,0,0},
                                              {0,0,0}};
 
+
+static bool serialBroadcast = true;  // whether we broadcast the position data back to the rpi
 
 // Switch Mode  API
 
@@ -169,38 +138,34 @@ static float maquettePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
 #define SWITCH_PLAYBACK_PIN 40
 #define SWITCH_OFF_PIN      42   // XXX FIXME NO PHYSICAL ATTACHMENT!!
 
-
+// Physical switch controlling mode
 static void SwitchInit();
 static int SwitchGetMode();
 static void setModeFromSwitch();
-
-// External poseMode API
-static void poseModeRunStateMachine();
-
-static void parseTowerCommand(char *buf, int len);
-
-
 static const char *modeStr[] = {"OFF", "IMMEDIATE", "POSE", "PLAYBACK"};
 
-static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINTS]);
-static void broadcastModelPosition();
-static void readCAN();
 
+
+// Reading commands and parsing bus commands
 #define MAX_COMMAND_LENGTH 32
 typedef struct {
     uint8_t cmd_len;
     uint8_t cmd_str[MAX_COMMAND_LENGTH];
 } CommandBuf;
 
-CommandBuf serialCmd  = {0};
-CommandBuf rs485CmdE  = {.cmd_len=0};
+CommandBuf serialCmd  = {.cmd_len=0};
+CommandBuf rs485Cmd  = {.cmd_len=0};
 
 static uint8_t accumulateCommandString(uint8_t c, CommandBuf *cbuf);
 static void parseSerialCommand();
+static void parseTowerCommand(char *buf, int len);
 static uint8_t maquetteCalibrated();
 
+#define NETWORKFILE   &uart1file   // 485 bus output to the sculpture
 static void Write485(char *buf);
+// static void broadcastModelPosition();
 
+static void readCAN();
 static void CAN_init();
 static void CAN_sendData(unsigned char *data, unsigned char len);
 static void CAN_receive();
@@ -251,11 +216,12 @@ void log_debug(char *str)
   }
 }
 
-// There are four different configuration variables that we store in EEPROM. These are
+// There are two different configuration variables that we store in EEPROM. These are
 // towerEnabled - whether the specified tower should be sent commands or not.
 // jointEnabled - whether the specified joint should be sent commands or not.
-// maquetteJointCenter - the center of the joint, as read by the potentiometer
-// maquetteTowerCenterCalibrated - whether all the joint centers are valid and the tower is considered calibrated
+// XXX - This was true for the maquette, where we want to be able to zero out
+// misbehaving input data. Is it true for the tower, or does the responsibiity more
+// properly reside in the driver at the tower?? FIXME
 
 short EEPROMReadShort(int eepromOffset)
 {
@@ -350,8 +316,6 @@ void writeCalibrationData()
 }
 
 
-// 485 bus here...
-#define NETWORKFILE   &uart1file
 
 // Main Mode Switch
 // There is a physical mode switch on the front of the controller box. Hopefully
@@ -410,39 +374,92 @@ void setup(){
   wdt_enable(WDTO_2S);
 }
 
-int timerIdx = 0;
-unsigned long mainloopTimeout = 0;
 
-static bool playbackDataValid() {
-    return false;
+
+static positionInRedZone(int towerId, int jointId, int position)
+{
+    return false;  // XXX fixme
+}
+#define INVALID_TOWER (-1)
+static int towerIdInRedZone = INVALID_TOWER;
+
+static bool positionIsSafe(int towerId, int jointId, int position)
+{
+    bool positionOkay = true;
+
+    if (towerId < 0 || towerId > NUM_TOWERS) {
+        return false;
+    }
+    if (jointId < 0 || jointId > NUM_JOINTS) {
+        return false;
+    }
+
+    if (positionInRedZone(towerId, jointId, position)) {
+        if (towerIdInRedZone == INVALID_TOWER) {
+            towerIdInRedZone = towerId;
+            positionOkay = true;
+        } else if (towerIdInRedZone != towerId) {
+            positionOkay = false;
+        }
+    } else {
+        if (towerId == towerIdInRedZone) {
+            towerIdInRedZone = INVALID_TOWER;
+            positionOkay = true;
+        }
+    }
+
+    if (positionOkay) {
+        curJointTargets[towerId][jointId] = position;
+    }
+
+    return positionOkay;
 }
 
-static bool conductorPositionValid() {
-    return false;
+static void clearCommandString(CommandBuf *cmd)
+{
+    cmd->cmd_len = 0;
 }
 
-static bool maquettePositionValid() {
-    return false;
-}
-
-static void parseConductorCommand(int uart){
-    return; // XXX this needs to do something...
+static void sendPosition(const char *cmd)
+{
+    if (serialBroadcast) {
+        Serial.print(cmd);
+    }
+    Write485(cmd);
 }
 
 static void handleConductorInput() {
     // Parser for data on the 485 bus
-    if (UART1_data_in_ring_buf()) { // check for waiting UART data from SPU
+    // The only commands we accept from this input source are
+    // tower positions. If we're in CONDUCTOR mode (ie, the sculpture is being
+    // controlled by the conductor), we check whether the target position
+    // is safe. If it is, we both save the target position as part of
+    // tracked sculpture state, and send the data along on the other 485
+    // bus. If we're not in CONDUCTOR mode, we drop the data on the floor.
+    if (UART2_data_in_ring_buf()) { // check for waiting UART data from SPU
       uint8_t cData;
-      // char buf[16];
-      cData = UART1_ring_buf_byte(); // get next char from ring buffer...
-                                     // sprintf(buf, "485 Receive %c\n", cData);
-      // putstr(buf);
-      //if (accumulateCommandString(cData, &rs485Cmd)) { // ... and add to command string
-      //  // if we are here we have a complete command; parse it
-      //  parseConductorCommand(1); // parse and execute commands
-      //}   // XXX - we need a provision to be able to parse strings coming from multiple places. add this FIXME
+      cData = UART2_ring_buf_byte(); // get next char from ring buffer...
+      if (accumulateCommandString(cData, &rs485Cmd)) { // ... and add to command string
+        if (mode != MODE_CONDUCTOR) {
+            clearCommandString(&rs485Cmd);
+        } else {
+            if (rs485Cmd.cmd_len >= 9 && rs485Cmd.cmd_str[3] == 't') {
+                int towerId;
+                int jointId;
+                int value;
+                sscanf(rs485Cmd.cmd_str, "<%01d%01dt%d>", &towerId, &jointId, &value);
+                if (positionIsSafe(towerId, jointId, value)) {
+                    sendPosition(rs485Cmd.cmd_str);
+                }
+            }
+        }
+      }   // XXX - we need a provision to be able to parse strings coming from multiple places. add this FIXME
     }
 }
+
+
+static int timerIdx = 0;
+static unsigned long mainloopTimeout = 0;
 
 void loop() {
     char outBuf[4096];
@@ -456,50 +473,26 @@ void loop() {
     wdt_reset();  // Pat watchdog
     
     if (curTime > mainloopTimeout) {
+      const char *myStr = "<12t2000>";
+      int towerId;
+      int jointId;
+      int position;
+      sscanf(myStr, "<%01d%01dt%04d>", &towerId, &jointId, &position);
+      Serial.println("Scanf - result is ");
+      Serial.println(towerId);
+      Serial.println(jointId);
+      Serial.println(position);
       mainloopTimeout = curTime + MAIN_LOOP_TIMEOUT_MILLIS;
 
       timerIdx++;
 
       if (timerIdx > 20) { // only run main control loop every 10th of a second // XXX - this is wrong, I think
         timerIdx = 0; 
-    
-        // What I do here depends on what mode I'm in.
-        switch (mode) {
-          case MODE_OFF:
-              break;
-          case MODE_PLAYBACK:
-              if (playbackDataValid()) {
-                  setSculptureTargetPosition(playbackPosition);
-              }
-              break;
-          case MODE_CONDUCTOR:
-              if (conductorPositionValid()) {
-                  setSculptureTargetPosition(conductorPosition);
-              }
-              break;
-          case MODE_MAQUETTE:
-              if (maquettePositionValid()) {
-                  setSculptureTargetPosition(maquettePosition);
-              }
-              break;
-          default:
-              break;
-        }
-        if (debug) {
-          //broadcastModelPosition();
-        }
+      
+      // At the moment there really isn't much of a main loop. We're just gathering up
+      // inputs and handling them when it becomes appropriate to do so... 
      }
    }
-}
-
-
-// XXX - this is never set, and really isn't used. The question in the module is how
-// to write the maquette position to the sculpture, which is different than the question
-// this function was designed for
-static int16_t canonicalJointPosition[NUM_TOWERS][NUM_JOINTS];
-
-static int16_t maquetteCanonicalToSculpture(int towerId, int jointId) {
-   return (int16_t)(canonicalJointPosition[towerId][jointId]*SCULPTURE_RANGE/2) + SCULPTURE_RANGE/2; 
 }
 
 
@@ -536,63 +529,8 @@ static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos3, int 
   return isSafe;
 }
 
-// Send target position to sculpture
-static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
-    char modelString[256];
-    char smallModelString[64];
-    char *ptr = modelString;
 
-    if (!maquetteCalibrated()) {
-      log_error("Target sculpture called on uncalibrated sculpture. Center first!!");
-      return;
-    }
-
-    for (int i=0; i<NUM_TOWERS; i++){
-        if (!towerEnabled[i]) {
-          Serial.print("Tower not enabled: ");
-          Serial.println(i);
-          continue;
-        }
-        if (!sculptureTargetPositionSafe(positionArray[i][0], positionArray[i][1], positionArray[i][2], i)) {
-          Serial.print("Tower motion disallowed - safety: ");
-          Serial.println(i);
-          continue;
-        }
-        for (int j=0; j<NUM_JOINTS; j++) {
-            if (!jointEnabled[i][j]) {
-              Serial.print("Joint not enabled: ");
-              Serial.print(i);
-              Serial.println(j);
-              continue;
-            }
-            char floatStr[10]; // float converted to string
-            dtostrf(positionArray[i][j], 2, 3, floatStr);
-            sprintf(ptr, "<%d%df%s>", i+1, j+1, floatStr);
-            ptr += strlen(ptr);
-
-/*            if (i==0 && j==1) {
-              sprintf(smallModelString, "<%d%dt%d>\r\n", i+1, j+1, positionArray[i][j]);
-              Serial.print(smallModelString);
-            }
-*/
-        }
-    }
-    sprintf(ptr, "\r\n");
-    fprintf(NETWORKFILE, modelString);
-
-    if (debug) {
-      debug_info(modelString);
-    }
-}
-
-void debug_info(char *debugStr)  // XXX add formatting
-{
-    char buf[512];
-    sprintf(buf, "<!md{\"level\":\"info\", \"str\":\"%s\"}>\n", debugStr);
-    Serial.print(buf);
-}
-
-
+/*
 // Let the rest of the world know what we're doing
 // Here I'm going to work in JSON, since that's easiest for me to parse
 static void broadcastModelPosition() {
@@ -615,6 +553,7 @@ static void broadcastModelPosition() {
     sprintf(ptr, "]\n");
     Serial.print(modelString); 
 }
+*/
 
 
 static void handleSerialCommand()
@@ -687,7 +626,6 @@ static void parseSerialCommand()
   }
 }
 
-static int gLEDOn = 0;  // XXX testing LED blink...
 
 static void parseMaquetteCommand(char *buf, int len) {
     int maxVal;
@@ -816,6 +754,7 @@ static void parseTowerCommand(char *buf, int len) {
     uint8_t jointId;
     char secondChar = buf[2];
     char command;
+    int cmd_idx;
     int ret;
     char outBuf[64];
     
@@ -827,10 +766,12 @@ static void parseTowerCommand(char *buf, int len) {
             return;
         }
         jointId = secondChar-'0';
-        command = buf[3];
+        cmd_idx = 3;
     } else {
-        command = buf[2];
+        cmd_idx = 2;
     }
+
+    command = buf[cmd_idx];
     
     switch(command){
     case 's':
@@ -860,8 +801,14 @@ static void parseTowerCommand(char *buf, int len) {
         Write485(buf);
         break;
     case 't':
-        // Set tower position. Pass through
-        Write485(buf); // XXX - probably not allowed in slave mode or playback XXX
+        // Set tower position. This may or may not pass, depending on mode
+        if (mode == MODE_MAQUETTE || mode == MODE_PLAYBACK) {
+            int position;
+            sscanf(buf[cmd_idx], "%d>", &position);
+            if (positionIsSafe(towerId, jointId, position)) {
+                sendPosition(buf);
+            }
+        }
         break;
     case 'L':
         // Set tower limits. Pass through
@@ -965,9 +912,6 @@ long unsigned int txID = 0x1881ABBA;// This format is typical of a 29 bit identi
                                     // https://www.kvaser.com/about-can/the-can-protocol/can-messages-33/
 unsigned char stmp[8] = {0x0E, 0x00, 0xFF, 0x22, 0xE9, 0xFA, 0xDD, 0x51};
 
-//Construct a MCP_CAN Object and set Chip Select to 53.
-
-//MCP_CAN CAN(SPI_CS_PIN);                            
 
 
 static void CAN_init()
