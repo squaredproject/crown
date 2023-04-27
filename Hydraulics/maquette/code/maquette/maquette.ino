@@ -81,6 +81,7 @@
 #define TF_STRING(x) ((x) ? "true" : "false")
 #define SETTLE_TIME 2
 
+// #define MAQUETTE_STAND_ALONE
 //const int SPI_CS_PIN = 53;
 
 typedef enum {
@@ -728,7 +729,11 @@ static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINT
         }
     }
     sprintf(ptr, "\r\n");
+#ifdef MAQUETTE_STAND_ALONE
     fprintf(NETWORKFILE, modelString);
+#else
+    Serial.print(modeString);
+#endif // MAQUETTE_STANDALONE
 
     if (debug) {
       debug_info(modelString);

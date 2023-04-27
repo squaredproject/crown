@@ -4,7 +4,7 @@ import logging
 import random 
 from threading import Thread, Lock
 import time
-import Queue
+import queue
 
 
 ser = None
@@ -20,8 +20,8 @@ responderThread = None
 
 running = True
 
-writeQueue = Queue.Queue()  # things to be written to the 'serial' port, sent to us
-readQueue  = Queue.Queue()  # things that the 'serial' port reads
+writeQueue = queue.Queue()  # things to be written to the 'serial' port, sent to us
+readQueue  = queue.Queue()  # things that the 'serial' port reads
 responseBuffer = [] # 'serial' port responses
 
 def init():  
@@ -46,6 +46,7 @@ def run():
         while(writeQueue.qsize() > 0) : 
             print ("Got an item off the write queue!")
             item = writeQueue.get()
+            print(f"Adding item {item} to read queue!")
             readQueue.put(item)
             
         time.sleep(0.02) # XXX I should be using select and a select timeout...
@@ -107,14 +108,14 @@ def processRequest(item):
             responseString = None
         
         if ( responseString ) :
-            print "adding response..."
+            print("adding response...")
             curTime = time.time()
             expTime = curTime + random.randint(1,100)/1000
             print("expiry time " + str(expTime) + ", current time " + str(curTime))
             responseBuffer.append({"time": expTime, "response":responseString})
     except Exception as e:
-        print "Exception in serial responder test code"
-        print e
+        print("Exception in serial responder test code")
+        print(e)
     
 
 # called by listener thread...
@@ -132,7 +133,7 @@ def registerListener(callback, args):
 def freeListener(callbackId):
     global listeners
     listenerMutex.acquire()
-    print listeners
+    print(listeners)
     del listeners[callbackId]
     listenerMutex.release()
 
