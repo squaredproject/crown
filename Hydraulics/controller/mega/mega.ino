@@ -44,6 +44,15 @@
 // CSW, 2/6/23
  
 
+// FIXME Issues when pulling apart maquette and controller:
+// - Who controls what eeprom. Information on which tower or joint of the
+// maquette is disabled is clearly a maquette function, but am I also using
+// this for sculpture tower enable/disable? If not, how do I know which
+// towers and joints are currently enabled and disabled? And shouldn't this
+// information be stored in the controller?
+// - Web page forwarding. Right now the maquette web page has all the maquette information.
+// ?? Maybe I just redirect to pi-maquette local and have a nice day?
+
 // Note on the serial protocol:
 // The serial protocol on both the RS485 line (to the driver at the sculpture arm)
 // and on the serial line (to the higher level Raspberry Pi) takes the following 
@@ -85,11 +94,12 @@
 
 typedef enum {
    MODE_OFF = 0,
-   MODE_IMMEDIATE = 1,
-   MODE_POSE = 2,
+   MODE_MAQUETTE = 1,
+   MODE_CONDUCTOR = 2,
    MODE_PLAYBACK = 3,
-} Mode;
-Mode mode = MODE_OFF;
+} ControllerMode;
+ControllerMode mode = MODE_OFF;
+static const char *modeNames[] = {"OFF", "MAQUETTE", "CONDUCTOR", "PLAYBACK"};
 
 // Block of calibration data
 // Joint enabled is whether the joint is currently enabled.
@@ -169,30 +179,40 @@ float slavePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
 
 uint8_t slaveValidBitmask = 0x00; 
 
+// XXX can we tell the difference between a playback command and a maquette command at this level?
+// The pi can. We've got another little complication here. XXX
 
-typedef struct _Button {
-  uint8_t externalState;
-  uint8_t internalState;
-  uint8_t justPressed;
-  uint8_t justReleased;
-  int settleTime;
-  int pin;
-} Button;
+static float conductorPosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+                                             {0,0,0},
+                                             {0,0,0},
+                                             {0,0,0}};
+static float playbackPosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+                                             {0,0,0},
+                                             {0,0,0},
+                                             {0,0,0}};
+static float maquettePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+                                             {0,0,0},
+                                             {0,0,0},
+                                             {0,0,0}};
 
-#define POSE_BUTTON_LED 13
-#define POSE_BUTTON     12
-#define POSE_LENGTH_MILLIS 10000
 
-static Button poseButton;
+// Switch Mode  API
 
-// External button API..
-static void ButtonInit(int pin, Button &button);
-static void buttonRead(Button &button);
-static bool buttonJustPressed(Button &button, bool consume);
-static bool buttonJustReleased(Button &button, bool consume);
+// Pin definitions
+#define SWITCH_CONDUCTOR_PIN 36
+#define SWITCH_MAQUETTE_PIN 38
+#define SWITCH_PLAYBACK_PIN 40
+#define SWITCH_OFF_PIN      42   // XXX FIXME NO PHYSICAL ATTACHMENT!!
+
+
+static void SwitchInit();
+static int SwitchGetMode();
+static void setModeFromSwitch();
 
 // External poseMode API
 static void poseModeRunStateMachine();
+
+static void parseTowerCommand(char *buf, int len);
 
 
 // XXX - we've got a level violation here. The input to the mode API is a number
@@ -205,7 +225,6 @@ static int16_t maquetteToModel(uint16_t pos, int i, int j);
 static int16_t clamp(int16_t value, int16_t max, int16_t min);
 static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINTS]);
 static void broadcastModelPosition();
-static void setModeFromSwitch();
 static int slaveDataValid();
 static void readCAN();
 static uint8_t accumulateCommandString(uint8_t c);
@@ -377,118 +396,126 @@ void invalidateCalibration(int tower)
 // 485 bus here...
 #define NETWORKFILE   &uart1file
 
+// Main Mode Switch
+// There is a physical mode switch on the front of the controller box. Hopefully
+// it will not be ripped off when people physically throw the box in a trunk at
+// the end of a run.
+// The switch selects between three input modes - one in which the conductor 
+// provides the input, one in which the maquette provides the input, and one
+// in which the playback system is providing the input. Off mode (which needs to
+// be implemented Real Soon Now) prevents standard inputs from being sent to
+// the hydraulics, although the user can still calibrate the towers.
+
+
+static void SwitchInit()
+{
+    Serial.println("Initializing all pins to INPUT_PULLUP");
+    pinMode(SWITCH_CONDUCTOR_PIN, INPUT_PULLUP);
+    pinMode(SWITCH_MAQUETTE_PIN, INPUT_PULLUP);
+    pinMode(SWITCH_PLAYBACK_PIN, INPUT_PULLUP);
+    pinMode(SWITCH_OFF_PIN,      INPUT_PULLUP);
+}
+
+static int SwitchGetMode()
+{
+    // Note that the pins are pulled high, so a low value is a connected switch 
+    if (!digitalRead(SWITCH_OFF_PIN)) return MODE_OFF;
+    if (!digitalRead(SWITCH_CONDUCTOR_PIN)) return MODE_CONDUCTOR;
+    if (!digitalRead(SWITCH_MAQUETTE_PIN)) return MODE_MAQUETTE;
+    if (!digitalRead(SWITCH_PLAYBACK_PIN)) return MODE_PLAYBACK;
+
+    return MODE_OFF;
+}
+
+static void setModeFromSwitch()
+{
+    int newMode = SwitchGetMode();
+    if (newMode != mode) {
+        Serial.print("Switch value changed. Was ");
+        Serial.print(modeNames[mode]);
+        Serial.print(" New value: ");
+        Serial.println(modeNames[newMode]);
+        mode = newMode;
+        // XXX - invalidate/reset buffers/whatever all partial position information from playback/conductor/maquette.
+    }
+}
+
 void setup(){
   Serial.begin(115200);
-  UART1_Init(UART_115200);  // Network Baud out to nodes
+  UART1_Init(UART_115200);  // 485 to sculpture  // XXX - not sure if this is the right UART
+  // UART2_Init(UART_115200);  // Conductor to controller
   wdt_disable();  // Disable watchdog
   delay(100);
-  ButtonInit(POSE_BUTTON, poseButton);
-  InitLEDs();
-  CAN_init();
-  Serial.println("Starting maquette...");
-  fprintf(NETWORKFILE, "Starting maquette...");
+  SwitchInit();
+  // CAN_init();  // XXX - CAN is not yet in the controller box
+  Serial.println("Starting Controller...");
+  fprintf(NETWORKFILE, "Starting Controller...");
   wdt_enable(WDTO_2S);
-  readCalibrationData();
-  //pinMode(35, INPUT_PULLUP);
-   // XXX - FIXME - Need to read the EEPROM for maquette calibration information,
-  // as well as whether we've turned on/off joints towers etc.
 }
 
 int timerIdx = 0;
-int secIdx = 0;
 unsigned long mainloopTimeout = 0;
-unsigned long poseTimeout = 0;
+
+static bool playbackDataValid() {
+    return false;
+}
+
+static bool conductorPositionValid() {
+    return false;
+}
+
+static bool maquettePositionValid() {
+    return false;
+}
+
 
 void loop() {
     char outBuf[4096];
+    char tmpBuf[30];
     unsigned long curTime = millis();
 
-
-//    secIdx++;
-    buttonRead(poseButton);  
     readSerialCommand();
-    readCAN();
-    wdt_reset();  // Tell watchdog not to bark
+    // readCAN();  // XXX - CAN module not physically hooked up yet
+    setModeFromSwitch();
+    wdt_reset();  // Pat watchdog
+
     
     if (curTime > mainloopTimeout) {
       mainloopTimeout = curTime + MAIN_LOOP_TIMEOUT_MILLIS;
 
       timerIdx++;
-      secIdx++;
 
-
-      if (timerIdx > 5) { // only run main control loop every 10th of a second
-          timerIdx = 0; 
-          
-
-       // if (UART1_data_in_ring_buf()) {
-       //   Serial.print("data on 485\n");
-       //  }
-  
-        for (int i=0; i<NUM_TOWERS; i++) {
-            /* if (i == 0 && timerIdx%50 == 0) {
-                Serial.print("Tower pot values: ");
-            }*/
-            for (int j=0; j<NUM_JOINTS; j++) {
-                // For each joint, read the value from the maquette, and check whether that value
-                // has changed more than the accepted delta from the previous position
-                uint16_t potValue  = readJointPos(i, j);
-                canonicalJointPosition[i][j] = maquetteRawToCanonical((int16_t)potValue, i, j);
-                modelPosition[i][j] = maquetteToModel(potValue, i, j);
-                /*if (i == 0 && timerIdx%50 == 0) {
-                    Serial.print(potValue);
-                    Serial.print(" ");
-                    Serial.print(int(canonicalJointPosition[i][j]*128));
-                    Serial.print(" ");
-                }*/
-/*                if (j == 1) {
-                  char buf[512];
-                  sprintf(buf, "pot val: %d, center: %d, model: %d\n", potValue, maquetteJointCenter[0][1], modelPosition[0][1]);
-                  Serial.print(buf);
-                }
-*/
-                if ( towerEnabled[i] && jointEnabled[i][j] && 
-                   ((modelPosition[i][j] - 20 > staticModelPosition[i][j]) || 
-                    (modelPosition[i][j] + 20 < staticModelPosition[i][j]))) {
-                    //char buf[256];
-                    //sprintf(buf, "Have movement on tower %d joint %d, old %d, new %d, potValue %d \n", i, j, staticModelPosition[i][j], modelPosition[i][j], potValue);
-                    //Serial.print(buf);
-                    staticModelPosition[i][j] = modelPosition[i][j];
-                }
-            }
-/*
-            if (i==0 && timerIdx%50==0) {
-                Serial.println("");
-            }
-*/
-        }
-   
+      if (timerIdx > 20) { // only run main control loop every 10th of a second // XXX - this is wrong, I think
+        timerIdx = 0; 
     
+        // XXX - read data on 485 input. If we're not in the correct mode we throw
+        // it away, but we need to read it.      
+
+        // if (UART1_data_in_ring_buf()) {
+        //   Serial.print("data on 485\n");
+        //  }
+        
         // What I do here depends on what mode I'm in.
         switch (mode) {
-            case MODE_OFF:
-                break;
-            case MODE_IMMEDIATE:
-                if (!maquetteCalibrated()) {
-                    break;
-                }
-                // sendToSculpture(modelPosition);
-                setSculptureTargetPosition(canonicalJointPosition);  // XXX de-noise?
-                break;
-            case MODE_POSE:
-                if (!maquetteCalibrated())
-                    break;  // Safety valve - do not send data from maquette if maquette is not calibrated.
-                poseModeRunStateMachine();
-        
-// FIXME  And if we decalibrate/calibrate anything we immediately leave pose mode.
-                break;
-            case MODE_PLAYBACK:
-                if (slaveDataValid() && maquetteCalibrated()) {
-                    setSculptureTargetPosition(slavePosition);
-                }
-                break;
-            default:
-                break;
+          case MODE_OFF:
+              break;
+          case MODE_PLAYBACK:
+              if (playbackDataValid()) {
+                  setSculptureTargetPosition(playbackPosition);
+              }
+              break;
+          case MODE_CONDUCTOR:
+              if (conductorPositionValid()) {
+                  setSculptureTargetPosition(conductorPosition);
+              }
+              break;
+          case MODE_MAQUETTE:
+              if (maquettePositionValid()) {
+                  setSculptureTargetPosition(maquettePosition);
+              }
+              break;
+          default:
+              break;
         }
         if (debug) {
           //broadcastModelPosition();
@@ -496,17 +523,6 @@ void loop() {
      }
    }
 }
-
-static uint8_t maquetteCalibrated(void)
-{
-  uint8_t centerVal = TRUE;
-  for (int i=0; i<NUM_TOWERS; i++){
-    centerVal = centerVal && maquetteTowerCenterCalibrated[i];
-  }
-
-  return centerVal;
-}
-
 
 static int slaveDataValid() {
   return slaveValidBitmask == 0x0F;
@@ -525,79 +541,6 @@ static uint16_t readJointPos(int towerIdx, int jointIdx) {
  #endif
 }
 
-static void InitLEDs() {
-  pinMode(POSE_BUTTON_LED, OUTPUT);
-}
-
-
-static void ButtonInit(int pin, Button &button)
-{
-    button.pin = pin; 
-    button.externalState = 0;
-    button.internalState = 0;
-    button.settleTime = 0;
-    button.justPressed = FALSE;
-    button.justReleased = FALSE;
-    pinMode(pin, INPUT_PULLUP);
-}
-
-
-static void buttonRead(Button &button)
-{
-  // NB - most of this code handles debouncing. The
-  // button must read the same value for a certain period of time
-  // before its externally facing state changes.
-
-  int curState = digitalRead(button.pin);
-  curState = 1-curState; // invert meaning, since we use a pull up
-
-  // if the state is not the currently reported state of the button,
-  // change either the externally reported state, or update
-  // our settling counter
-  if (curState != button.externalState) {
-    if (curState == button.internalState) {
-      button.settleTime++;
-    } else {
-      button.settleTime = 0;
-      button.internalState = curState;
-    }
-    
-    if (button.settleTime > SETTLE_TIME) {
-      button.externalState = curState;
-      button.settleTime = 0;
-      if (curState) {
-        button.justPressed = TRUE;
-        button.justReleased = FALSE;
-      } else {
-        button.justPressed = FALSE;
-        button.justReleased = TRUE;
-      }
-      if (debug) {
-        char strBuf[256];
-        sprintf(strBuf, "%s button %d\n", button.justPressed ? "PRESSED" : "RELEASED", button.pin);
-        Serial.print(strBuf);
-      }
-    }
-  }
-}
-
-static bool buttonJustPressed(Button &button, bool consume)
-{
-    int ret = button.justPressed;
-    if (consume) {
-        button.justPressed = FALSE;
-    }
-    return ret;
-}
-
-static bool buttonJustReleased(Button &button, bool consume)
-{
-    int ret = button.justReleased;
-    if (consume) {
-        button.justReleased = FALSE;
-    }
-    return ret;
-}
 
 
 /* Translate between potentiometer reading [0, 1204) 
@@ -812,26 +755,11 @@ static uint8_t accumulateCommandString(uint8_t c)
   return 0;
 }
 
-
-
 static void parseSerialCommand() 
 {
   int8_t towerId=0;    /* tower we're working with, if there is one */
   uint8_t c;            /* next char to parse */
   int len = strlen(cmd_str);
-#if 0
-  int8_t jointId=0;    /* joint we're working with, if necessary */
-  int val;
-  char *limitstr[3] = {NULL, NULL, NULL};
-  uint16_t jtarget[3];  /* joint target data */
-  uint16_t jcenter[3];  /* joint center data. Raw units from the potentiometer */
-  int maxVal;
-  int minVal;
-  int centerVal;
-  int idx = 0;
-  int ntokens = 0;
-  char strBuf[1024];
-#endif
 
   log_debug("Received command");
 
@@ -855,119 +783,6 @@ static void parseSerialCommand()
     }
   }
 }
-
-/** POSE MODE FUNCTIONS ***/
-
-// 'Pose' mode sets the towers to the current maquette state, and holds the pose for
-// some number of seconds. It is triggered by a button press
-static float posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
-                                             {0,0,0},
-                                             {0,0,0},
-                                             {0,0,0}};
-#define BLINK_TIME 400
-#define POSE_STATE_WAITING 0
-#define POSE_STATE_HOLD 1
-
-uint8_t poseState = POSE_STATE_WAITING;
-uint8_t poseDataValid = FALSE; 
-static void poseLEDSet(int onOff);
-static void poseLEDBlinkOnTimeout();
-static bool poseGetPoseData();
-static void poseModeInit();
-static void poseModeSetWaiting();
-static void poseModeSetHolding();
-
-static void poseModeInit()
-{
-  poseState = POSE_STATE_WAITING;
-  poseDataValid = FALSE;
-  poseLEDSet(1);
-}
-
-static int poseLEDOnOff = 0;
-static unsigned long poseBlinkTransitionTime = 0;
-static void poseLEDSet(int onOff)
-{
-    digitalWrite(POSE_BUTTON_LED, onOff?HIGH:LOW);
-    poseLEDOnOff = onOff;
-}
-
-static void poseLEDBlinkOnTimeout() 
-{
-   unsigned long curTime = millis();
-   if (curTime > poseBlinkTransitionTime) {
-      poseLEDOnOff = 1 - poseLEDOnOff;
-      poseLEDSet(poseLEDOnOff);
-      poseBlinkTransitionTime = curTime + BLINK_TIME;
-   }
-}
-
-
-static void poseModeSetWaiting()
-{
-  Serial.println("Transition - to pose mode waiting");
-  poseState = POSE_STATE_WAITING;
-  poseLEDSet(1);
-}
-
-
-static void poseModeSetHolding()
-{
-  Serial.println("Transition - to pose mode holding");
-  poseState = POSE_STATE_HOLD;
-  poseLEDSet(0);
-  poseTimeout = millis() + POSE_LENGTH_MILLIS;
-}
-
-
-static bool poseModeGetPoseData()
-{
-  bool haveNewPose = FALSE;
-  if (poseState == POSE_STATE_WAITING) {
-    // check for button press
-    if (buttonJustPressed(poseButton, TRUE)) {
-      // get pose data
-      for (int i=0; i<NUM_TOWERS; i++) {
-        for (int j=0; j<NUM_JOINTS; j++) {
-          posePosition[i][j] = canonicalJointPosition[i][j];
-        }
-      }
-      haveNewPose = TRUE;
-    }
-  } else if (poseState == POSE_STATE_HOLD) {
-    // throw away button presses in hold state
-    buttonJustPressed(poseButton, TRUE);
-  }
-
-  return haveNewPose;
-}
-
-
-static void poseModeRunStateMachine()
-{
-    // If we have valid pose data, pose the machine.
-    // This is true no matter whether we're in waiting state or hold state -
-    // even if we're for a new pose, we continue to send the previous pose
-    // until told otherwise
-    if (poseDataValid) {
-        setSculptureTargetPosition(posePosition);
-    }
-    // Check the state transitions
-    if (poseState == POSE_STATE_HOLD) {
-        // Back to wait state if we've been holding too long
-        if (millis() > poseTimeout) {
-            poseModeSetWaiting();
-        // Otherwise blink the button
-        } else {
-            poseLEDBlinkOnTimeout();    
-        }
-    } else if (poseState == POSE_STATE_WAITING) {
-        if (poseModeGetPoseData()) { // Button pressed, new pose data
-            poseModeSetHolding();
-        }
-    }
-}
-
 
 static int gLEDOn = 0;  // XXX testing LED blink...
 
@@ -995,48 +810,7 @@ static void parseMaquetteCommand(char *buf, int len) {
     Serial.println(c);
    
     Serial.println("switching on char..."); 
-    switch(c) {
-    case 'b':  // toggle led on button... testing
-      gLEDOn = 1 - gLEDOn;
-      poseLEDSet(gLEDOn);
-      Serial.println("<!mb+>");
-      break;
-    case 'L':  // set limits for a tower on maquette 
-      /* next character should be a digit - tower 
-         Note that this clause will catch EOL */
-      c =*ptr++;
-      towerId = c -'0';
-      if (towerId < 1 || towerId > 4) {
-        log_error("cannot parse command string, unknown tower");
-        return;
-      } 
-      towerId--; // 0 based indexing
-
-      c = *ptr++;
-      jointId = c - '0';
-      if (jointId < 1 || jointId > 3) {
-        Serial.println("cannot parse command string, unknown joint");
-        return;
-      }
-      jointId--; // 0 based indexing
-      
-      ntokens = sscanf (ptr,"%d,%d>",&minVal, &maxVal);
-
-      if (ntokens < 2) {
-        log_error("not enough values in command");
-        return;
-      }  
-      
-      maquetteJointRange[towerId][jointId][0] = minVal;
-      maquetteJointRange[towerId][jointId][1] = maxVal;
-
-      if (debug) {
-        sprintf(outBuf, "Maquette Tower %d joint %d set to min: %d, max: %d,\n", towerId+1, jointId+1, minVal, maxVal);
-        log_debug(outBuf);
-      }
-      writeTowerCalibrationData(towerId);
-      Serial.println("<!mL>");
-      break; 
+    switch (c) {
     case 'D':  // set debug level
       Serial.println("Setting debug level"); 
       ptr++; // XXX skipping ':', see note about parsing better globally
@@ -1051,71 +825,10 @@ static void parseMaquetteCommand(char *buf, int len) {
       }
       Serial.println("<!mD+>");
       break; 
-    case 'M':  // set mode
-      Serial.println("Setting mode...");
-      // skip to arguments. XXX I really out to parse them out up front.
-      ptr++;  // skip the ':'
-      c =*ptr++;
-      val = c - '0';
-      sprintf(outBuf, "Setting mode to %d", val);
-      log_debug(outBuf);
-      
-      switch(val) {
-        case 0:
-            mode = MODE_OFF;
-            poseLEDSet(0);
-            break;
-        case 1:
-            if (!maquetteCalibrated()) {
-                Serial.println("<!mM-Invalid State>");
-                error = TRUE;
-            } else {
-                poseLEDSet(0);
-                mode = MODE_IMMEDIATE;
-            }
-            break;
-        case 2:
-            if (!maquetteCalibrated()) {
-                Serial.println("<!mM-Invalid State>");
-                error = TRUE;
-            } else {
-                mode = MODE_POSE;
-                poseModeInit();
-            }
-            break;
-        case 3:
-            if (!maquetteCalibrated()) {
-                Serial.println("<!mM-Invalid State>");
-                error = TRUE;
-            } else {
-                poseLEDSet(0);
-                mode = MODE_PLAYBACK;
-            }
-            break;
-        default:
-            Serial.println("<!mM-Invalid Mode>");
-            error = TRUE;
-            break;
-      }
-
-      if (mode != MODE_PLAYBACK) {
-        slaveValidBitmask = 0x00;
-      }
-
-      if (debug ) {
-        if (!error) {
-            sprintf(outBuf, "Mode set to %s\n", modeStr[mode]);
-            log_debug(outBuf);
-        }
-      }     
-      if (!error) { // XXX this is a terrible way to handle errors here, but I want to refactor most of this case shit.
-        Serial.println("<!mM+>");
-      }
-      break; 
     case 's': // Get status
         Serial.println("Getting status");
         // Note that I'm being very careful here not to overrun outBuf, which can't be very big because we have a small stack.
-        sprintf(outBuf, "<!ms{\"mode\": \"%s\", \"poseState\": %d, \"towerState\": [", modeStr[mode], poseState);
+        // sprintf(outBuf, "<!ms{\"mode\": \"%s\", \"poseState\": %d, \"towerState\": [", modeStr[mode], poseState);
         Serial.print(outBuf);
         for (int i=0; i<NUM_TOWERS; i++) {
             // XXX NB - I'm splitting this printf up into several parts because the Arduino folks, in their infinite
@@ -1140,158 +853,7 @@ static void parseMaquetteCommand(char *buf, int len) {
             Serial.print(outBuf);    
         }
         Serial.println("]}>");
-        break;
-    case 'P':  // set slave (pose) data
-        // XXX - this is much better done in canonical values rather than in raw values. This eliminates the
-        // calibration issue.
-        float target[3];
-        // It does, however, cause problems because Arduino can't sscanf floats. 
-        ntokens = sscanf (ptr,"t%hhu:%hu,%hu,%hu", 
-                          &towerId, &target[0], &target[1], &target[2]); 
-        if (ntokens != 4 || towerId > 4 || towerId < 1) {
-          log_error("Invalid tower");
-          break;
-        }
-        towerId--; // 0 based idx
-        for (int i=0; i<3; i++) {
-          slavePosition[towerId][i] = clamp(target[i], -1.0, 1.0);
-          /* sprintf(outBuf, "Clamping %d between %d and %d, result %d\n", jtarget[i], maquetteJointRange[towerId][i][0], 
-                                                                                    maquetteJointRange[towerId][i][1], 
-                                                                                    slavePosition[towerId][i]);
-          log_debug(outBuf);
-          */
-        } 
-        slaveValidBitmask |= (1 << towerId);
-
-        /*
-        if (debug) {
-           sprintf(outBuf, "Set pose data for tower %d to %d, %d, %d\n", towerId+1, slavePosition[towerId][0], 
-                                                                                    slavePosition[towerId][1],
-                                                                                    slavePosition[towerId][2]);
-           log_debug(outBuf);
-           sprintf(outBuf, "Slave bitmask is %x\n", slaveValidBitmask);
-           log_debug(outBuf);
-        }
-        */
-        Serial.println("<!mP+>");
         break;  
-    case 'C': 
-        // Set center of joint (calibrate)
-        // C<towerId>:<joint_center1>,<joint_center2>,<joint_center3>
-        // There are two ways to use this command - either by sending just the tower id and no joint parameters
-        // or by sending the tower id and all three joint parameters. In the first case, the joint
-        // centers will be set to the current position of the joints
-        
-        ntokens = sscanf(ptr, "%hhu:%hu,%hu,%hu", &towerId, &jcenter[0], &jcenter[1], &jcenter[2]);  
-        
-        if (ntokens != 1 && ntokens != 4) {
-          log_error("Invalid number of center tokens. Require 3 or none");
-          Serial.print("<!mC");
-          Serial.print(towerId);
-          Serial.println("-Invalid number of centers>");
-          break; 
-        }
-
-        if (towerId > 4 || towerId < 1) {
-          log_error("Invalid tower");
-          Serial.println("<!mC-Invalid tower>");
-          break;
-        }
-
-        towerId--; // 0 based indexing from now on
-
-        if (ntokens == 1) {
-          // take the current center of the joint as the center
-          for (int i=0; i<3; i++) {
-            jcenter[i] = readJointPos(towerId, i); 
-          }
-        } else if (ntokens == 4) {
-          if (jcenter[0] > POT_RANGE || jcenter[0] < 0) {
-              log_error("Joint 1 center out of range\n");
-              Serial.println("<!mC-Center 1 out of range>");
-              break;
-          } else if (jcenter[1] > POT_RANGE || jcenter[1] < 0) {
-              log_error("Joint 2 center out of range\n");
-              Serial.println("<!mC-Center 2 out of range>");
-              break;
-          } else if (jcenter[2] > POT_RANGE || jcenter[2] < 0) {
-              log_error("Joint 3 center out of range\n");
-              Serial.println("<!mC-Center 3 out of range>");
-              break;
-          } 
-       } 
-       
-       for (int i=0; i<NUM_JOINTS; i++) {
-          maquetteJointCenter[towerId][i] = jcenter[i];   
-       }
-       maquetteTowerCenterCalibrated[towerId] = TRUE;
-       // Serial.println(maquetteToModel(jcenter[0], towerId, 0));
-
-       writeTowerCalibrationData(towerId);
-       Serial.print("<!mC");
-       Serial.print(towerId+1);
-       Serial.println("+>");  // XXX see comments below
-       
-       break;
-    case 'c': // Get calibration status
-      sprintf(outBuf, "<!mc[%d, %d, %d, %d]>", maquetteTowerCenterCalibrated[0], maquetteTowerCenterCalibrated[1], maquetteTowerCenterCalibrated[2], maquetteTowerCenterCalibrated[3]);
-      Serial.println(outBuf);
-      break;
-    case 'X': // uncalibrate
-      ntokens = sscanf(ptr, "%hhu", &towerId);
-      if (ntokens == 1 && (towerId < 1 || towerId > 4)) {
-        Serial.print("<!mX");
-        Serial.print(towerId);
-        Serial.println("-Bad Tower ID>");
-        break;
-      }
-      if (ntokens == 1) {
-        Serial.print("Setting tower center calibrated to FALSE for tower");
-        Serial.println(towerId);
-        maquetteTowerCenterCalibrated[towerId-1] = FALSE;
-      } else {
-        Serial.println("Setting center calibrated to false for all towers");
-        for (int i=0; i<NUM_TOWERS; i++) { 
-           maquetteTowerCenterCalibrated[i] = FALSE;
-        }
-      }
-      // XXX - Notes for better things. Okay. So let's assume that I can write the protocol for the maquette. What do I want it to be?
-      // Let's keep it of the form <mxxxx>
-      // Then we can do <m<0-99><c>:<t>:<j>:<args>>  And here t and j and args can be blank, but we always have the ':' in them. Then the response is
-      // <!m<0-99><c>:<success/failure>:response>>  And *that* is a lot more reasonable.
-      // But first shall I figure out the storage problem? 
-      writeCalibrationData();
-      Serial.print("<!mX");
-      Serial.print(towerId);
-      Serial.println("+>");
-      break;
-    case 'q':
-      // Nuke eeprom.
-      for (int i=0; i<48; i++) {
-        uint8_t foo = 0;
-        EEPROM.put(i, foo);
-      }
-      Serial.println("<!mq+>");
-      break;
-    case 'Q':
-      printCalibrationData();
-      Serial.println("<!mQ+>");
-      break;
-    case 'w':
-      ntokens = sscanf(ptr, "%hhu:%hhu", &towerId, &val);
-      if (ntokens == 2) {
-         unsigned int eeprom_offset = towerId;
-         uint8_t byte_val = (uint8_t)val;
-         EEPROM.put(eeprom_offset, byte_val);
-         Serial.print("Attempting tp write ");
-         Serial.print(byte_val);
-         Serial.print(" at location ");
-         Serial.println(eeprom_offset);
-         printCalibrationData();
-      } else {
-        Serial.println("Wrong number of tokens");
-      }
-      break;
     case 'E': // enable/disable tower
       ntokens = sscanf(ptr, "%hhu:%hhu", &towerId, &val);
       if (ntokens != 2) {
@@ -1343,44 +905,6 @@ static void parseMaquetteCommand(char *buf, int len) {
       Serial.println("+>"); // XXX fixme above
       break;
         
-    case 'S': // simulation. Get the position that we would be sending the towers
-       sprintf(outBuf, "<!mS[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]>", 
-            modelPosition[0,0], modelPosition[0,1], modelPosition[0,2],
-            modelPosition[1,0], modelPosition[1,1], modelPosition[1,2],
-            modelPosition[2,0], modelPosition[2,1], modelPosition[2,2],
-            modelPosition[3,0], modelPosition[3,1], modelPosition[3,2]);
-       Serial.println(outBuf);
-       break;
-
-    case 'A': // analog read of the joints. Sanity check
-      sprintf(outBuf, "<!mA[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]>",
-        readJointPos(0,0), readJointPos(0,1), readJointPos(0,2),
-        readJointPos(1,0), readJointPos(1,1), readJointPos(1,2),
-        readJointPos(2,0), readJointPos(2,1), readJointPos(2,2),
-        readJointPos(3,0), readJointPos(3,1), readJointPos(3,2));
-        
-      Serial.println(outBuf);
-      break;
-    
-    case 'p': // Get just the joint position, canonical form
-        // Using Serial.print because the Arduino folks have not implemented
-        // sprintf for floats. Fuckers.
-        Serial.print("<!mp[");
-        for (int i=0; i<NUM_TOWERS; i++) {
-            Serial.print("[");
-            for (int j=0; j<NUM_JOINTS; j++) {
-                Serial.print(canonicalJointPosition[i][j], 2);
-                if (j < NUM_JOINTS-1) {
-                    Serial.print(",");
-                }
-            }
-            Serial.print("]");
-            if (i< NUM_TOWERS-1) {
-                Serial.print(",");
-            }
-        }
-        Serial.print("]>");   
-        break;
     default:
       Serial.println("Couldn not find case for char");
       break; 
