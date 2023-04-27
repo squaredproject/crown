@@ -5,6 +5,8 @@
 //
 // rewritten for atmega2560 and file streams MAP April 2012
 // -------------------------------------------------------------------------------
+#include <stdio.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,7 +16,7 @@ void UART1_send_byte(unsigned char data);
 char UART1_ring_buf_byte(void);
 unsigned char UART1_data_in_ring_buf(void);
 extern FILE uart1file;
-
 #ifdef __cplusplus
-}
+};
 #endif
+

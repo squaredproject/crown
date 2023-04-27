@@ -6,6 +6,8 @@
 // rewritten for atmega2560 and file streams MAP April 2012
 // -------------------------------------------------------------------------------
 
+#include "UART1.h"
+
 /* Includes */
 #include <avr/interrupt.h>
 #include <avr/io.h>
@@ -17,7 +19,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "UART1.h"
 
 /* UART Buffer Defines */
 #define UART1_RX_BUFFER_SIZE 128 /* 2,4,8,16,32,64,128 or 256 bytes */
