@@ -133,9 +133,9 @@ static bool serialBroadcast = true;  // whether we broadcast the position data b
 // Switch Mode  API
 
 // Pin definitions
-#define SWITCH_CONDUCTOR_PIN 36
-#define SWITCH_MAQUETTE_PIN 38
-#define SWITCH_PLAYBACK_PIN 40
+#define SWITCH_CONDUCTOR_PIN 38
+#define SWITCH_MAQUETTE_PIN 40
+#define SWITCH_PLAYBACK_PIN 36
 #define SWITCH_OFF_PIN      42   // XXX FIXME NO PHYSICAL ATTACHMENT!!
 
 // Physical switch controlling mode
@@ -352,8 +352,7 @@ static void setModeFromSwitch()
 {
     int newMode = SwitchGetMode();
     if (newMode != mode) {
-        Serial.print("Switch value changed. Was ");
-        Serial.print(modeNames[mode]);
+        Serial.print("Switch value changed, ");
         Serial.print(" New value: ");
         Serial.println(modeNames[newMode]);
         mode = newMode;
@@ -440,6 +439,8 @@ static void handleConductorInput() {
       uint8_t cData;
       cData = UART2_ring_buf_byte(); // get next char from ring buffer...
       if (accumulateCommandString(cData, &rs485Cmd)) { // ... and add to command string
+        Serial.print("Have a command on the 485 port!:\r\n  ");
+        Serial.println((char *)&rs485Cmd.cmd_str[0]);
         if (mode != MODE_CONDUCTOR) {
             clearCommandString(&rs485Cmd);
         } else {
@@ -447,7 +448,7 @@ static void handleConductorInput() {
                 int towerId;
                 int jointId;
                 int value;
-                sscanf(rs485Cmd.cmd_str, "<%01d%01dt%d>", &towerId, &jointId, &value);
+                sscanf(rs485Cmd.cmd_str, "<%01d%01dt%04d>", &towerId, &jointId, &value);
                 if (positionIsSafe(towerId, jointId, value)) {
                     sendPosition(rs485Cmd.cmd_str);
                 }
@@ -473,15 +474,6 @@ void loop() {
     wdt_reset();  // Pat watchdog
     
     if (curTime > mainloopTimeout) {
-      const char *myStr = "<12t2000>";
-      int towerId;
-      int jointId;
-      int position;
-      sscanf(myStr, "<%01d%01dt%04d>", &towerId, &jointId, &position);
-      Serial.println("Scanf - result is ");
-      Serial.println(towerId);
-      Serial.println(jointId);
-      Serial.println(position);
       mainloopTimeout = curTime + MAIN_LOOP_TIMEOUT_MILLIS;
 
       timerIdx++;
