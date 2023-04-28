@@ -20,6 +20,7 @@ else:
 
     serial = CrownSerial
 
+from MaquetteRelay import MaquettePositionHandler
 
 app = Flask(
     "crown", static_url_path="/"
@@ -920,6 +921,8 @@ if __name__ == "__main__":
 
     serial.init()
 
+    maquette_relay = MaquettePositionHandler()
+
     # homingHandler = HomingStatusHandler()
 
     time.sleep(1)  # why am I doing this?
@@ -932,3 +935,4 @@ if __name__ == "__main__":
         pass
 
     serial.shutdown()
+    maquette_relay.shutdown()

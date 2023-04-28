@@ -20,19 +20,19 @@ class MaquettePositionHandler:
         relay queue, where they will get picked up by the MaquetteRelay and
         transmitted to the Controller '''
 
-    def __init__(self, relay):
-        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, self, message_queue)
+    def __init__(self):
         self.msg_queue = Queue()
+        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self, self.msg_queue))
         self.relay = MaquetteRelay(self.msg_queue)
      
-    def handle_serial_data(data, self, message_queue):
+    def handle_serial_data(self, msg_queue, data):
         if len(data) > 4 and data[3] == "T":  # XXX check that this is correct
             msg_queue.put(data)
 
         return False # never consume this data
 
     def shutdown(self):
-        CrownSerial.freeListener(self._callback_id);
+        CrownSerial.freeListener(self.callback_id);
         self.relay.shutdown()
 
 

@@ -81,13 +81,13 @@ def serial_open():
 
 
 # called by listener thread...
-def registerListener(callback, args):
+def registerListener(callback, args, bare_response=True):
     global listenerId
     global listeners
     listenerMutex.acquire()
     callbackId = listenerId
     listenerId = listenerId + 1
-    listeners[callbackId] = {"callback": callback, "args": args}
+    listeners[callbackId] = {"callback": callback, "args": args, "bare_response" : bare_response}
     listenerMutex.release()
 
     return callbackId
@@ -152,7 +152,11 @@ def routeResponse(response):
     bareCommand = response[1:-1]  # strip '<' ..'>'
     for key in listeners:
         listener = listeners[key]
-        if listener["callback"](listener["args"], bareCommand):
+        if listener["bare_response"]:
+            consume = listener["callback"](*listener["args"], bareCommand)
+        else:
+            consume = listener["callback"](*listener["args"], response) 
+        if consume:
             break
 
     listenerMutex.release()
