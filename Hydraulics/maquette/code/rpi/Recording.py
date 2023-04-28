@@ -1,65 +1,180 @@
-# recording module
+# Crown Recording Module
+# Records data coming in from the maquette
+# and the conductor to a file
+#
+# This module lives on the main arms-control pi, and
+# works in conjunction with the controller Arduino Mega
+# (which monitors the 485 port for communication from the
+# conductor) and the maquette system (which connects
+# to a listener in self module, and sends maquette position
+# information).
+#
+# Proper multiplexing between maquette and driver is not
+# enforced by self module; the various producers of positional
+# information should understand whether they are supposed to
+# be on or off, and act accordingly.
+
+
 import shutil
 import tempfile
 import glob
 from threading import Thread
 import time
 
+from multiprocessing import Process, Queue
+import queue
+
+from pathlib import Path
+
 listener = None
-tmpRecordingFile = None
-recordingPath = "/usr/lib/crown/"
-recordingTowers = None
-
-# globals - gTowerRange?
+recording_towers = None
 
 
-def startRecording(towers):
-    global recordingFile
-    global recordingTowers
-    if recordingFile:
-        recordingFile.close()
-    tmpRecordingFile = tempfile.TemporaryFile()
-    recordingTowers = towers
-    if listener:
-        listener.shutdown()
-    listener = SerialListener(filterPositions, positionHandler)
+class Recorder:
+    def __init__(self):
+        self._is_recording = False
+        self._is_paused = False
+        self._recording_file = None
+        self._filename = None
+        self._recording_path = "~/crown/recordings"
+        self._tmp_filepath = Path(self._recording_path, "tmp.playback")
+        self._last_frame_time = None
 
+        Path(self._recording_path).mkdir(parents=True, exist_ok=True)
 
-def filterPositions(serialString):
-    # position string looks.. how? XXX TODO
-    if serialString.startswith("<!mT"):
-        return True
+    def start_recording(self, filename=None):
+        if self._is_recording:
+            print("Recording already started")
 
-    return False  # do not block others (Or maybe I do want to block them) XXX
+        now = time.time()
 
+        if filename is None:
+            self._filename = "auto" + now.strftime("%m_%d_%Y:%H_%M_%S") + ".playback"
+        else:
+            self._filename = filename + ".playback"
 
-def positionHandler(serialString):
-    # parse out position
-    try:
-        position = json.loads(serialString)
-    except ValueError:
-        return  # log debug
+        self._recording_file = open(self._tmp_filepath, "w+")
+        self._is_recording = True
+        self._is_paused = False
+        self._last_frame_time = None
 
-    for towerId in towers:
-        if towerId in gTowerRange:
-            towerPos = position[towerId]
-    if tmpRecordingFile:
-        tmpRecordingFile.write(towerId + "," + towerPos)
-        tmpRecordingFile.write("\n")
+    def pause_recording(self):
+        if not self._is_recording:
+            print(f"Not currently recording, so could not pause")
+            return
+        self._is_paused = True
 
+    def resume_recording(self):
+        if not (self._is_recording and this._is_paused):
+            return
+        self._is_paused = False
 
-def stopRecording():
-    global listener
-    if listener:
-        listener.shutdown()
-        listener = None
+    def abort_recording(self):
+        if not self._is_recording:
+            return
+        close(self._recording_file)
+        os.remove(self._tmp_filepath)
+        self._is_recording = False
 
+    def close_recording(self):
+        if not self._is_recording:
+            return
+        close(self._recording_file)
+        os.rename(self._tmp_filepath, Path(self._recording_path, self._filename))
+        self._is_recording = False
 
-def isRecording():
-    if listener:
-        return True
-    else:
-        return False
+    def record_frame(self, frame: str):
+        if not self._is_recording:
+            return
+        if self._is_paused:
+            return
+        new_reference_time = time.perf_counter()
+        if self._last_frame_time == None:
+            timedelta_ms = 0
+        else:
+            timedelta_ms = (new_reference_time - self._last_reference_time) * 1000
+        self._last_frame_time = new_reference_time
+
+        self._recording_file.write(f"{frame} + : + {timedelta_ms:3f}\n")
+
+# For recording I need to be able to get the state of recording
+# from the recording process - if we're not recording, I don't want
+# to fork off all the data
+# Or do I have the recording state at a higher level? On the main thread?
+# I need to think about that a little bit
+
+class CrownRecorder:
+    def __init__(self, data_queue):
+        self.recording_state = "not recording"
+        self.data_queue = data_queue
+        self.command_queue = Queue()
+        self.process = Process(target=self._run, args=(data_queue, self.command_queue,))
+        # self.maquettePositionHandler = MaquettePositionReceiver(self)
+        # self.conductorPositionHandler = ConductorPositionHandler(self)
+        self.process.start()
+
+    # Recorder processs
+    def _run(self, data_queue, command_queue):
+        running = True
+        recorder = Recorder()
+        while running:
+            # read with timeout on data queue
+            try:
+                recorder.record_frame(data_queue.get(timeout=0.05))
+            except queue.Empty:
+                pass
+
+            # read non-blocking on command queue
+            command = None
+            try:
+                command = command_queue.get(block=False)
+            except queue.Empty:
+                pass
+
+            # run command if there is one
+            if command != None:
+                if command[0] == "shutdown":
+                    recorder.close_recording()
+                    running = False
+                else:
+                    _run_command(command)
+
+        def _run_command(command):
+            command_func = getattr(recorder, command[0])
+            if command_func is not None:
+                command_func(recorder, *command[1:])
+
+    # API functions
+    def pause_recording(self):
+        self.command_queue.put(["pause_recording"])
+        self.recording_state = "paused"
+
+    def resume_recording(self):
+        self.command_queue.put(["resume_recording"])
+        self.recording_state = "recording"
+
+    def start_recording(self, name: str):
+        self.command_queue.put(["start_recording", name])
+        self.recording_state = "recording"
+
+    def close_recording(self):
+        self.command_queue.put(["close_recording"])
+        self.recording_state = "not recording"
+
+    def abort_recording(self):
+        self.command_queue.put(["abort_recording"])
+        self.recording_state = "not recording"
+
+    def record_frame(self, frame):
+        self.command_queue.put(["record_frame", frame])
+
+    def shutdown(self):
+        self.command_queue.put(["shutdown"])
+        self.process.join()
+
+    def recording_state(self):
+        return self.recording_state
+
 
 
 def nameRecording(filename):
@@ -71,7 +186,7 @@ def nameRecording(filename):
 
     try:
         with open(recordingPath + filename + ".rec", "w+") as newfile:
-            shutil.copyfileobj(recordingFile, newFile)
+            shutil.copyfileobj(tmpRecordingFile, newFile)
 
     except IOError:
         logging.error("IO Error transferring temporary file to permanent storage")
@@ -90,8 +205,6 @@ def getClips():
 def getListOfRecordings():
     return glob.glob(recordingPath + "*.rec")
 
-
-# Create playback from recording clips... XXX todo
 
 
 playbackThread = None

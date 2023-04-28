@@ -101,12 +101,12 @@ class Recorder:
 
 
 class CrownRecorder:
-    def __init__(self):
+    def __init__(self, data_queue):
         self.recording_state = "not recording"
-        self.data_queue = Queue()
+        self.data_queue = data_queue
         self.command_queue = Queue()
         self.process = Process(target=self._run, args=(data_queue, command_queue))
-        self.maquettePositionHandler = MaquettePositionHandler(self)
+        self.maquettePositionHandler = MaquettePositionReceiver(self)
         self.conductorPositionHandler = ConductorPositionHandler(self)
         self.process.start()
 
@@ -182,61 +182,7 @@ class CrownProtocol:
     FRAME_START = b"00T00000"
     FRAME_STOP = b"00T00001"
 
-
-class MaquettePositionHandler:
-    def __init__(self, recorder: CrownRecorder, port=None):
-        self.msg_pipe = Pipe()
-        self.maquette_position_gatherer = Process(
-            target=self.run, args=(recorder, port, self.msg_pipe)
-        )
-        self.maquette_position_gatherer.start()
-
-    def run(recorder, port, pipe):
-        PACKET_LEN = 8
-        listener_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        listener_socker.bind((socket.gethostname(), port))
-        listener_socket.listen()
-        running = False
-        frame = []
-        while running:
-            readable, writeable, error = select.select(
-                [listener_socket, pipe], [], [listener_socket], timeout=0.1
-            )
-            if pipe in readable:  # Signal shutdown
-                running = False
-                break
-
-            if listener_socket in readable:  # Connection ready
-                (client_socket, address) = listener_socket.accept()
-                while True:
-                    readable, writeable, error = select.select(
-                        [listener_socket, pipe], [], [listener_socket], timeout=0.1
-                    )
-                    if pipe in readable:
-                        running = False
-                        break
-                    if client_socket in error:
-                        break
-
-                    if client_socket in readable:
-                        data = clientsocket.recv(self.PACKET_LEN)
-                        if data == CrownProtocol.FRAME_START:
-                            state = FrameState.ACCUMULATING
-                        elif data == CrownProtocol.FRAME_STOP:
-                            state = FrameState.NO_FRAME
-                            recorder.record_frame(frame)
-                            frame = []
-                        else:  # an actual frame
-                            if state == FrameState.ACCUMULATING:
-                                frame.append(data.decode("UTF-8"))
-
-                client_socket.close()
-
-        listener_socket.close()
-
-    def shutdown(self):
-        self.msg_pipe.write("shutdown")
-        self.maquette_position_gatherer.join()
+CROWN_MAQUETTE_PORT = 5051
 
 
 class ConductorPositionHandler:
