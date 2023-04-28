@@ -22,7 +22,7 @@ class MaquettePositionHandler:
 
     def __init__(self):
         self.msg_queue = Queue()
-        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self, self.msg_queue))
+        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self, self.msg_queue), False)
         self.relay = MaquetteRelay(self.msg_queue)
      
     def handle_serial_data(self, msg_queue, data):

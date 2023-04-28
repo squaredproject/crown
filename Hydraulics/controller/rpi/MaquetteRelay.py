@@ -4,12 +4,15 @@ from multiprocessing.connection import wait
 import time
 import select
 
+import CrownSerial
+serial = CrownSerial
+
+use_hostnames = True
+
 CROWN_MAQUETTE_PORT = 5051
 # CROWN_CONTROLLER_ADDR = "10.0.0.2"
 CROWN_CONTROLLER_ADDR = "127.0.0.1"
-
-import CrownSerial
-serial = CrownSerial
+CROWN_CONTROLLER_NAME = "pi-hydraulics.local"
 
 class MaquettePositionHandler:
     ''' Runs on the Maquette.
@@ -17,19 +20,19 @@ class MaquettePositionHandler:
         relay queue, where they will get picked up by the MaquetteRelay and
         transmitted to the Controller '''
 
-    def __init__(self, relay):
-        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, self, message_queue)
+    def __init__(self):
         self.msg_queue = Queue()
+        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self, self.msg_queue), False)
         self.relay = MaquetteRelay(self.msg_queue)
      
-    def handle_serial_data(data, self, message_queue):
+    def handle_serial_data(self, msg_queue, data):
         if len(data) > 4 and data[3] == "T":  # XXX check that this is correct
             msg_queue.put(data)
 
         return False # never consume this data
 
     def shutdown(self):
-        CrownSerial.freeListener(self._callback_id);
+        CrownSerial.freeListener(self.callback_id);
         self.relay.shutdown()
 
 
@@ -51,8 +54,10 @@ class MaquetteRelay:
         while running:
             try:
                 if not socket_connected:
-                    # sender_socket.connect((CROWN_CONTROLLER_ADDR, port))
-                    sender_socket.connect((socket.gethostname(), port))
+                    if use_hostnames:
+                        sender_socket.connect((socket.gethostbyname(CROWN_CONTROLLER_NAME), port))
+                    else:
+                        sender_socket.connect((CROWN_CONTROLLER_ADDR, port))
                     socket_connected = True
                     print("Socket Connected!!")
                 ready = wait([pipe, input_queue._reader], 0.1)
@@ -161,20 +166,20 @@ if __name__ == "__main__":
     from Recording import CrownRecorder
     #  Data path: from queue to relay to known socket to receiver to recorder
     recorder_queue = Queue()
-    # input_queue = Queue()
+    input_queue = Queue()
     print("Create Recorder")
     my_recorder = CrownRecorder(recorder_queue)
     print("Create position receiver")
     my_receiver = MaquettePositionReceiver(recorder_queue)
-    # print("Create relay...")
-    # my_relay = MaquetteRelay(input_queue)
+    print("Create relay...")
+    my_relay = MaquetteRelay(input_queue)
 
-    # for i in range(0, 10):
-    #     print("Input message")
-    #     input_queue.put(f"<{i}0T1111>")
-    #     time.sleep(0.05)
+    for i in range(0, 10):
+        print("Input message")
+        input_queue.put(f"<{i}0T1111>")
+        time.sleep(0.05)
 
-    time.sleep(100)
-    # my_relay.shutdown()
+    time.sleep(1)
+    my_relay.shutdown()
     my_receiver.shutdown()
     my_recorder.shutdown() 

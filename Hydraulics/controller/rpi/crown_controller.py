@@ -6,9 +6,14 @@ from sys import platform
 import threading
 import traceback
 
+from multiprocessing import Queue
+
 from flask import Flask, request, abort, make_response, jsonify
 from flask_cors import CORS
 
+
+from MaquetteRelay import MaquettePositionReceiver
+from Recording import CrownRecorder
 
 test = False
 if test:
@@ -919,6 +924,10 @@ if __name__ == "__main__":
     logging.basicConfig(filename=logfile, level=logging.DEBUG)
 
     serial.init()
+
+    recorder_queue = Queue()
+    recorder = CrownRecorder(recorder_queue)
+    maquette_receiver = MaquettePositionReceiver(recorder_queue)
 
     # homingHandler = HomingStatusHandler()
 
