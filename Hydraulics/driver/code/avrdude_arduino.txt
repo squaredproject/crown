@@ -1,0 +1,1 @@
+avrdude -v -patmega1280 -carduino -P/dev/cu.usbmodem141131 -b57600 -D -Uflash:w:/var/folders/27/_ndl9qsj43l74vmkjbl8_ynr0000gn/T/arduino_build_959586/maquette.ino.hex:i
