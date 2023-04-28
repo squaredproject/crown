@@ -179,8 +179,8 @@ class FrameState:
 
 
 class CrownProtocol:
-    FRAME_START = b"00T00000"
-    FRAME_STOP = b"00T00001"
+    FRAME_START = b"00t0000"
+    FRAME_STOP = b"00t0001"    # XXX check this is non-lethal. FIXME
 
 CROWN_MAQUETTE_PORT = 5051
 
@@ -221,7 +221,7 @@ class ConductorPositionHandler:
 
 # So.
 # I now have the modules that run on the newpi. I need modules that
-# - run on the new mega (485 listener, 485 switch)
+# - run on the new mega (485 listener, 485 switch)  DONE
 # - run on the old mega (send maquette position on serial)
 # - run on the old pi (listen for serial and send via ethernet, the reverse
 #    of these last couple of functions.
