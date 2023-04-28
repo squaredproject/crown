@@ -191,10 +191,10 @@ class MaquettePositionHandler:
         )
         self.maquette_position_gatherer.start()
 
-    def run(recorder, eort, pipe):
+    def run(recorder, port, pipe):
         PACKET_LEN = 8
         listener_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        listener_socker.bind((socket.gethostname(), self._port))
+        listener_socker.bind((socket.gethostname(), port))
         listener_socket.listen()
         running = False
         frame = []
