@@ -4,12 +4,15 @@ from multiprocessing.connection import wait
 import time
 import select
 
+import CrownSerial
+serial = CrownSerial
+
+use_hostnames = True
+
 CROWN_MAQUETTE_PORT = 5051
 # CROWN_CONTROLLER_ADDR = "10.0.0.2"
 CROWN_CONTROLLER_ADDR = "127.0.0.1"
-
-import CrownSerial
-serial = CrownSerial
+CROWN_CONTROLLER_NAME = "pi-hydraulics.local"
 
 class MaquettePositionHandler:
     ''' Runs on the Maquette.
@@ -51,8 +54,10 @@ class MaquetteRelay:
         while running:
             try:
                 if not socket_connected:
-                    # sender_socket.connect((CROWN_CONTROLLER_ADDR, port))
-                    sender_socket.connect((socket.gethostname(), port))
+                    if use_hostnames:
+                        sender_socket.connect((socket.gethostbyname(CROWN_CONTROLLER_NAME), port))
+                    else:
+                        sender_socket.connect((CROWN_CONTROLLER_ADDR, port))
                     socket_connected = True
                     print("Socket Connected!!")
                 ready = wait([pipe, input_queue._reader], 0.1)
@@ -94,7 +99,7 @@ class MaquettePositionReceiver:
         PACKET_LEN = 180  # This is more than I am likely to be sending at a time
         print("Creating listener socket")
         listener_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        listener_socket.bind((socket.gethostname(), port))
+        listener_socket.bind(("", port))
         listener_socket.listen()
         print("Bound, now listening...")
         running = True
