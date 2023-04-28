@@ -29,8 +29,6 @@ from pathlib import Path
 listener = None
 recording_towers = None
 
-# globals - gTowerRange?
-
 
 class Recorder:
     def __init__(self):
@@ -42,7 +40,7 @@ class Recorder:
         self._tmp_filepath = Path(self._recording_path, "tmp.playback")
         self._last_frame_time = None
 
-        Path(_recordingPath).mkdir(parents=True, exist_ok=True)
+        Path(self._recording_path).mkdir(parents=True, exist_ok=True)
 
     def start_recording(self, filename=None):
         if self._is_recording:
@@ -85,7 +83,7 @@ class Recorder:
         os.rename(self._tmp_filepath, Path(self._recording_path, self._filename))
         self._is_recording = False
 
-    def record_frame(self, frame: String):
+    def record_frame(self, frame: str):
         if not self._is_recording:
             return
         if self._is_paused:
@@ -99,19 +97,24 @@ class Recorder:
 
         self._recording_file.write(f"{frame} + : + {timedelta_ms:3f}\n")
 
+# For recording I need to be able to get the state of recording
+# from the recording process - if we're not recording, I don't want
+# to fork off all the data
+# Or do I have the recording state at a higher level? On the main thread?
+# I need to think about that a little bit
 
 class CrownRecorder:
     def __init__(self, data_queue):
         self.recording_state = "not recording"
         self.data_queue = data_queue
         self.command_queue = Queue()
-        self.process = Process(target=self._run, args=(data_queue, command_queue))
-        self.maquettePositionHandler = MaquettePositionReceiver(self)
-        self.conductorPositionHandler = ConductorPositionHandler(self)
+        self.process = Process(target=self._run, args=(data_queue, self.command_queue,))
+        # self.maquettePositionHandler = MaquettePositionReceiver(self)
+        # self.conductorPositionHandler = ConductorPositionHandler(self)
         self.process.start()
 
     # Recorder processs
-    def _run(data_queue, command_queue):
+    def _run(self, data_queue, command_queue):
         running = True
         recorder = Recorder()
         while running:
@@ -150,7 +153,7 @@ class CrownRecorder:
         self.command_queue.put(["resume_recording"])
         self.recording_state = "recording"
 
-    def start_recording(self, name: String):
+    def start_recording(self, name: str):
         self.command_queue.put(["start_recording", name])
         self.recording_state = "recording"
 
@@ -172,187 +175,6 @@ class CrownRecorder:
     def recording_state(self):
         return self.recording_state
 
-
-class FrameState:
-    NO_FRAME = "No Frame"
-    ACCUMULATING = "Accumulating"
-
-
-class CrownProtocol:
-    FRAME_START = b"00t0000"
-    FRAME_STOP = b"00t0001"    # XXX check this is non-lethal. FIXME
-
-CROWN_MAQUETTE_PORT = 5051
-
-
-class ConductorPositionHandler:
-    def __init__(self, recorder):
-        self._callback_id = CrownSerial.registerListener(self.handle_serial_data, self)
-        self.frame_state = FrameState.NO_FRAME
-        self._frame = []
-
-    def filter_function(self, data):
-        if data == CrownProtocol.FRAME_START:
-            self._frame_state = FrameState.ACCUMULATING
-        elif data == CrownProtocol.FRAME_STOP:
-            self._frame_state = FrameState.NO_FRAME
-            return True
-        else:
-            if self._state == FrameState.ACCUMULATING:
-                if (
-                    data[3] == "T" or data[3] == "F"
-                ):  # we're only looking for certain types of data. XXX really, I should make this all canonical form
-                    self._frame.append(data.decode("utf-8"))
-        return False
-
-    # Callback happens on the serial thread
-    def handle_serial_data(
-        data, self
-    ):  # XXX - Yes, that's right. The arguments are data and *then* self
-        if self.filter_function(data):
-            recorder.record_frame(self._frame.join(":"))
-            self._frame = []
-
-        return False  # never consume this data
-
-    def shutdown(self):
-        CrownSerial.freeListener(self._callback_id)
-
-
-# So.
-# I now have the modules that run on the newpi. I need modules that
-# - run on the new mega (485 listener, 485 switch)  DONE
-# - run on the old mega (send maquette position on serial)
-# - run on the old pi (listen for serial and send via ethernet, the reverse
-#    of these last couple of functions.
-# - I also need to delineate frames... This is a change pretty much everywhere.
-
-# - run on the new pi (send maquette position down to mega)  Missed this one, didn't I?
-# -- XXX haven't dealt with the fact that I might not receive all the bytes on the wire...
-
-class MaquettePositionSender:
-    def __init__(self):
-        self.socket = None
-        self._callback_id = CrownSerial.registerListener(self.handle_serial_data, self)
-        self.frame_state = FrameState.NO_FRAME
-        self._frame = []
-
-    def setup_socket(self):
-        try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.connect(CONTROL_PI_ADDR, CONTROL_PI_MAQUETTE_PORT)
-        except OSError, TimeoutError:
-            self.socket = None
-
-    def socket_send(self):
-        if self.socket == None:
-            setup_socket()
-
-        if self.socket == None:
-            return
-
-        try:
-            self.socket.sendall(frame.join()  # XXX this may be a little harder than that
-        except OSError, TimeoutError:
-            self.socket.close()
-            self.setup_socket()
-
-    def filter_function(self, data):
-        if data == CrownProtocol.FRAME_START:
-            self._frame_state = FrameState.ACCUMULATING
-        elif data == CrownProtocol.FRAME_STOP:
-            self._frame_state = FrameState.NO_FRAME
-            return True
-        else:
-            if self._state == FrameState.ACCUMULATING:
-                if (
-                    data[3] == "T" or data[3] == "F"
-                ):  # we're only looking for certain types of data. XXX really, I should make this all canonical form
-                    self._frame.append(data.decode("utf-8"))
-        return False
-
-    # Callback happens on the serial thread
-    def handle_serial_data(
-        data, self
-    ):  # XXX - Yes, that's right. The arguments are data and *then* self
-        if self.filter_function(data):
-            recorder.record_frame(self._frame.join(":"))
-            self._frame = []
-
-        return False  # never consume this data
-
-    def shutdown(self):
-        CrownSerial.freeListener(self._callback_id)
-
-# I will write the python ones first, since I've been writing in Python
-
-
-# XXX - So I am going to assume that there is a calling module responsible for
-# filtering data and packing things up into a frame. I am *not* handling that from
-# the recording module
-
-# Maquette recorder is going to take position information coming out of the maquette,
-# assemble a frame in the correct format, and call self function. This happens over
-# ethernet - which means I can't call self function directly. Okay, so the recorder
-# is taking things out of a queue, which I need to be maintaing. Anyone can put things
-# into the queue. Which says that it runs in a different thread or process. Probably
-# a different process.
-# And then there need to be rpc calls to it to do the above functionality. Okay fine,
-# now we've got an interface on top of self.
-
-# Conductor recorder is hanging off the serial interface (also in a different process)
-# Same requirements
-# Both of the gatherers run regardless of whether we're actually recording.
-# Ah, and self is why I have a filter on the serialListener. Great.
-
-
-def startRecording(towers):
-    global recordingFile
-    global recordingTowers
-    if recordingFile:
-        recordingFile.close()
-    tmpRecordingFile = tempfile.TemporaryFile()
-    recordingTowers = towers
-    if listener:
-        listener.shutdown()
-    listener = SerialListener(filterPositions, positionHandler)
-
-
-def filterPositions(serialString):
-    # position string looks.. how? XXX TODO
-    if serialString.startswith("<!mT"):
-        return True
-
-    return False  # do not block others (Or maybe I do want to block them) XXX
-
-
-def positionHandler(serialString):
-    # parse out position
-    try:
-        position = json.loads(serialString)
-    except ValueError:
-        return  # log debug
-
-    for towerId in towers:
-        if towerId in gTowerRange:
-            towerPos = position[towerId]
-    if tmpRecordingFile:
-        tmpRecordingFile.write(towerId + "," + towerPos)
-        tmpRecordingFile.write("\n")
-
-
-def stopRecording():
-    global listener
-    if listener:
-        listener.shutdown()
-        listener = None
-
-
-def isRecording():
-    if listener:
-        return True
-    else:
-        return False
 
 
 def nameRecording(filename):
@@ -383,8 +205,6 @@ def getClips():
 def getListOfRecordings():
     return glob.glob(recordingPath + "*.rec")
 
-
-# Create playback from recording clips... XXX todo
 
 
 playbackThread = None
