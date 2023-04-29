@@ -99,13 +99,24 @@ ASRC =
 ## Arduino Libraries
 # Many projects need arduino libraries, they are plentiful and bounitful
 # Thus you need the Arduino path and whatnot
-# I am using Windows WSL ( 2018 ) so my path looks odd, you'll have to track
-# down your Arduino environment and change this
 
-ARDUINO_ROOT = /Users/carolyn/Library/Arduino15/packages/arduino
-ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.8.4/cores/arduino
+# A good way to do this is use arduino-cli. You can then do
+# arduino-cli core install arduino:avr. If then you try to actually compile an
+# ino file with the -v option, it'll tell you where its stashed everything
+
+# This is a good value if you're on linux (or mac or wsl) using arduino-cli and you've done 
+# arduino-cli core install arduino:avr
+# currently installed versions are more current
+ARDUINO_ROOT = $(HOME)/.arduino15/packages/arduino
+ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.8.6/cores/arduino
 ARDUINO_VARIANT = mega
-ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.8.4/variants/$(ARDUINO_VARIANT)
+ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.8.6/variants/$(ARDUINO_VARIANT)
+
+# This is csw's value
+# ARDUINO_ROOT = /Users/carolyn/Library/Arduino15/packages/arduino
+#ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.8.4/cores/arduino
+#ARDUINO_VARIANT = mega
+#ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.8.4/variants/$(ARDUINO_VARIANT)
 
 
 # Optimization level, can be [0, 1, 2, 3, s]. 
