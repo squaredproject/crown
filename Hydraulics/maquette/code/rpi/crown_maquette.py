@@ -649,9 +649,17 @@ def crown_set_run_state(tower_id):
             else 0
         )
     if onOff:
-        pass
-        # crown_force_home(tower_id)  # XXX - do I really want to force the home? This seems like a bad choice. FIXME
+        if "centered" in request.values:
+            # Set center
+            send_sculpture_message(SET_CENTER_COMMAND, tower_id=tower_id, joint_id=1)
+            send_sculpture_message(SET_CENTER_COMMAND, tower_id=tower_id, joint_id=2)
+            send_sculpture_message(SET_CENTER_COMMAND, tower_id=tower_id, joint_id=3)
+
+        if "homed" in request.values:
+            crown_force_home(tower_id)
+
     send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_id, args=[onOff])
+
     return make_response("Success", 200)
 
 

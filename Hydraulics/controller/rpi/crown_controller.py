@@ -646,16 +646,22 @@ def crown_force_home(tower_id):
 
 @app.route("/crown/sculpture/towers/<int:tower_id>/running", methods=["PUT"])
 def crown_set_run_state(tower_id):
+    args = []
+    centered = None
     if "run_state" in request.values:
         onOff = (
             1
             if request.values["run_state"] in [True, "true", 1, "on", "running"]
             else 0
         )
-    if onOff:
-        pass
-        # crown_force_home(tower_id)  # XXX - do I really want to force the home? This seems like a bad choice. FIXME
-    send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_id, args=[onOff])
+        args.append(onOff)
+        if onOff:
+            homed = request.values.get("homed", False)
+            args.append(homed)
+            centered = request.values.get("centered", False)
+            args.append(centered)
+            print(f"Set sculpture running with home and center: homed = {homed}, centered = {centered}")
+        send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_id, args=[onOff, homed, centered])
     return make_response("Success", 200)
 
 

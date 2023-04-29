@@ -147,7 +147,9 @@ int16_t maquetteJointRange[NUM_TOWERS][NUM_JOINTS][2] = {{{-100, 100}, {-60, 60}
 
 // Canonical position is in the range [-1.0, 1.0], where -1.0 is all the way out, and 1.0 is all the way
 // in. 0 is the center. This is calculated on the maquette.
-float canonicalJointPosition[NUM_TOWERS][NUM_JOINTS] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+// XXX - moving to fixed point. [-256, 255]
+// float canonicalJointPosition[NUM_TOWERS][NUM_JOINTS] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+int canonicalJointPosition[NUM_TOWERS][NUM_JOINTS] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
 
 // Model position - joint position of sculpture, if it matched maquette
 int modelPosition[NUM_TOWERS][NUM_JOINTS]       = {{0,0,0}, {0,0,0}, {0,0,0}, {0,0,0}};
@@ -614,12 +616,14 @@ static bool buttonJustReleased(Button &button, bool consume)
 // jointCanonical = (potVal - potValMin) / (potValMax - potValMin)
 // And then - jointHydraulicsPos = hydraulicsValMin + jointCanonical*(hydraulicsValMax - hydraulicsValMin)
 
-static float maquetteRawToCanonical(int16_t potValue, int towerId, int jointId) {
+static int maquetteRawToCanonical(int16_t potValue, int towerId, int jointId) {
    int16_t center = maquetteJointCenter[towerId][jointId];
    int16_t min = maquetteJointRange[towerId][jointId][0] + center;
    int16_t max = maquetteJointRange[towerId][jointId][1] + center;
-   float canonicalValue = potValue < center ? ((float)(potValue - center))/((float)(center - min)) : ((float)(potValue - center))/((float)(max - center));
-   return clampf(canonicalValue, -1.0, 1.0);
+   // XXX - moving to fixed point, range [-256, 255]
+   //float canonicalValue = potValue < center ? ((float)(potValue - center))/((float)(center - min)) : ((float)(potValue - center))/((float)(max - center));
+   int canonicalValue = potValue < center ? ((potValue - center)>>8)/(center - min) : ((potValue - center)>>8)/(max - center);
+   return clamp(canonicalValue, -256, 255);
 }
 
 static int16_t maquetteCanonicalToSculpture(int towerId, int jointId) {
@@ -629,7 +633,7 @@ static int16_t maquetteToModel(uint16_t potValue, int towerId, int jointId) {
 // Potentiometer has a range of POT_RANGE (1K)  XXX check this!!
 // Sculpture has a range of SCULPTURE_RANGE (8K)
 
-// Assuming the zeros are lined up, that means that the translation is
+// Assuming the zeros are lined up, that means that the translatiion is
    long potValueCentered = ((long)potValue) - maquetteJointCenter[towerId][jointId];
    int16_t val = (int16_t)((potValueCentered * SCULPTURE_RANGE)/POT_RANGE);
 
@@ -687,7 +691,7 @@ static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos2, int 
 }
 
 // Send target position to sculpture
-static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINTS]) {
+static void setSculptureTargetPosition(int postionArray[NUM_TOWERS][NUM_JOINTS]) {  // please tell me this isn't going to make a copy
     char modelString[256];
     char smallModelString[64];
     char *ptr = modelString;
@@ -715,11 +719,14 @@ static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINT
               Serial.println(j);
               continue;
             }
-            bool redZone = sculptureTargetInRedZone(
-            char floatStr[10]; // float converted to string
-            dtostrf(positionArray[i][j], 2, 3, floatStr);
-            sprintf(ptr, "<%d%df%s>", i+1, j+1, floatStr);
+#ifdef USE_CANONICAL_VALUES
+            // char floatStr[10]; // float converted to string
+            // dtostrf(positionArray[i][j], 2, 3, floatStr);
+            sprintf(ptr, "<%d%df%s>", i+1, j+1, positionArray[i][j]);
             ptr += strlen(ptr);
+#else
+            int position =  positionArray[i][j]>>1;  // convert from 255 range to 512 range. 512 range is safe for tower - 2K per quarter
+#endif //USE_CANONICAL_VALUES
 
 /*            if (i==0 && j==1) {
               sprintf(smallModelString, "<%d%dt%d>\r\n", i+1, j+1, positionArray[i][j]);

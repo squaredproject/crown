@@ -741,7 +741,8 @@ function setRunning(towerId, callbackfn) {
         type: 'POST',
         url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/running",
         data: {"running":true,
-               "homed": true 
+               "homed": true,
+               "centered": true
               },
         success: function(data, status, req) {
             checkRunning(towerId, callbackfn) 
