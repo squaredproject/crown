@@ -102,40 +102,32 @@ def freeListener(callbackId):
 
 # command interface - private functions
 MAX_COMMAND_LEN = 2000
-command_len = 0
 command = []
-
-
-bInCommand = False
+in_command = False
 COMMAND_START_CHAR = b"<"
 COMMAND_END_CHAR = b">"
 
 
 def checkForResponse():
-    global bInCommand
-    global command_len
     global command
+    global in_command
     command_finished = False
-    if command_len >= MAX_COMMAND_LEN:
-        command = []
     c = ser.read(1)
     while c:
-        command_len = command_len + 1
-        if (not bInCommand) and c == COMMAND_START_CHAR:
-            bInCommand = True
+        if (not in_command) and c == COMMAND_START_CHAR:
+            in_command = True
             command = []
             command.append(c)
-        elif bInCommand:
+        elif in_command:
             command.append(c)
             if c == COMMAND_END_CHAR:
                 command_finished = True
-                command_len = 0
-                bInCommand = False
+                in_command = False
 
-        if not command_finished and command_len >= MAX_COMMAND_LEN:
-            bInCommand = False
-            command_len = 0
-            print("Exceeded maximum size of command, resetting")
+        if not command_finished and len(command) >= MAX_COMMAND_LEN:
+            in_command = False
+            print(f"Exceeded maximum size of command {command}, resetting")
+            command = []
         if command_finished:
             break
         else:
