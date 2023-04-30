@@ -158,7 +158,7 @@ CommandBuf rs485Cmd  = {.cmd_len=0};
 static uint8_t accumulateCommandString(uint8_t c, CommandBuf *cbuf);
 static void parseSerialCommand();
 static void parseTowerCommand(char *buf, int len);
-static uint8_t maquetteCalibrated();
+static void parseLocalCommand(char *buf, int len);
 
 #define NETWORKFILE   &uart1file   // 485 bus output to the sculpture
 static void Write485(char *buf);
@@ -189,7 +189,7 @@ void log_debug(char *str);
 #define DBG_LEVEL_ERROR 1
 static const char *debugString[] = {"OFF", "ERROR", "INFO", "DEBUG"};
 
-int debug = 0;  // debug on/off
+int debug = 0; // DBG_LEVEL_DEBUG;  // debug on/off
 
 void log_info(char *str) 
 {
@@ -474,7 +474,8 @@ static void handleConductorInput() {
         if (mode != MODE_CONDUCTOR) {
             clearCommandString(&rs485Cmd);
         } else {
-            if (rs485Cmd.cmd_len >= 9 && rs485Cmd.cmd_str[3] == 't') {
+            // NB. cmd_len is 0 here because it's fully acumulated
+            if ((strlen(rs485Cmd.cmd_str) >= 6) && (rs485Cmd.cmd_str[3] == 't')) {
                 int towerId;
                 int jointId;
                 int value;
@@ -482,10 +483,23 @@ static void handleConductorInput() {
                 if (positionIsSafe(towerId, jointId, value)) {
                     sendPosition(rs485Cmd.cmd_str);
                 }
+                else {
+                    Serial.println(" ignoreCmd: position not safe ");
+                }
+            } else {
+                if (strlen(rs485Cmd.cmd_str) < 6) {
+                    Serial.print(" ignoreCmd: len short should be 6 or more ");
+                    Serial.println(rs485Cmd.cmd_len);
+                } else if (rs485Cmd.cmd_str[3] != 't') {
+                    Serial.print(" ignoreCmd: char 3 not t ");
+                    Serial.println(rs485Cmd.cmd_str[3]);
+                } else {
+                    Serial.println(" ignoreCmd: not sure why ");
+                }
             }
-        }
+         }
       }
-    }
+   }
 }
 
 
@@ -599,10 +613,10 @@ static void parseSerialCommand()
   }
 
   /* first character after the '<' is either a command to a tower, or an 'm', signifying that this
-     is a command to the maquette itself */
+     is a command to the mega board itself */
   c = cmd_str[1];  
   if (c == 'm') {
-    parseMaquetteCommand(cmd_str+2, len-2); // skip '<m'
+    parseLocalCommand(cmd_str+2, len-2); // skip '<m'
   } else {  // parse tower command here
     //Sanity check - first character should be the tower id
     towerId = c - '0';
@@ -615,7 +629,7 @@ static void parseSerialCommand()
 }
 
 
-static void parseMaquetteCommand(char *buf, int len) {
+static void parseLocalCommand(char *buf, int len) {
     int maxVal;
     int minVal;
     int centerVal;
