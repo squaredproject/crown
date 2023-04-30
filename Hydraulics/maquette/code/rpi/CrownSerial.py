@@ -101,7 +101,7 @@ def freeListener(callbackId):
 
 
 # command interface - private functions
-MAX_COMMAND_LEN = 2000
+MAX_COMMAND_LEN = 4000
 command_len = 0
 command = []
 

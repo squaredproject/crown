@@ -740,8 +740,9 @@ function setRunning(towerId, callbackfn) {
     $.ajax({
         type: 'POST',
         url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/running",
-        data: {"running":true,
-               "homed": true 
+        data: {"run_state":true,
+               "homed": true,
+               "centered": true
               },
         success: function(data, status, req) {
             checkRunning(towerId, callbackfn) 
@@ -1234,9 +1235,9 @@ function renderMaquetteStatus(status){
             jointPosElem.text(Number(tower["jointPos"][jIdx]).toFixed(2));
         }
         // render the tower
-        let jointAngle0 = tower["jointPos"][0]*Math.PI/9;
-        let jointAngle1 = tower["jointPos"][1]*Math.PI/9;
-        let jointAngle2 = tower["jointPos"][2]*Math.PI/9;
+        let jointAngle0 = (tower["jointPos"][0]/255)*Math.PI/9;
+        let jointAngle1 = (tower["jointPos"][1]/255)*Math.PI/9;
+        let jointAngle2 = (tower["jointPos"][2]/255)*Math.PI/9;
         let canvas = document.getElementById("mT" + (idx+1) + "Canvas");
         drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);
     } 
@@ -1273,13 +1274,13 @@ function renderTowerInfo(tIdx) {
     towerElem.select(tower.running);
     setColorOnSelect(towerElem);
 
-    // render tower position // XXX - I need canonical values here...
-    let jointAngle0 = tower.joints[0] * Math.PI/9; // XXX what are the values, really?
-    let jointAngle1 = tower.joints[1] * Math.PI/9; // XXX what are the values, really?
-    let jointAngle2 = tower.joints[2] * Math.PI/9; // XXX what are the values, really?
+    // render tower position
+    // Canonical values are in range [-256, 255], so we're allowing a visual motion of 20 degrees
+    let jointAngle0 = (tower.joints[0]/255) * Math.PI/9;
+    let jointAngle1 = (tower.joints[1]/255) * Math.PI/9;
+    let jointAngle2 = (tower.joints[2]/255) * Math.PI/9;
     let canvas = document.getElementById("T" + (tIdx+1) + "Canvas");
-    drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);  
-    
+    drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);
     /*
     var jointEnabledText = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled + "]";
     $("#t" + idx + "Status[name=joint_enabled]").text(jointEnabledText);

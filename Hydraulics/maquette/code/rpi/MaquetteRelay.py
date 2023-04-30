@@ -22,11 +22,18 @@ class MaquettePositionHandler:
 
     def __init__(self):
         self.msg_queue = Queue()
+<<<<<<< Updated upstream
         self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self, self.msg_queue), False)
+=======
+        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self.msg_queue,))
+>>>>>>> Stashed changes
         self.relay = MaquetteRelay(self.msg_queue)
      
     def handle_serial_data(self, msg_queue, data):
-        if len(data) > 4 and data[3] == "T":  # XXX check that this is correct
+        print(f"self is {self}")
+        print(f"msg_queue is {msg_queue}")
+        print(f"data is {data}")
+        if len(data) > 4 and data[3] == "t":  # XXX check that this is correct
             msg_queue.put(data)
 
         return False # never consume this data

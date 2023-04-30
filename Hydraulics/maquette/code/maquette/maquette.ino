@@ -81,7 +81,7 @@
 #define TF_STRING(x) ((x) ? "true" : "false")
 #define SETTLE_TIME 2
 
-// #define MAQUETTE_STAND_ALONE
+#define MAQUETTE_STAND_ALONE
 //const int SPI_CS_PIN = 53;
 
 typedef enum {
@@ -165,7 +165,7 @@ int pinMapping[NUM_TOWERS][NUM_JOINTS] = { {A0, A1, A3},
 // In 'Slave' mode, we're reading poses from some external source (such as 
 // a pose list on the rpi) and adjusting the towers to match the current
 // pose.
-float slavePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+int slavePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
                                                 {0,0,0},
                                                 {0,0,0},
                                                 {0,0,0} };
@@ -206,7 +206,7 @@ static const char *modeStr[] = {"OFF", "IMMEDIATE", "POSE", "PLAYBACK"};
 
 static int16_t maquetteToModel(uint16_t pos, int i, int j);
 static int16_t clamp(int16_t value, int16_t max, int16_t min);
-static void setSculptureTargetPosition(float positionArray[NUM_TOWERS][NUM_JOINTS]);
+static void setSculptureTargetPosition(int positionArray[NUM_TOWERS][NUM_JOINTS]);
 static void broadcastModelPosition();
 static void setModeFromSwitch();
 static int slaveDataValid();
@@ -214,7 +214,7 @@ static void readCAN();
 static uint8_t accumulateCommandString(uint8_t c);
 static void parseSerialCommand();
 static uint8_t maquetteCalibrated();
-static uint16_t readJointPos(int towerIdx, int jointIdx);
+static int16_t readJointPos(int towerIdx, int jointIdx);
 
 static void Write485(char *buf);
 
@@ -422,7 +422,7 @@ void loop() {
 
       if (timerIdx > 5) { // only run main control loop every 10th of a second
           timerIdx = 0; 
-          
+        
 
        // if (UART1_data_in_ring_buf()) {
        //   Serial.print("data on 485\n");
@@ -435,13 +435,13 @@ void loop() {
             for (int j=0; j<NUM_JOINTS; j++) {
                 // For each joint, read the value from the maquette, and check whether that value
                 // has changed more than the accepted delta from the previous position
-                uint16_t potValue  = readJointPos(i, j);
+                int16_t potValue  = readJointPos(i, j);
                 canonicalJointPosition[i][j] = maquetteRawToCanonical((int16_t)potValue, i, j);
                 modelPosition[i][j] = maquetteToModel(potValue, i, j);
-                /*if (i == 0 && timerIdx%50 == 0) {
+                /* if (i == 0 && timerIdx%50 == 0) {
                     Serial.print(potValue);
                     Serial.print(" ");
-                    Serial.print(int(canonicalJointPosition[i][j]*128));
+                    Serial.print(int(canonicalJointPosition[i][j]));
                     Serial.print(" ");
                 }*/
 /*                if (j == 1) {
@@ -515,8 +515,8 @@ static int slaveDataValid() {
   return slaveValidBitmask == 0x0F;
 }
 
-static uint16_t simulatedJointPos = 100;
-static uint16_t readJointPos(int towerIdx, int jointIdx) {
+static int16_t simulatedJointPos = 100;
+static int16_t readJointPos(int towerIdx, int jointIdx) {
 #ifdef SIMULATE_JOINTS
   simulatedJointPos++;
   if (simulatedJointPos > 300) {
@@ -622,7 +622,7 @@ static int maquetteRawToCanonical(int16_t potValue, int towerId, int jointId) {
    int16_t max = maquetteJointRange[towerId][jointId][1] + center;
    // XXX - moving to fixed point, range [-256, 255]
    //float canonicalValue = potValue < center ? ((float)(potValue - center))/((float)(center - min)) : ((float)(potValue - center))/((float)(max - center));
-   int canonicalValue = potValue < center ? ((potValue - center)>>8)/(center - min) : ((potValue - center)>>8)/(max - center);
+   int canonicalValue = potValue < center ? ((center - potValue)<<8)/(min - center) : ((potValue - center)<<8)/(max - center);
    return clamp(canonicalValue, -256, 255);
 }
 
@@ -664,7 +664,7 @@ static int16_t clamp(int16_t value, int16_t min, int16_t max) {
 // XXX - get values for R1, R2, and R3; convert between canonical position and
 // joint angle
 static int targetRedZoneTower = -1;
-static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos2, int tower)
+static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos3, int tower)
 {
   bool isSafe = TRUE;
   /*
@@ -691,7 +691,7 @@ static bool sculptureTargetPositionSafe(float pos1, float pos2, float pos2, int 
 }
 
 // Send target position to sculpture
-static void setSculptureTargetPosition(int postionArray[NUM_TOWERS][NUM_JOINTS]) {  // please tell me this isn't going to make a copy
+static void setSculptureTargetPosition(int positionArray[NUM_TOWERS][NUM_JOINTS]) {  // please tell me this isn't going to make a copy
     char modelString[256];
     char smallModelString[64];
     char *ptr = modelString;
@@ -709,7 +709,7 @@ static void setSculptureTargetPosition(int postionArray[NUM_TOWERS][NUM_JOINTS])
         }
         if (!sculptureTargetPositionSafe(positionArray[i][0], positionArray[i][1], positionArray[i][2], i)) {
           Serial.print("Tower motion disallowed - safety: ");
-          Serial.println(tower);
+          Serial.println(i);
           continue;
         }
         for (int j=0; j<NUM_JOINTS; j++) {
@@ -725,7 +725,7 @@ static void setSculptureTargetPosition(int postionArray[NUM_TOWERS][NUM_JOINTS])
             sprintf(ptr, "<%d%df%s>", i+1, j+1, positionArray[i][j]);
             ptr += strlen(ptr);
 #else
-            int position =  positionArray[i][j]>>1;  // convert from 255 range to 512 range. 512 range is safe for tower - 2K per quarter
+            int position =  positionArray[i][j] * 2;  // convert from 255 range to 512 range. 512 range is safe for tower - 2K per quarter
 #endif //USE_CANONICAL_VALUES
 
 /*            if (i==0 && j==1) {
@@ -739,7 +739,7 @@ static void setSculptureTargetPosition(int postionArray[NUM_TOWERS][NUM_JOINTS])
 #ifdef MAQUETTE_STAND_ALONE
     fprintf(NETWORKFILE, modelString);
 #else
-    Serial.print(modeString);
+    Serial.print(modelString);
 #endif // MAQUETTE_STANDALONE
 
     if (debug) {
@@ -873,7 +873,7 @@ static void parseSerialCommand()
 
 // 'Pose' mode sets the towers to the current maquette state, and holds the pose for
 // some number of seconds. It is triggered by a button press
-static float posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
+static int posePosition[NUM_TOWERS][NUM_JOINTS] = { {0,0,0},
                                              {0,0,0},
                                              {0,0,0},
                                              {0,0,0}};

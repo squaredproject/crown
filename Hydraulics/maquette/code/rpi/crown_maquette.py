@@ -89,7 +89,7 @@ class AsyncRequester:
         self.timeout = timeout
         self.data_ready = False
 
-        self.listener = serial.registerListener(AsyncRequester._async_callback, self)
+        self.listener = serial.registerListener(AsyncRequester._async_callback, (self,))
 
     def run(self):
         """Make all requests, wait for responses. Timeout if responses have not been
