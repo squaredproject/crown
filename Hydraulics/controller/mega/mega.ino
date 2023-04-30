@@ -232,7 +232,7 @@ short EEPROMReadShort(int eepromOffset)
 // XXX - I do not know if the tower itself is calibrated. This I can only know from the CANbus... 
 static void debugCalibrationData(int tower)
 {
-    char buf[256];
+    char buf[128];
     sprintf(buf, "Tower %d Status Data: \r\n ", tower);
     Serial.print(buf);
     sprintf(buf, "  Joint Enabled: %d, %d, %d\r\n", jointEnabled[tower][0], jointEnabled[tower][1], jointEnabled[tower][2]);
@@ -245,7 +245,7 @@ static void debugCalibrationData(int tower)
 void printCalibrationData()
 {
     // Print the first 256 hex characters of EEPROM
-    char buf[256];
+    char buf[128];
     int eeprom_offset = 0;
     for (int i=0; i<16; i++) {
         sprintf(buf, "0x%x 0x%x 0x%x 0x%x  0x%x 0x%x 0x%x 0x%x  0x%x 0x%x 0x%x 0x%x  0x%x 0x%x 0x0%x 0x%x", 
@@ -370,7 +370,8 @@ void setup(){
   // CAN_init();  // XXX - CAN is not yet in the controller box
   Serial.println("Starting Controller...");
   fprintf(NETWORKFILE, "Starting Controller...\n");
-  wdt_enable(WDTO_2S);
+  wdt_enable(WDTO_8S);
+
 }
 
 
@@ -412,14 +413,56 @@ static float rawPositionToAngle(int raw) {
 #define INVALID_TOWER (-1)
 static int towerIdInRedZone = INVALID_TOWER;
 
-static bool positionIsSafe(int towerId, int jointId, int position)
-{
+// String is format: <TJtXXXXX>
+// where T is the tower ID
+// J is the joint ID
+// t is the command to set a position
+// XXXXX is a number
+// Tried using sscanf but it's not very stable. DOing it by hand
+// is more the arduino style
+
+static bool positionIsSafe(const char *cmd_str) {
+
     bool positionOkay = true;
 
-    if (towerId < 0 || towerId > NUM_TOWERS) {
+    // WARNING: tower and joint on the wire are 1 to N, but we want zero
+    // index in this spot. 
+    int towerId = (int) cmd_str[1] - '1';
+    int jointId = (int) cmd_str[2] - '1';
+    int position = 0;
+    int spos=4;
+    bool negative = false;
+    while ( spos < 32 ) {
+        char c = cmd_str[spos++];
+        if (c == '-') {
+            negative = true;
+            continue;
+        }
+        if ((c >= '0') && (c <= '9')) {
+            position = (position * 10) + (c - '0');
+            continue;
+        }
+        if (c == '>') {
+            break;
+        }
+        if (c == 0) {
+            return(false);
+        }
+    }
+    if (spos == 32) {
+        return(false);
+    }
+    if (negative) position = -1 * position;
+
+    //Serial.println(" isSafe ");
+    //Serial.println(towerId);
+    //Serial.println(jointId);
+    //Serial.println(position);
+            
+    if (towerId < 0 || towerId >= NUM_TOWERS) {
         return false;
     }
-    if (jointId < 0 || jointId > NUM_JOINTS) {
+    if (jointId < 0 || jointId >= NUM_JOINTS) {
         return false;
     }
 
@@ -476,21 +519,21 @@ static void handleConductorInput() {
             clearCommandString(&rs485Cmd);
         } else {
             // NB. cmd_len is 0 here because it's fully acumulated
-            if ((strlen(rs485Cmd.cmd_str) >= 6) && (rs485Cmd.cmd_str[3] == 't')) {
-                int towerId;
-                int jointId;
-                int value;
-                sscanf(rs485Cmd.cmd_str, "<%01d%01dt%04d>", &towerId, &jointId, &value);
-                if (positionIsSafe(towerId, jointId, value)) {
+            int le = strlen(rs485Cmd.cmd_str);
+            if ((le >=6) && (le <=12) && (rs485Cmd.cmd_str[0] == '<') && (rs485Cmd.cmd_str[3] == 't')) {
+                if (positionIsSafe(rs485Cmd.cmd_str)) {
                     sendPosition(rs485Cmd.cmd_str);
                 }
                 else {
-                    Serial.println(" ignoreCmd: position not safe ");
+                     Serial.println(" ignoreCmd: position not safe ");
                 }
             } else {
-                if (strlen(rs485Cmd.cmd_str) < 6) {
+                if (le < 6) {
                     Serial.print(" ignoreCmd: len short should be 6 or more ");
-                    Serial.println(rs485Cmd.cmd_len);
+                    Serial.println(le);
+                } else if (le > 12) {
+                    Serial.print(" ignoreCmd: len long should be 12 or less ");
+                    Serial.println(le);
                 } else if (rs485Cmd.cmd_str[3] != 't') {
                     Serial.print(" ignoreCmd: char 3 not t ");
                     Serial.println(rs485Cmd.cmd_str[3]);
@@ -508,8 +551,7 @@ static int timerIdx = 0;
 static unsigned long mainloopTimeout = 0;
 
 void loop() {
-    char outBuf[4096];
-    char tmpBuf[30];
+    
     unsigned long curTime = millis();
 
     handleSerialCommand();  // Includes position data from playback and maquette 
@@ -575,16 +617,21 @@ static void handleSerialCommand()
 
 static uint8_t accumulateCommandString(uint8_t c, CommandBuf *cbuf)
 {
+  // if we were at full and get another character, it's time to 
+  // if its the end of a string, might need the character and one more the null
+  if (cbuf->cmd_len >= MAX_COMMAND_LENGTH - 2) {
+    cbuf->cmd_len = 0;
+  }
+
   /* catch beginning of this string */
   if (c == '<') { // this will catch re-starts and stalls as well as valid commands.
-     cbuf->cmd_len = 0;
-     cbuf->cmd_str[cbuf->cmd_len++] = c;
+     cbuf->cmd_len = 1;
+     cbuf->cmd_str[0] = '<';
      return 0;
   }
   
   if (cbuf->cmd_len != 0) {   // string in progress, accumulate next char
-    if (cbuf->cmd_len < MAX_COMMAND_LENGTH - 1) 
-      cbuf->cmd_str[cbuf->cmd_len++] = c;
+    cbuf->cmd_str[cbuf->cmd_len++] = c;
       
     if (c == '>') {
         //char buf[128];
@@ -638,7 +685,7 @@ static void parseLocalCommand(char *buf, int len) {
     char *ptr = buf;
     char *bufEnd = buf + len;
     uint8_t val;
-    char outBuf[2*1024];
+    char outBuf[512];
     uint8_t towerId;
     uint8_t jointId;
     uint16_t jtarget[3];  /* joint target data */
@@ -752,6 +799,7 @@ static void parseLocalCommand(char *buf, int len) {
 
 static void parseTowerCommand(char *buf, int len) {
     // For the most part, we don't parse tower commands. We just send them on
+    // WARNING: towerId, jointId is 1 indexed here, 0 indexed elsewhere
     uint8_t towerId = buf[1] - '0';
     uint8_t jointId;
     char secondChar = buf[2];
@@ -759,7 +807,6 @@ static void parseTowerCommand(char *buf, int len) {
     int cmd_idx;
     int ret;
     char outBuf[64];
-    
     
     if (secondChar <= '3' && secondChar >= '0') {
         // joint id. Next is command
@@ -805,9 +852,7 @@ static void parseTowerCommand(char *buf, int len) {
     case 't':
         // Set tower position. This may or may not pass, depending on mode
         if (mode == MODE_MAQUETTE || mode == MODE_PLAYBACK) {
-            int position;
-            sscanf(buf[cmd_idx], "%d>", &position);
-            if (positionIsSafe(towerId, jointId, position)) {
+            if (positionIsSafe(buf)) {
                 sendPosition(buf);
             }
         }
@@ -1045,8 +1090,8 @@ static void CAN_receive()
     */ 
     default:
         { 
-          char buf[256];
-          sprintf(buf, "Invalid CAN message, type %d\n", buf[CAN_CMD_BYTE]);
+          char buf[64];
+          snprintf(buf, sizeof(buf), "Invalid CAN message, type %d\n", buf[CAN_CMD_BYTE]);
           log_error(buf);
         }
         return;
@@ -1056,25 +1101,29 @@ static void CAN_receive()
 
 
 
+#define MAX_SERIAL_BUF 512
+
 // Translate CAN messages into a friendlier format, send them on... 
 
 static void HandleCANPosition(uint8_t towerId, uint8_t *buf) 
 {
-    uint8_t serialBuf[256];
     CAN_Position pos;
     
     CAN_BufferToPosition(buf, &pos);
-    sprintf(serialBuf, "<!T%d[%d,%d,%d]>", towerId, pos.joint1Pos, pos.joint2Pos, pos.joint3Pos);
+
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf, sizeof(serialBuf), "<!T%d[%d,%d,%d]>", towerId, pos.joint1Pos, pos.joint2Pos, pos.joint3Pos);
     Serial.println((char *)serialBuf);
 }
 
 static void HandleCANJointLimits(uint8_t towerId, uint8_t jointId, uint8_t *buf)
 {
-    uint8_t serialBuf[256];
     CAN_Limits limits;
     
     CAN_BufferToJointLimits(buf, &limits);
-    sprintf(serialBuf, "<!l%d%d{\"min\":%d,\"max\":%d, \"center\": %d}>", 
+
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf,sizeof(serialBuf), "<!l%d%d{\"min\":%d,\"max\":%d, \"center\": %d}>", 
                          towerId, jointId, 
                          limits.minPos, limits.maxPos, limits.centerPos);
     Serial.println((char *)serialBuf);
@@ -1082,12 +1131,12 @@ static void HandleCANJointLimits(uint8_t towerId, uint8_t jointId, uint8_t *buf)
 
 static void HandleCANGeneralStatus(uint8_t towerId, uint8_t *buf) 
 {
-    uint8_t serialBuf[512];
     CAN_StatusStruct canStatus;
 
     CAN_BufferToStatus(buf, &canStatus);
-    
-    sprintf(serialBuf, "<!x%d{\"homed\":[%s,%s,%s], \"switches\": [%d, %d, %d], \"enabled\": [%s, %s, %s], \"running\": %s,\"error\": %d}>", 
+   
+    uint8_t serialBuf[MAX_SERIAL_BUF]; 
+    snprintf(serialBuf,sizeof(serialBuf), "<!x%d{\"homed\":[%s,%s,%s], \"switches\": [%d, %d, %d], \"enabled\": [%s, %s, %s], \"running\": %s,\"error\": %d}>", 
                               towerId,
                               TF_STRING(canStatus.homed[0]), 
                               TF_STRING(canStatus.homed[1]), 
@@ -1103,27 +1152,27 @@ static void HandleCANGeneralStatus(uint8_t towerId, uint8_t *buf)
 
 static void HandleCANValveStatus(uint8_t towerId, uint8_t *buf)
 {
-    uint8_t serialBuf[512];
     CAN_Valves valves;
 
     CAN_BufferToValves(buf, &valves);
-    sprintf(serialBuf, "<!v%d[%d, %d, %d]>", towerId, 
+
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf, sizeof(serialBuf), "<!v%d[%d, %d, %d]>", towerId, 
                                              valves.driveLevel[0],
                                              valves.driveLevel[1],
                                              valves.driveLevel[2]);
 
     Serial.println((char *)serialBuf);
-  
 }
 
 static void HandleCANJointStatus(uint8_t towerId, uint8_t jointId, uint8_t *buf)
 {
-    uint8_t serialBuf[1024];
     CAN_JointStatus joint; 
 
     CAN_BufferToJointStatus(buf, &joint);
 
-    sprintf(serialBuf, "<!j%d%d{\"jointId\":%d, \"pos\":%d, \"target\":%d, \"valve\":%d, \"homed\":%s, \"enabled\":%s, \"switches\":0x%x}>",
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf, sizeof(serialBuf), "<!j%d%d{\"jointId\":%d, \"pos\":%d, \"target\":%d, \"valve\":%d, \"homed\":%s, \"enabled\":%s, \"switches\":0x%x}>",
             towerId, jointId, 
             jointId,
             joint.pos,
@@ -1138,12 +1187,12 @@ static void HandleCANJointStatus(uint8_t towerId, uint8_t jointId, uint8_t *buf)
 
 static void HandleCANHomingStatus(uint8_t towerId, uint8_t jointId, uint8_t *buf)
 {
-    uint8_t serialBuf[512];
     CAN_Homing homing; 
 
     CAN_BufferToHomingStatus(buf, &homing);
 
-    sprintf(serialBuf, "<!H%d%d{\"sw\":%d, \"pos\":%d, \"mask\":%d, \"stalls\":%d}>", 
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf, sizeof(serialBuf), "<!H%d%d{\"sw\":%d, \"pos\":%d, \"mask\":%d, \"stalls\":%d}>", 
                       towerId, jointId, 
                       homing.switches, homing.pos, homing.target, homing.stalls);
     Serial.println((char *)serialBuf);
@@ -1177,12 +1226,12 @@ static const char * homingReason(uint8_t detail)
 
 static void HandleCANHomingResult(uint8_t towerId, uint8_t jointId, uint8_t *buf)
 {
-    uint8_t serialBuf[512];
     CAN_Homing_Result homing; 
 
     CAN_BufferToHomingResult(buf, &homing);
 
-    sprintf(serialBuf, "<!H%d%d{\"homed\":%s, \"detail\":\"%s\", \"target\":%d}>", 
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf, sizeof(serialBuf), "<!H%d%d{\"homed\":%s, \"detail\":\"%s\", \"target\":%d}>", 
                       towerId, jointId, 
                       TF_STRING(homing.success), 
                       homingReason(homing.detail),
@@ -1194,12 +1243,12 @@ static void HandleCANHomingResult(uint8_t towerId, uint8_t jointId, uint8_t *buf
 
 static void HandleCANExtendedStatus(uint8_t towerId, uint8_t *buf)
 {
-    uint8_t serialBuf[512];
     CAN_ExtendedStatus status;
 
     CAN_BufferToExtendedStatus(buf, &status);
 
-    sprintf(serialBuf, "<!e%d{\"addr\":%d,\"debug\":%d, \"h1\":%d, \"h2\":%d, \"h3\":%d}>",
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf, sizeof(serialBuf), "<!e%d{\"addr\":%d,\"debug\":%d, \"h1\":%d, \"h2\":%d, \"h3\":%d}>",
               towerId,
               status.debugLevel, 
               status.homeSpeed[0], status.homeSpeed[1], status.homeSpeed[2]);
@@ -1209,12 +1258,12 @@ static void HandleCANExtendedStatus(uint8_t towerId, uint8_t *buf)
 
 static void HandleCANPIDValues(uint8_t towerId, uint8_t *buf) 
 {
-    uint8_t serialBuf[512];
     CAN_PIDValues pids;
 
     CAN_BufferToPIDValues(buf, &pids);
 
-    sprintf(serialBuf, "<!p%d[{\"p\":%d,\"i\":%d},{\"p\":%d,\"i\":%d}, {\"p\":%d,\"i\":%d}]>",
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf,sizeof(serialBuf), "<!p%d[{\"p\":%d,\"i\":%d},{\"p\":%d,\"i\":%d}, {\"p\":%d,\"i\":%d}]>",
               towerId,
               pids.Kp[0], pids.Ki[0], 
               pids.Kp[1], pids.Ki[1], 
@@ -1225,12 +1274,12 @@ static void HandleCANPIDValues(uint8_t towerId, uint8_t *buf)
 
 static void HandleCANIntegrators(uint8_t towerId, uint8_t *buf)
 {
-    uint8_t serialBuf[512];
     CAN_Integrators integrators;
 
     CAN_BufferToIntegrators(buf, &integrators);
 
-    sprintf(serialBuf, "<!i%d[%d, %d, %d]>",
+    uint8_t serialBuf[MAX_SERIAL_BUF];
+    snprintf(serialBuf,sizeof(serialBuf), "<!i%d[%d, %d, %d]>",
               towerId,
               integrators.i1,
               integrators.i2,
