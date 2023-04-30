@@ -88,14 +88,14 @@ class MaquettePositionReceiver:
         XXX - If I knew whether the Recorder was active, I wouldn't bother
         constantly sending packets to it... FIXME
     '''
-    def __init__(self, recording_queue, port=CROWN_MAQUETTE_PORT):
+    def __init__(self, recording_queue, serial_out, port=CROWN_MAQUETTE_PORT):
         self.msg_pipe, recv_pipe = Pipe()
         self.maquette_position_gatherer = Process(
-            target=self.run, args=(recording_queue, port, recv_pipe,)
+            target=self.run, name="Maquette Receiver", args=(recording_queue, serial_out.writeQueue, port, recv_pipe,)
         )
         self.maquette_position_gatherer.start()
 
-    def run(self, recording_queue, port, pipe):
+    def run(self, recording_queue, serial_queue, port, pipe):
         PACKET_LEN = 180  # This is more than I am likely to be sending at a time
         print("Creating listener socket")
         listener_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -131,7 +131,7 @@ class MaquettePositionReceiver:
                     if client_socket in readable:
                         data = client_socket.recv(PACKET_LEN)
                         if len(data) > 0:
-                            print(f"Read data {data}")
+                            # print(f"Read data {data}")
                             accumulated_data += data.decode("UTF-8")
                             while True:
                                 packet_start = accumulated_data.find("<")
@@ -142,11 +142,13 @@ class MaquettePositionReceiver:
                                 packet_end = accumulated_data.find(">")
                                 if packet_end > 0:
                                     packet = accumulated_data[packet_start:packet_end+1]
-                                    print(f"Sending data - {packet}")
-                                    serial.write(packet)
-                                    if recording_queue is not None:
-                                        print("Sending data to recorder!")
-                                        recording_queue.put(packet)
+                                    if (serial_queue.qsize() > 3):
+                                        print("Too much data on enet for serial queue, dropping enet packet")
+                                    else:
+                                        serial_queue.put(packet)
+                                    # if recording_queue is not None:
+                                    #     print("Sending data to recorder!")
+                                    #   recording_queue.put(packet)
                                     accumulated_data = accumulated_data[packet_end+1:]
                                 else:
                                     break

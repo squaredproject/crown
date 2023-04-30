@@ -355,6 +355,7 @@ static void setModeFromSwitch()
         Serial.print(" New value: ");
         Serial.println(modeNames[newMode]);
         mode = newMode;
+        fprintf(NETWORKFILE, "Switch value changed to : %s\n", modeNames[newMode]);
         // XXX - invalidate/reset buffers/whatever all partial position information from playback/conductor/maquette.
     }
 }
@@ -368,7 +369,7 @@ void setup(){
   SwitchInit();
   // CAN_init();  // XXX - CAN is not yet in the controller box
   Serial.println("Starting Controller...");
-  fprintf(NETWORKFILE, "Starting Controller...");
+  fprintf(NETWORKFILE, "Starting Controller...\n");
   wdt_enable(WDTO_2S);
 }
 
@@ -565,7 +566,7 @@ static void handleSerialCommand()
     int haveCommand = FALSE;
     haveCommand = accumulateCommandString(Serial.read(), &serialCmd);
     if (haveCommand) {
-       log_debug("Have command");
+      // log_debug("Have command");
       parseSerialCommand();
     }
   }
@@ -648,8 +649,7 @@ static void parseLocalCommand(char *buf, int len) {
     if (bufEnd <= buf) return;
     
     c = *ptr++;
-    log_debug("maquette command!!!");
-    Serial.print("maquette command ");
+    log_debug("local command!!!");
     Serial.println(c);
    
     Serial.println("switching on char..."); 
@@ -893,7 +893,7 @@ static void Write485(char *buf)
 {
     Serial.print("writing to 485: ");
     Serial.println(buf);
-    fprintf(NETWORKFILE, buf);
+    fprintf(NETWORKFILE, "%s\n", buf);
 }
 
 

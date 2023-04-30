@@ -1,10 +1,10 @@
-# This is serialRouter.py
 import serial
 import select
 from sys import platform
 from threading import Thread, Lock
 import logging
 import time
+from multiprocessing import Queue
 import queue
 
 
@@ -25,7 +25,7 @@ serialThread = None
 
 running = True
 
-writeQueue = queue.Queue()
+writeQueue = Queue()
 
 
 def init():
@@ -39,11 +39,13 @@ def init():
 def shutdown():
     global running
     running = False
+    print("SHUTDOWN called, setting running to FALSE")
     if serialThread:
         serialThread.join(1)
 
 
 def run():
+    global running
     serial_open()
     while running:
         try:
@@ -53,7 +55,6 @@ def run():
                 resp = checkForResponse()
                 if resp:
                     routeResponse(resp)
-
             while (
                 writeQueue.qsize() > 0
             ):  # XXX do this in a select - can look for writes and reads simultaneously

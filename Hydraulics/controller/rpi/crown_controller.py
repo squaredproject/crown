@@ -6,7 +6,14 @@ from sys import platform
 import threading
 import traceback
 
+import multiprocessing as mp
 from multiprocessing import Queue
+
+try:
+   mp.set_start_method('spawn', force=True)
+   print("spawned")
+except RuntimeError:
+   pass
 
 from flask import Flask, request, abort, make_response, jsonify
 from flask_cors import CORS
@@ -933,7 +940,7 @@ if __name__ == "__main__":
 
     recorder_queue = Queue()
     recorder = CrownRecorder(recorder_queue)
-    maquette_receiver = MaquettePositionReceiver(recorder_queue)
+    maquette_receiver = MaquettePositionReceiver(recorder_queue, serial)
 
     # homingHandler = HomingStatusHandler()
 
