@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 import logging
+from logging.handlers import RotatingFileHandler
 import time
 import json
 from sys import platform
@@ -35,7 +36,7 @@ else:
 
 app = Flask(
     "crown", static_url_path="/"
-)  # , static_folder="/home/pi/crown/maquette/Hydraulics/code/rpi/static")
+)  # , static_folder="/home/pi/crown/Hydraulics/controller/rpi/static")
 CORS(app)
 
 
@@ -62,7 +63,7 @@ class AsyncRequest:
         self.args = args
 
     def make_request(self):
-        print(
+        logging.debug(
             f"Sending message to sculpture, command is {self.command}, to_maquette is {self.to_maquette}"
         )
         send_sculpture_message(
@@ -100,26 +101,31 @@ class AsyncRequester:
         self.timeout = timeout
         self.data_ready = False
 
-        self.listener = serial.registerListener(AsyncRequester._async_callback, self)
+        self.listener = serial.registerListener(AsyncRequester._async_callback, [self])
 
     def run(self):
         """Make all requests, wait for responses. Timeout if responses have not been
         received by the specified timeout"""
+        logging.debug("AsyncRequest - run")
         try:
             endTime = time.time() + self.timeout
             self._request()
             while not self.data_ready and time.time() < endTime:
                 time.sleep(0.15)
         except Exception as e:
-            print(f"Exception in AsyncRequester! {e}\n")
+            logging.error(f"Exception in AsyncRequester! {e}")
             traceback.print_exc()
 
+        logging.debug("Async request - finished")
         serial.freeListener(self.listener)
 
+        logging.debug("free listener finished")
+
         if self.data_ready:
+            logging.debug("Async request - have response")
             return True
         else:
-            print("No data returned, aborting\n")
+            logging.info("Timeout - No data returned, aborting\n")
             return False
 
     def _request(self):
@@ -132,6 +138,7 @@ class AsyncRequester:
     def _async_callback(
         myself, message
     ):  # callback... can't call through class so I fake it...
+        logging.info(f"Callback, response {message}")
         try:
             found_requestor = False
             for request in myself.request_list:
@@ -141,7 +148,7 @@ class AsyncRequester:
                     found_requestor = True
                     break
             if not found_requestor:
-                print(f"Could not find requestor for message {message}")
+                logging.error(f"Could not find requestor for message {message}")
             have_all_requests = True
             for request in myself.request_list:
                 if not request.have_response():
@@ -151,14 +158,14 @@ class AsyncRequester:
             # if there are no responses left, trigger wakeup of main thread.   # XXX - use select
         except Exception as e:
             myself.data_ready = False
-            logging.warning("Exception on async serial callback")
+            logging.warning("Exception on async serial callback! {e}")
             traceback.print_exc()
 
         return False
 
 
-gTowerRange = [1, 2, 3, 4]
-gJointRange = [1, 2, 3]
+gTowerRange = [0, 1, 2, 3]
+gJointRange = [0, 1, 2]
 
 
 """ Description of Serial protocol...
@@ -172,6 +179,7 @@ gJointRange = [1, 2, 3]
 
 # Sculpture
 GENERAL_STATUS_REQUEST = "s"
+INPUT_MODE_REQUEST = "i"
 JOINT_STATUS_REQUEST = "j"  # XXX not currently exposed in web api
 JOINT_LIMITS_REQUEST = "l"
 TOWER_POSITION_REQUEST = "T"
@@ -311,7 +319,7 @@ def send_sculpture_message(
         args = [args]
 
     if not to_maquette:
-        print(f"Writing <{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
+        logging.debug(f"Writing <{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
         serial.write(f"<{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
     else:
         # NB - I can't change the tower serial protocol for legacy reasons. But I can change the maquette protocol
@@ -321,20 +329,24 @@ def send_sculpture_message(
         args_local = ",".join(map(str, args))
         if args_local:
             args_local = ":" + args_local
-        print(f" Writing <m{command}{tower_local}{joint_local}{args_local}>")
+        logging.debug(f" Writing <m{command}{tower_local}{joint_local}{args_local}>")
         serial.write(f"<m{command}{tower_local}{joint_local}{args_local}>")
 
 
+@app.route("/", methods=["GET"])
+def show_index():
+    return app.send_static_file("control_panel.html")
+
 @app.route("/crown/sculpture", methods=["GET"])
 def crown_get_sculpture_state():
-    return _getSculptureState(range(1, 4))
+    return _getSculptureState(range(1, 5))
 
 
-@app.route("/crown/sculpture/towers/<int:tower_id>", methods=["GET"])
-def crown_get_tower_state():
-    if tower_id not in gTowerRange:
+@app.route("/crown/sculpture/towers/<int:tower_idx>", methods=["GET"])
+def crown_get_tower_state(tower_idx):
+    if tower_idx not in gTowerRange:
         return make_response("Invalid tower", 404)
-    response = _getSculptureState(tower_id)
+    return _getSculptureState(tower_idx)
 
 
 def _getSculptureState(towers):
@@ -348,28 +360,29 @@ def _getSculptureState(towers):
                          "running":true|false,
                          "error":true:false}"""
 
-    calls = []
     if not isinstance(towers, Iterable):
         towers = [towers]
-    for tower_id in towers:
+    
+    # First, let's set up the object that's going to collate the results
+    result_list = {}
+   
+    for tower_id in []: #towers:
+        if tower_id not in gTowerRange:
+            continue
+        calls = []
         calls.append(AsyncRequest(TOWER_POSITION_REQUEST, tower_id=tower_id))
         calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=0))
         calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=1))
         calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=2))
         calls.append(AsyncRequest(GENERAL_STATUS_REQUEST, tower_id=tower_id))
 
-    requester = AsyncRequester(calls)
-    results = requester.run()
-    if results:
-        # First, let's set up the object that's going to collate the results
-        result_list = {}
-        for tower_id in towers:
-            if tower_id not in gTowerRange:
-                continue
+        requester = AsyncRequester(calls)
+        results = requester.run()
+        if results:
             joint_list = []
             for joint_id in range(0, 3):
                 joint_list.append(
-                    {
+                     {
                         "id": joint_id,
                         "position": [],
                         "max": 0,
@@ -385,43 +398,49 @@ def _getSculptureState(towers):
                 "running": True,
                 "error": False,
             }
-            print(f"adding tower_id {tower_id} to resultList")
+            logger.debug(f"adding tower_id {tower_id} to resultList")
             result_list[tower_id] = tower_obj
 
-        # Now, go through all the responses, and collate them correctly
-        for call in calls:
-            # the format of the individual responses is json string data
-            result_obj = json.loads(call.response)
-            tower_id = call.tower_id
-            print(f"towerIdx is {tower_id}")
-            print(f"resultObj is {result_obj}")
-            if call.command == TOWER_POSITION_REQUEST:
-                # print("resultlist towerId is {}".format(result_list[tower_id]))
-                # print("joints 0 is {}".format(result_list[tower_id]['joints'][0]))
-                result_list[tower_id]["joints"][0]["position"] = result_obj[0]
-                result_list[tower_id]["joints"][1]["position"] = result_obj[1]
-                result_list[tower_id]["joints"][2]["position"] = result_obj[2]
-            if call.command == GENERAL_STATUS_REQUEST:
-                result_list[tower_id]["running"] = result_obj["running"]
-                result_list[tower_id]["error"] = result_obj["error"]
-                result_list[tower_id]["joints"][0]["enabled"] = result_obj["enabled"][0]
-                result_list[tower_id]["joints"][0]["homed"] = result_obj["homed"][0]
-                result_list[tower_id]["joints"][1]["enabled"] = result_obj["enabled"][1]
-                result_list[tower_id]["joints"][1]["homed"] = result_obj["homed"][1]
-                result_list[tower_id]["joints"][2]["enabled"] = result_obj["enabled"][2]
-                result_list[tower_id]["joints"][2]["homed"] = result_obj["homed"][2]
-            if call.command == JOINT_LIMITS_REQUEST:
-                joint_idx = (
-                    call.joint_id - 1
-                )  # joints 0 based. because we hate life XXX I don't have to propagate that
-                resultList[tower_id]["joints"][joint_idx]["center"] = result_obj[
-                    "center"
-                ]
-                resultList[tower_id]["joints"][joint_idx]["min"] = result_obj["min"]
-                resultList[tower_id]["joints"][joint_idx]["max"] = result_obj["max"]
+            # Now, go through all the responses, and collate them correctly
+            for call in calls:
+                # the format of the individual responses is json string data
+                result_obj = json.loads(call.response)
+                tower_id = call.tower_id
+                if call.command == TOWER_POSITION_REQUEST:
+                    # print("resultlist towerId is {}".format(result_list[tower_id]))
+                    # print("joints 0 is {}".format(result_list[tower_id]['joints'][0]))
+                    result_list[tower_id]["joints"][0]["position"] = result_obj[0]
+                    result_list[tower_id]["joints"][1]["position"] = result_obj[1]
+                    result_list[tower_id]["joints"][2]["position"] = result_obj[2]
+                if call.command == GENERAL_STATUS_REQUEST:
+                    result_list[tower_id]["running"] = result_obj["running"]
+                    result_list[tower_id]["error"] = result_obj["error"]
+                    result_list[tower_id]["joints"][0]["enabled"] = result_obj["enabled"][0]
+                    result_list[tower_id]["joints"][0]["homed"] = result_obj["homed"][0]
+                    result_list[tower_id]["joints"][1]["enabled"] = result_obj["enabled"][1]
+                    result_list[tower_id]["joints"][1]["homed"] = result_obj["homed"][1]
+                    result_list[tower_id]["joints"][2]["enabled"] = result_obj["enabled"][2]
+                    result_list[tower_id]["joints"][2]["homed"] = result_obj["homed"][2]
+                if call.command == JOINT_LIMITS_REQUEST:
+                    joint_idx = (
+                        call.joint_id - 1
+                    )  # joints 0 based. because we hate life XXX I don't have to propagate that
+                    result_list[tower_id]["joints"][joint_idx]["center"] = result_obj[
+                        "center"
+                    ]
+                    result_list[tower_id]["joints"][joint_idx]["min"] = result_obj["min"]
+                    result_list[tower_id]["joints"][joint_idx]["max"] = result_obj["max"]
+    
+    general_call = AsyncRequest(INPUT_MODE_REQUEST, to_maquette=True)
+    general_results = AsyncRequester([general_call]).run()
+    if general_results:
+        logging.debug("Results are {general_results}")
+        result_obj = json.loads(general_call.response)
+        result_list["general"] = result_obj
 
+    if result_list:
         # Spit out JSON
-        return jsonify(json.dumps(resultList))
+        return jsonify(json.dumps(result_list))
     else:
         return make_response("No data from towers", 500)
 
@@ -453,15 +472,15 @@ def _simple_web_async_request(
     return make_response("Internal error", 500)
 
 
-@app.route("/crown/sculpture/towers/<int:tower_id>/position", methods=["GET", "PUT"])
-def crown_get_tower_position(tower_id):
+@app.route("/crown/sculpture/towers/<int:tower_idx>/position", methods=["GET", "PUT"])
+def crown_get_tower_position(tower_idx):
     if method == "GET":
         """Get current position of all joints (as much as we can tell)"""
-        return _simple_web_async_request(TOWER_POSITION_REQUEST, tower_id=tower_id)
+        return _simple_web_async_request(TOWER_POSITION_REQUEST, tower_id=tower_idx)
     else:
         """Set the target values for the hydraulics. Fire and forget."""
         # XXX - I should also be able to get these values, even if I have to store them on the pi
-        if not _validate_tower(tower_id):
+        if not _validate_tower(tower_idx):
             return make_response("Must have valid tower id", 400)
         elif set("j1", "j2", "j3") not in set(request.values):
             return make_response("Must contain joint value parameters j1, j2, j3", 400)
@@ -475,19 +494,19 @@ def crown_get_tower_position(tower_id):
 
         send_sculpture_message(
             SET_CANONICAL_TARGETS_COMMAND,
-            tower_id=tower_id,
+            tower_id=tower_idx,
             joint_id=1,
             args=int(j_pos[1]),
         )
         send_sculpture_message(
             SET_CANONICAL_TARGETS_COMMAND,
-            tower_id=tower_id,
+            tower_id=tower_idx,
             joint_id=2,
             args=int(j_pos[2]),
         )
         send_sculpture_message(
             SET_CANONICAL_TARGETS__COMMAND,
-            tower_id=tower_id,
+            tower_id=tower_idx,
             joint_id=3,
             args=int(j_pos[3]),
         )
@@ -651,24 +670,26 @@ def crown_force_home(tower_id):
     return make_response("Success", 200)
 
 
-@app.route("/crown/sculpture/towers/<int:tower_id>/running", methods=["PUT"])
-def crown_set_run_state(tower_id):
+@app.route("/crown/sculpture/towers/<int:tower_idx>/running", methods=["PUT"])
+def crown_set_run_state(tower_idx):
     args = []
     centered = None
-    if "run_state" in request.values:
+    if "running" in request.values:
         onOff = (
             1
-            if request.values["run_state"] in [True, "true", 1, "on", "running"]
+            if request.values["running"] in [True, "true", 1, "on", "running"]
             else 0
         )
+        print(f"Running is {onOff}")
         args.append(onOff)
         if onOff:
-            homed = request.values.get("homed", False)
-            args.append(homed)
-            centered = request.values.get("centered", False)
-            args.append(centered)
-            print(f"Set sculpture running with home and center: homed = {homed}, centered = {centered}")
-        send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_id, args=[onOff, homed, centered])
+            # homed = request.values.get("homed", False)
+            # args.append(homed)
+            # centered = request.values.get("centered", False)
+            # args.append(centered)
+            # print(f"Set sculpture running with home and center: homed = {homed}, centered = {centered}")
+            pass
+        send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_idx, args=args)
     return make_response("Success", 200)
 
 
@@ -927,8 +948,8 @@ def crown_set_playlists():
 
 
 if platform == "linux" or platform == "linux2":
-    # logfile = '/var/log/crown/crown.log'
-    logfile = "crown.log"
+    logfile = '/var/log/crown/crown.log'
+    # logfile = "crown.log"
 elif platform == "darwin":
     logfile = "crown.log"
 
@@ -946,8 +967,6 @@ if __name__ == "__main__":
 
     time.sleep(1)  # why am I doing this?
 
-    # server = ThreadedHTTPServer(('', 5050), Handler)
-    # print('Starting server, use <Ctrl-C> to stop')
     try:
         serve_forever(5050)
     except KeyboardInterrupt:

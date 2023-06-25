@@ -1,0 +1,14 @@
+ 
+Compiling and downloading code for the mega...
+
+The code running on the mega uses the arduino libraries for convenience.
+
+In order to compile and download them, use the command line arduino
+tool - arduino-cli.
+
+For instance,
+ arduino-cli compile --fqbn arduino:avr:mega mega.ino
+ arduino-cli upload --port /dev/ttyACM0 --fqbn arduino:avr:mega .
+ 
+or
+ arduino-cli compile --fqbn arduino:avr:mega -v --clean mega.ino

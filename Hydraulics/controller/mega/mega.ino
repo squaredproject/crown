@@ -81,10 +81,10 @@ typedef enum {
    MODE_OFF = 0,
    MODE_MAQUETTE = 1,
    MODE_CONDUCTOR = 2,
-   MODE_PLAYBACK = 3,
+   MODE_MANUAL = 3,
 } ControllerMode;
 ControllerMode mode = MODE_OFF;
-static const char *modeNames[] = {"OFF", "MAQUETTE", "CONDUCTOR", "PLAYBACK"};
+static const char *modeNames[] = {"OFF", "MAQUETTE", "CONDUCTOR", "MANUAL"};
 
 // Block of calibration data
 // Joint enabled is whether the joint is currently enabled.
@@ -135,14 +135,14 @@ static bool serialBroadcast = true;  // whether we broadcast the position data b
 // Pin definitions
 #define SWITCH_CONDUCTOR_PIN 38
 #define SWITCH_MAQUETTE_PIN 40
-#define SWITCH_PLAYBACK_PIN 36
+#define SWITCH_MANUAL_PIN 36
 #define SWITCH_OFF_PIN      42   // XXX FIXME NO PHYSICAL ATTACHMENT!!
 
 // Physical switch controlling mode
 static void SwitchInit();
 static int SwitchGetMode();
 static void setModeFromSwitch();
-static const char *modeStr[] = {"OFF", "IMMEDIATE", "POSE", "PLAYBACK"};
+static const char *modeStr[] = {"OFF", "IMMEDIATE", "POSE", "MANUAL"};
 
 
 // Reading commands and parsing bus commands
@@ -332,7 +332,7 @@ static void SwitchInit()
     Serial.println("Initializing all pins to INPUT_PULLUP");
     pinMode(SWITCH_CONDUCTOR_PIN, INPUT_PULLUP);
     pinMode(SWITCH_MAQUETTE_PIN, INPUT_PULLUP);
-    pinMode(SWITCH_PLAYBACK_PIN, INPUT_PULLUP);
+    pinMode(SWITCH_MANUAL_PIN, INPUT_PULLUP);
     pinMode(SWITCH_OFF_PIN,      INPUT_PULLUP);
 }
 
@@ -342,7 +342,7 @@ static int SwitchGetMode()
     if (!digitalRead(SWITCH_OFF_PIN)) return MODE_OFF;
     if (!digitalRead(SWITCH_CONDUCTOR_PIN)) return MODE_CONDUCTOR;
     if (!digitalRead(SWITCH_MAQUETTE_PIN)) return MODE_MAQUETTE;
-    if (!digitalRead(SWITCH_PLAYBACK_PIN)) return MODE_PLAYBACK;
+    if (!digitalRead(SWITCH_MANUAL_PIN)) return MODE_MANUAL;
 
     return MODE_OFF;
 }
@@ -699,7 +699,7 @@ static void parseLocalCommand(char *buf, int len) {
     log_debug("local command!!!");
     Serial.println(c);
    
-    Serial.println("switching on char..."); 
+    // Serial.println("switching on char..."); 
     switch (c) {
     case 'D':  // set debug level
       Serial.println("Setting debug level"); 
@@ -716,17 +716,12 @@ static void parseLocalCommand(char *buf, int len) {
       Serial.println("<!mD+>");
       break; 
     case 's': // Get status
-        /* FIXME XXX
         Serial.println("Getting status");
         // Note that I'm being very careful here not to overrun outBuf, which can't be very big because we have a small stack.
-        // sprintf(outBuf, "<!ms{\"mode\": \"%s\", \"poseState\": %d, \"towerState\": [", modeStr[mode], poseState);
+        // sprintf(outBuf, "<!ms{\"mode\": \"%s\", \"towerState\": ", modeStr[mode]);
         Serial.print(outBuf);
         for (int i=0; i<NUM_TOWERS; i++) {
-            // XXX NB - I'm splitting this printf up into several parts because the Arduino folks, in their infinite
-            // wisdom, have decided that sprintf should not support float formatting. Serial.print(), however, does. Mfkers.
-            sprintf(outBuf, "], \"jointCenter\": [%d, %d, %d], \"jointLimits\": [[%d,%d],[%d,%d],[%d,%d]], \"towerEnabled\":%s, \"jointEnabled\" : [%s, %s, %s]},",
-                                maquetteJointCenter[i][0], maquetteJointCenter[i][1], maquetteJointCenter[i][2],
-                                maquetteJointRange[i][0][0], maquetteJointRange[i][0][1], maquetteJointRange[i][1][0], maquetteJointRange[i][1][1], maquetteJointRange[i][2][0], maquetteJointRange[i][2][1],
+            sprintf(outBuf, " [\"towerEnabled\":%s, \"jointEnabled\" : [%s, %s, %s]],",
                                 (towerEnabled[i] ? "true" : "false"),
                                 (jointEnabled[i][0] ? "true" : "false"),
                                 (jointEnabled[i][1] ? "true" : "false"),
@@ -736,9 +731,12 @@ static void parseLocalCommand(char *buf, int len) {
                 outBuf[strlen(outBuf)-1] = '\0'; // remove trailing ','
             Serial.print(outBuf);    
         }
-        Serial.println("]}>");
-        */
-        break;  
+        Serial.println("}>");
+        break;
+    case 'i':  // Get input 
+        sprintf(outBuf, "<!mi{\"mode\": \"%s\"}>", modeNames[mode]);
+        Serial.print(outBuf);
+        break; 
     case 'E': // enable/disable tower
       ntokens = sscanf(ptr, "%hhu:%hhu", &towerId, &val);
       if (ntokens != 2) {
@@ -851,7 +849,7 @@ static void parseTowerCommand(char *buf, int len) {
         break;
     case 't':
         // Set tower position. This may or may not pass, depending on mode
-        if (mode == MODE_MAQUETTE || mode == MODE_PLAYBACK) {
+        if (mode == MODE_MAQUETTE || mode == MODE_MANUAL) {
             if (positionIsSafe(buf)) {
                 sendPosition(buf);
             }

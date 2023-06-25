@@ -12,7 +12,7 @@ use_hostnames = True
 CROWN_MAQUETTE_PORT = 5051
 # CROWN_CONTROLLER_ADDR = "10.0.0.2"
 CROWN_CONTROLLER_ADDR = "127.0.0.1"
-CROWN_CONTROLLER_NAME = "pi-hydraulics.local"
+CROWN_CONTROLLER_NAME = "hydraulics.local"
 
 class MaquettePositionHandler:
     ''' Runs on the Maquette.

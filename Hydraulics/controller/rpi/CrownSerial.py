@@ -54,6 +54,7 @@ def run():
             if ser in avail_read:
                 resp = checkForResponse()
                 if resp:
+                    logging.debug(f"SERIAL - have response {resp}")
                     routeResponse(resp)
             while (
                 writeQueue.qsize() > 0
@@ -85,6 +86,7 @@ def serial_open():
 def registerListener(callback, args, bare_response=True):
     global listenerId
     global listeners
+    logging.debug(f"Register listener - args are {args}")
     listenerMutex.acquire()
     callbackId = listenerId
     listenerId = listenerId + 1
@@ -115,6 +117,7 @@ def checkForResponse():
     command_finished = False
     c = ser.read(1)
     while c:
+        logging.debug(f"Serial char {c}")
         if (not in_command) and c == COMMAND_START_CHAR:
             in_command = True
             command = []
@@ -127,7 +130,7 @@ def checkForResponse():
 
         if not command_finished and len(command) >= MAX_COMMAND_LEN:
             in_command = False
-            print(f"Exceeded maximum size of command {command}, resetting")
+            logging.error(f"Serial: Exceeded maximum size of command {command}, resetting")
             command = []
         if command_finished:
             break
@@ -142,14 +145,21 @@ def checkForResponse():
 
 def routeResponse(response):
     listenerMutex.acquire()
-    bareCommand = response[1:-1]  # strip '<' ..'>'
-    for key in listeners:
-        listener = listeners[key]
-        if listener["bare_response"]:
-            consume = listener["callback"](*listener["args"], bareCommand)
-        else:
-            consume = listener["callback"](*listener["args"], response) 
-        if consume:
-            break
-
-    listenerMutex.release()
+    try: 
+        bareCommand = response[1:-1]  # strip '<' ..'>'
+        for key in listeners:
+            listener = listeners[key]
+            if listener["bare_response"]:
+                logging.debug("Calling callback with bare command")
+                logging.debug(f"Callback is {listener['callback']}")
+                logging.debug(f"Args are {listener['args']}")
+                consume = listener["callback"](*listener["args"], bareCommand)
+            else:
+                logging.debug("Calling callback with full response")
+                consume = listener["callback"](*listener["args"], response) 
+            if consume:
+                break
+    except Exception as e:
+        logging.error(f"Serial: Exception in callback {e}")
+    finally:
+        listenerMutex.release()
