@@ -934,7 +934,6 @@ static void parseTowerCommand(char *buf, int len) {
         
 static void Write485(char *buf)
 {
-    Serial.print("writing to 485: ");
     Serial.println(buf);
     fprintf(NETWORKFILE, "%s\n", buf);
 }

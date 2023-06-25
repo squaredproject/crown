@@ -4,9 +4,11 @@ from sys import platform
 from threading import Thread, Lock
 import logging
 import time
-from multiprocessing import Queue
-import queue
-
+import multiprocessing
+import multiprocessing.queues
+import socket
+import os
+# import queue
 
 if platform == "linux" or platform == "linux2":
     tty = "/dev/ttyACM0"
@@ -15,24 +17,63 @@ elif platform == "darwin":
 
 ser = None
 baudrate = 115200
-timeout = 0.1
+timeout = 0.01
 
 listeners = {}  # hash of registered listeners
 listenerId = 0  # id to be given to next registered listener
-listenerMutex = Lock()  # mutex for hashlist
+listenerMutex = None  # mutex for hashlist
 
 serialThread = None
 
 running = True
 
-writeQueue = Queue()
+# PollableQueue class thanks to O'Reilly
+class PollableQueue(multiprocessing.queues.Queue):
+    def __init__(self):
+        print("POLLABLE QUEUE CTOR")
+        super().__init__(ctx=multiprocessing.get_context())
+        # Create a pair of connected sockets
+        if os.name == 'posix':
+            self._putsocket, self._getsocket = socket.socketpair()
+        else:
+            # Compatibility on non-POSIX systems
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.bind(('127.0.0.1', 0))
+            server.listen(1)
+            self._putsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._putsocket.connect(server.getsockname())
+            self._getsocket, _ = server.accept()
+            server.close()
+        print(f"putsocket is {self._putsocket}, getsocket is {self._getsocket}")
 
+    def fileno(self):
+        return self._getsocket.fileno()
+
+    def put(self, item):
+        super().put(item)
+        self._putsocket.send(b'x')
+
+    def get(self):
+        self._getsocket.recv(1)
+        return super().get()
+
+
+writeQueue = None
 
 def init():
+    print("SER INIT")
     global ser
+    global writeQueue
+    global listenerMutex
+    global running
     ser = serial.Serial(None, baudrate, timeout=timeout)
     ser.nonblocking()
-    serialThread = Thread(target=run)
+    writeQueue = multiprocessing.Queue()
+    # print(f"writequeue put socket is {writeQueue._putsocket}")
+    print(f"writequeue is {writeQueue}")
+    listenerMutex = Lock()
+    running = True
+    serialThread = Thread(target=run, args=(writeQueue, listenerMutex, running))
     serialThread.start()
 
 
@@ -44,8 +85,7 @@ def shutdown():
         serialThread.join(1)
 
 
-def run():
-    global running
+def run(writeQueue, listenerMutex, running):
     serial_open()
     while running:
         try:
@@ -56,9 +96,10 @@ def run():
                 if resp:
                     logging.debug(f"SERIAL - have response {resp}")
                     routeResponse(resp)
+            # if writeQueue in avail_read:
             while (
                 writeQueue.qsize() > 0
-            ):  # XXX do this in a select - can look for writes and reads simultaneously
+            ):
                 item = writeQueue.get()
                 ser.write(bytes(item, "utf-8"))
 
@@ -138,7 +179,12 @@ def checkForResponse():
             c = ser.read(1)
 
     if command_finished:
-        return b"".join(command).decode("utf-8")
+        retVal = None
+        try: 
+            retVal = b"".join(command).decode("utf-8")
+        except:
+            logging.error(f"Serial: Could not decode {command}")
+        return retVal
     else:
         return None
 
