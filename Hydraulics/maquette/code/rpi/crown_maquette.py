@@ -760,6 +760,7 @@ def crown_get_maquette_state():
     else:
         """Only valid POST currently is to set the mode"""
         mode = request.values.get("mode")
+        logging.debug(f"Set mode input is {mode}")
         if mode:  # in request.values:
             # mode = request.values["mode"]
             modeInt = -1
@@ -772,7 +773,7 @@ def crown_get_maquette_state():
             elif mdoe == "PLAYBACK":
                 modeInt = 3
             if modeInt >= 0:
-                print(f"Setting mode to {modeInt}")
+                logging.debug(f"Setting mode to {modeInt}")
                 return _simple_web_async_request(
                     SET_MAQUETTE_MODE_COMMAND, args=[modeInt], to_maquette=True
                 )
@@ -918,8 +919,8 @@ def crown_set_playlists():
 
 
 if platform == "linux" or platform == "linux2":
-    # logfile = '/var/log/crown/crown.log'
-    logfile = "crown.log"
+    logfile = '/var/log/crown/crown.log'
+    # logfile = "crown.log"
 elif platform == "darwin":
     logfile = "crown.log"
 

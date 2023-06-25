@@ -28,7 +28,7 @@ class MaquettePositionHandler:
      
     def handle_serial_data(self, msg_queue, data):
         # XXX if I'm relaying, I should be relaying canonical data...
-        print(f"Received data, {data}")
+        # print(f"Received data, {data}")
         if len(data) > 4 and data[3] == "t":  # XXX check that this is correct
             msg_queue.put(data)
 
@@ -73,7 +73,8 @@ class MaquetteRelay:
                     print(f"Maquette relay - send message {msg}")
                     sender_socket.send(msg.encode("UTF-8"))
             except OSError as e:
-                # print(f"Socket exception : {e}")
+                print(f"Socket exception : {e}")
+                time.sleep(0.5)
                 if socket_connected:
                     sender_socket.close()
                 sender_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

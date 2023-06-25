@@ -791,8 +791,8 @@ static void setSculptureTargetPosition(int16_t *positionArray) {
         }
     }
     sprintf(ptr, "\r\n");
-    fprintf(NETWORKFILE, modelString);
-    // Serial.print(modelString);
+    fprintf(NETWORKFILE, modelString);  // NB - this goes directly to the 485 port
+    Serial.print(modelString);          // NB - this goes back to the rpi serial port, where it's supposed to be relayed to the controller
 
     if (debug) {
       debug_info(modelString);
@@ -1598,7 +1598,6 @@ static void parseTowerCommand(char *buf, int len) {
 
 static void Write485(char *buf)
 {
-    Serial.print("writing to 485: ");
     Serial.println(buf);
     fprintf(NETWORKFILE, buf);
 }
