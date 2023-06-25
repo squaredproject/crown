@@ -1,3 +1,4 @@
+import logging
 import socket
 from multiprocessing import Process, Queue, Pipe
 from multiprocessing.connection import wait
@@ -12,7 +13,7 @@ use_hostnames = True
 CROWN_MAQUETTE_PORT = 5051
 # CROWN_CONTROLLER_ADDR = "10.0.0.2"
 CROWN_CONTROLLER_ADDR = "127.0.0.1"
-CROWN_CONTROLLER_NAME = "pi-hydraulics.local"
+CROWN_CONTROLLER_NAME = "hydraulics.local"
 
 class MaquettePositionHandler:
     ''' Runs on the Maquette.
@@ -22,17 +23,12 @@ class MaquettePositionHandler:
 
     def __init__(self):
         self.msg_queue = Queue()
-<<<<<<< Updated upstream
-        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self, self.msg_queue), False)
-=======
-        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self.msg_queue,))
->>>>>>> Stashed changes
+        self.callback_id = CrownSerial.registerListener(self.handle_serial_data, (self.msg_queue,), False)
         self.relay = MaquetteRelay(self.msg_queue)
      
     def handle_serial_data(self, msg_queue, data):
-        print(f"self is {self}")
-        print(f"msg_queue is {msg_queue}")
-        print(f"data is {data}")
+        # XXX if I'm relaying, I should be relaying canonical data...
+        print(f"Received data, {data}")
         if len(data) > 4 and data[3] == "t":  # XXX check that this is correct
             msg_queue.put(data)
 
