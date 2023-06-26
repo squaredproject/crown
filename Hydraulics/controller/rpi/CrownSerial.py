@@ -86,16 +86,23 @@ def shutdown():
 
 
 def run(writeQueue, listenerMutex, running):
+    logger = logging.getLogger("Serial")
+    handler = logging.handlers.RotatingFileHandler(filename = "/var/log/crown/serial.log", maxBytes=100000)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    
     serial_open()
     while running:
         try:
             # avail_read,avail_write,avail_error=select.select([ser, writeQueue], [], [], timeout)
             avail_read, avail_write, avail_error = select.select([ser], [], [], timeout)
             if ser in avail_read:
-                resp = checkForResponse()
+                resp = checkForResponse(logger)
                 if resp:
-                    logging.debug(f"SERIAL - have response {resp}")
-                    routeResponse(resp)
+                    logger.debug(f"Have response {resp}")
+                    routeResponse(resp, logger)
             # if writeQueue in avail_read:
             while (
                 writeQueue.qsize() > 0
@@ -127,7 +134,7 @@ def serial_open():
 def registerListener(callback, args, bare_response=True):
     global listenerId
     global listeners
-    logging.debug(f"Register listener - args are {args}")
+    logging.getLogger("Crown").debug(f"Register listener - args are {args}")
     listenerMutex.acquire()
     callbackId = listenerId
     listenerId = listenerId + 1
@@ -152,13 +159,13 @@ COMMAND_START_CHAR = b"<"
 COMMAND_END_CHAR = b">"
 
 
-def checkForResponse():
+def checkForResponse(logger):
     global command
     global in_command
     command_finished = False
     c = ser.read(1)
     while c:
-        logging.debug(f"Serial char {c}")
+        logger.debug(f"Serial char {c}")
         if (not in_command) and c == COMMAND_START_CHAR:
             in_command = True
             command = []
@@ -171,7 +178,7 @@ def checkForResponse():
 
         if not command_finished and len(command) >= MAX_COMMAND_LEN:
             in_command = False
-            logging.error(f"Serial: Exceeded maximum size of command {command}, resetting")
+            logger.error(f"Exceeded maximum size of command {command}, resetting")
             command = []
         if command_finished:
             break
@@ -183,29 +190,29 @@ def checkForResponse():
         try: 
             retVal = b"".join(command).decode("utf-8")
         except:
-            logging.error(f"Serial: Could not decode {command}")
+            logger.error(f"Could not decode {command}")
         return retVal
     else:
         return None
 
 
-def routeResponse(response):
+def routeResponse(response, logger):
     listenerMutex.acquire()
     try: 
         bareCommand = response[1:-1]  # strip '<' ..'>'
         for key in listeners:
             listener = listeners[key]
             if listener["bare_response"]:
-                logging.debug("Calling callback with bare command")
-                logging.debug(f"Callback is {listener['callback']}")
-                logging.debug(f"Args are {listener['args']}")
+                logger.debug("Calling callback with bare command")
+                logger.debug(f"Callback is {listener['callback']}")
+                logger.debug(f"Args are {listener['args']}")
                 consume = listener["callback"](*listener["args"], bareCommand)
             else:
-                logging.debug("Calling callback with full response")
+                logger.debug("Calling callback with full response")
                 consume = listener["callback"](*listener["args"], response) 
             if consume:
                 break
     except Exception as e:
-        logging.error(f"Serial: Exception in callback {e}")
+        logger.error(f"Serial: Exception in callback {e}")
     finally:
         listenerMutex.release()

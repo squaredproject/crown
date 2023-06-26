@@ -63,7 +63,7 @@ class AsyncRequest:
         self.args = args
 
     def make_request(self):
-        logging.debug(
+        logger.debug(
             f"Sending message to sculpture, command is {self.command}, to_maquette is {self.to_maquette}"
         )
         send_sculpture_message(
@@ -106,26 +106,26 @@ class AsyncRequester:
     def run(self):
         """Make all requests, wait for responses. Timeout if responses have not been
         received by the specified timeout"""
-        logging.debug("AsyncRequest - run")
+        logger.debug("AsyncRequest - run")
         try:
             endTime = time.time() + self.timeout
             self._request()
             while not self.data_ready and time.time() < endTime:
                 time.sleep(0.15)
         except Exception as e:
-            logging.error(f"Exception in AsyncRequester! {e}")
+            logger.error(f"Exception in AsyncRequester! {e}")
             traceback.print_exc()
 
-        logging.debug("Async request - finished")
+        logger.debug("Async request - finished")
         serial.freeListener(self.listener)
 
-        logging.debug("free listener finished")
+        logger.debug("free listener finished")
 
         if self.data_ready:
-            logging.debug("Async request - have response")
+            logger.debug("Async request - have response")
             return True
         else:
-            logging.info("Timeout - No data returned, aborting\n")
+            logger.info("Timeout - No data returned, aborting\n")
             return False
 
     def _request(self):
@@ -138,7 +138,7 @@ class AsyncRequester:
     def _async_callback(
         myself, message
     ):  # callback... can't call through class so I fake it...
-        logging.info(f"Callback, response {message}")
+        logger.info(f"Callback, response {message}")
         try:
             found_requestor = False
             for request in myself.request_list:
@@ -148,7 +148,7 @@ class AsyncRequester:
                     found_requestor = True
                     break
             if not found_requestor:
-                logging.error(f"Could not find requestor for message {message}")
+                logger.error(f"Could not find requestor for message {message}")
             have_all_requests = True
             for request in myself.request_list:
                 if not request.have_response():
@@ -158,7 +158,7 @@ class AsyncRequester:
             # if there are no responses left, trigger wakeup of main thread.   # XXX - use select
         except Exception as e:
             myself.data_ready = False
-            logging.warning("Exception on async serial callback! {e}")
+            logger.warning("Exception on async serial callback! {e}")
             traceback.print_exc()
 
         return False
@@ -319,7 +319,7 @@ def send_sculpture_message(
         args = [args]
 
     if not to_maquette:
-        logging.debug(f"Writing <{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
+        logger.debug(f"Writing <{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
         serial.write(f"<{tower_local}{joint_local}{command}{','.join(map(str,args))}>")
     else:
         # NB - I can't change the tower serial protocol for legacy reasons. But I can change the maquette protocol
@@ -329,7 +329,7 @@ def send_sculpture_message(
         args_local = ",".join(map(str, args))
         if args_local:
             args_local = ":" + args_local
-        logging.debug(f" Writing <m{command}{tower_local}{joint_local}{args_local}>")
+        logger.debug(f" Writing <m{command}{tower_local}{joint_local}{args_local}>")
         serial.write(f"<m{command}{tower_local}{joint_local}{args_local}>")
 
 
@@ -434,7 +434,7 @@ def _getSculptureState(towers):
     general_call = AsyncRequest(INPUT_MODE_REQUEST, to_maquette=True)
     general_results = AsyncRequester([general_call]).run()
     if general_results:
-        logging.debug("Results are {general_results}")
+        logger.debug("Results are {general_results}")
         result_obj = json.loads(general_call.response)
         result_list["general"] = result_obj
 
@@ -932,7 +932,7 @@ def crown_set_playlists():
 #            homingObject = json.loads(homingMessage[4:])
 #            HomwingStatusHandlr.homingStatus[towerId] = homingObject
 #        except ValueError:
-#            logging.error("malformed json in homing message")
+#            logger.error("malformed json in homing message")
 #
 #    def getHomingStatus(towerId):
 #        if (towerId not in gTowerRange):
@@ -948,14 +948,23 @@ def crown_set_playlists():
 
 
 if platform == "linux" or platform == "linux2":
-    logfile = '/var/log/crown/crown.log'
+    logfile = '/var/log/crown/crown_1.log'
     # logfile = "crown.log"
 elif platform == "darwin":
     logfile = "crown.log"
 
+global logger
 
 if __name__ == "__main__":
-    logging.basicConfig(filename=logfile, level=logging.DEBUG)
+    global logger
+    logger  = logging.getLogger("Crown")
+    handler = logging.handlers.RotatingFileHandler(filename=logfile, maxBytes=100000)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    logger.info("Starting Crown Controller")
+    # logging.basicConfig(filename=logfile, level=logging.DEBUG)
 
     serial.init()
 

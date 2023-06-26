@@ -98,15 +98,19 @@ class MaquettePositionReceiver:
         self.maquette_position_gatherer.start()
 
     def run(self, recording_queue, serial_queue, port, pipe):
+        logger  = logging.getLogger("Relay")
         logfile = "/var/log/crown/relay.log"
-        logging.basicConfig(filename=logfile, level=logging.INFO)
+        handler = logging.handlers.RotatingFileHandler(filename=logfile, maxBytes=100000)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
         PACKET_LEN = 180  # This is more than I am likely to be sending at a time
-        logging.info("Maquette Receiver: Creating listener socket")
         print("Maquette receiever creating listener")
         listener_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listener_socket.bind(("", port))
         listener_socket.listen()
-        logging.info("Maquette Receiver: Bound, now listening...")
+        logger.info("Maquette Receiver: Bound, now listening...")
         print("Maquette receiver bound")
         running = True
         frame = []
@@ -116,30 +120,30 @@ class MaquettePositionReceiver:
                 [listener_socket, pipe], [], [listener_socket], 0.1
             )
             if pipe in readable:  # Signal shutdown
-                logging.info("Maquette Receiver: Received signal on pipe, shutting down receiver")
+                logger.info("Maquette Receiver: Received signal on pipe, shutting down receiver")
                 running = False
                 break
 
             if listener_socket in readable:  # Connection ready
                 (client_socket, address) = listener_socket.accept()
-                logging.info(f"Maquette Receiver: Accepted client, address {address}")
+                logger.info(f"Maquette Receiver: Accepted client, address {address}")
                 accumulated_data = ""
                 while True:
                     readable, writeable, error = select.select(
                         [client_socket, pipe], [], [client_socket], 0.1
                     )
                     if pipe in readable:
-                        logging.info("Maquette Receiver: received disconnect signal")
+                        logger.info("Maquette Receiver: received disconnect signal")
                         running = False
                         break
                     if client_socket in error:
-                        logging.info("Maquette Receiver: error on receiver")
+                        logger.info("Maquette Receiver: error on receiver")
                         break
 
                     if client_socket in readable:
                         data = client_socket.recv(PACKET_LEN)
                         if len(data) > 0:
-                            logging.debug(f"Read data {data}")
+                            logger.debug(f"Read data {data}")
                             try:
                                 accumulated_data += data.decode("UTF-8")
                                 while True:
@@ -152,20 +156,21 @@ class MaquettePositionReceiver:
                                     if packet_end > 0:
                                         packet = accumulated_data[packet_start:packet_end+1]
                                         if (serial_queue.qsize() > 30):
-                                            logging.info(f"Maquette Receiver: Too much data on enet for serial queue, dropping enet packet {packet}")
+                                            logger.info(f"Maquette Receiver: Too much data on enet for serial queue, queue size {serial_queue.qsize()}, dropping enet packet {packet}")
                                         else:
-                                            logging.debug(f"Maquette Receiver: Placing packet {packet} in serial queue")
+                                            logger.info(f"Maquette Receiver: Placing packet {packet} in serial queue")
                                             serial_queue.put(packet)
                                         # if recording_queue is not None:
                                         #     print("Sending data to recorder!")
                                         #   recording_queue.put(packet)
                                         accumulated_data = accumulated_data[packet_end+1:]
                                     else:
-                                        logging.debug(f"Could not find packet end in {accumulated_data}")
+                                        logger.debug(f"Could not find packet end in {accumulated_data}")
+                                        break
                                 else:
                                     break
                             except Exception as e:
-                                logging.info(f"Error {e} attempting to decode {data} addition to {accumulated_data}")
+                                logger.info(f"Error {e} attempting to decode {data} addition to {accumulated_data}")
 
                 client_socket.close()
             # XXX - not handling socket errors!!!
