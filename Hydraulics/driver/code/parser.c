@@ -93,12 +93,12 @@ void parseCommand(uint8_t ptr) {
     /* if not our address then they ain't talking to us */
     /* should use parseInt to get multi-byte addr, but assume 0-9 for now */
     if ((c - '0') != addr) {
-      if (debug_out) {
+      /*if (debug_out) {
         putstr("\r  ");
         putchr(c);
         putstr(" != ");
         putU8(addr);
-      }
+      }*/
       cmd_len = 0;
       return; /* skip rest of command */
     }
@@ -471,10 +471,11 @@ uint8_t accumulateCommandString0(uint8_t c) {
       putstr("Error - max command length reached\n");
     }
     if (c == '>') {
-      char buf[128];
+      /* char buf[128];
       memcpy(buf, cmd0_str, cmd0_len);
       buf[cmd0_len] = '\0';
       // putstr(buf);
+      */
       return 1;
     }
   }
@@ -498,7 +499,9 @@ uint8_t accumulateCommandString1(uint8_t c) {
     if (c == '>') {
       char buf[128];
       memcpy(buf, cmd1_str, cmd1_len);
-      buf[cmd1_len] = '\0';
+      buf[cmd1_len]   = '\r';
+      buf[cmd1_len+1] = '\n';
+      buf[cmd1_len+2] = '\0';
       putstr(buf);
       return 1;
     }
