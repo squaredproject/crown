@@ -958,21 +958,18 @@ global logger
 if __name__ == "__main__":
     global logger
     logger  = logging.getLogger("Crown")
-    handler = logging.handlers.RotatingFileHandler(filename=logfile, maxBytes=100000)
+    handler = logging.handlers.RotatingFileHandler(filename=logfile, maxBytes=100000, backupCount=1)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
     logger.info("Starting Crown Controller")
-    # logging.basicConfig(filename=logfile, level=logging.DEBUG)
 
     serial.init()
 
     recorder_queue = Queue()
     recorder = CrownRecorder(recorder_queue)
     maquette_receiver = MaquettePositionReceiver(recorder_queue, serial)
-
-    # homingHandler = HomingStatusHandler()
 
     time.sleep(1)  # why am I doing this?
 

@@ -63,9 +63,11 @@ class MaquetteRelay:
                     print("Socket Connected!!")
                 ready = wait([pipe, input_queue._reader], 0.1)
                 if pipe in ready:
-                    logging.info("Shutting down Maquette Relay")
-                    running = False
-                    sender_socket.close()
+                    pipe_data = pipe.recv()
+                    if pipe_data == "shutdown":
+                        logging.info("Shutting down Maquette Relay")
+                        running = False
+                        sender_socket.close()
                 if input_queue._reader in ready:
                     msg = input_queue.get()
                     print(f"Maquette relay - send message {msg}")
@@ -100,21 +102,23 @@ class MaquettePositionReceiver:
     def run(self, recording_queue, serial_queue, port, pipe):
         logger  = logging.getLogger("Relay")
         logfile = "/var/log/crown/relay.log"
-        handler = logging.handlers.RotatingFileHandler(filename=logfile, maxBytes=100000)
+        handler = logging.handlers.RotatingFileHandler(filename=logfile, maxBytes=100000, backupCount=2)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
         PACKET_LEN = 180  # This is more than I am likely to be sending at a time
-        print("Maquette receiever creating listener")
+        print("Maquette receiver creating listener")
         listener_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listener_socket.bind(("", port))
         listener_socket.listen()
+ 
         logger.info("Maquette Receiver: Bound, now listening...")
         print("Maquette receiver bound")
         running = True
         frame = []
         accumulated_data = ""
+        mode = "mode_manual"  # Should get a message from the switch... let's see if that always comes in.
         while running:
             readable, writeable, error = select.select(
                 [listener_socket, pipe], [], [listener_socket], 0.1
@@ -133,9 +137,14 @@ class MaquettePositionReceiver:
                         [client_socket, pipe], [], [client_socket], 0.1
                     )
                     if pipe in readable:
-                        logger.info("Maquette Receiver: received disconnect signal")
-                        running = False
-                        break
+                        cmd = pipe.recv()
+                        if cmd == "shutdown":
+                            logger.info("Maquette Receiver: received disconnect signal")
+                            running = False
+                            break
+                        elif cmd in ["mode_maquette", "mode_conductor", "mode_manual"]:
+                            mode = cmd
+                            logger.info(f"Changing mode to {cmd}")
                     if client_socket in error:
                         logger.info("Maquette Receiver: error on receiver")
                         break
@@ -155,14 +164,17 @@ class MaquettePositionReceiver:
                                     packet_end = accumulated_data.find(">")
                                     if packet_end > 0:
                                         packet = accumulated_data[packet_start:packet_end+1]
-                                        if (serial_queue.qsize() > 30):
-                                            logger.info(f"Maquette Receiver: Too much data on enet for serial queue, queue size {serial_queue.qsize()}, dropping enet packet {packet}")
+                                        if mode == "mode_maquette":
+                                            if (serial_queue.qsize() > 30):
+                                                logger.info(f"Maquette Receiver: Too much data on enet for serial queue, queue size {serial_queue.qsize()}, dropping enet packet {packet}")
+                                            else:
+                                                logger.debug(f"Maquette Receiver: Placing packet {packet} in serial queue")
+                                                serial_queue.put(packet)
+                                            # if recording_queue is not None:
+                                            #     print("Sending data to recorder!")
+                                            #   recording_queue.put(packet)
                                         else:
-                                            logger.info(f"Maquette Receiver: Placing packet {packet} in serial queue")
-                                            serial_queue.put(packet)
-                                        # if recording_queue is not None:
-                                        #     print("Sending data to recorder!")
-                                        #   recording_queue.put(packet)
+                                            pass  # throw the data away if we're in the wrong mode
                                         accumulated_data = accumulated_data[packet_end+1:]
                                     else:
                                         logger.debug(f"Could not find packet end in {accumulated_data}")
@@ -170,13 +182,16 @@ class MaquettePositionReceiver:
                                 else:
                                     break
                             except Exception as e:
-                                logger.info(f"Error {e} attempting to decode {data} addition to {accumulated_data}")
+                                logger.info(f"Error {e} ")
+                    # XXX check the timeout for polling the switch status
 
                 client_socket.close()
-            # XXX - not handling socket errors!!!
         print("Shutdown receiver")
         listener_socket.close()
         pipe.close()
+
+    def switch_state_callback(response, pipe):
+        pipe.send(response)
 
     def shutdown(self):
         self.msg_pipe.send("shutdown")
