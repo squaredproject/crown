@@ -948,7 +948,7 @@ def crown_set_playlists():
 
 
 if platform == "linux" or platform == "linux2":
-    logfile = '/var/log/crown/crown_1.log'
+    logfile = '/var/log/crown/crown.log'
     # logfile = "crown.log"
 elif platform == "darwin":
     logfile = "crown.log"
