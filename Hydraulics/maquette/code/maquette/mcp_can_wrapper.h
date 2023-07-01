@@ -90,6 +90,7 @@ unsigned char mcp_can_receive(unsigned long *id, unsigned char *len,
 unsigned char mcp_can_send(unsigned long id, unsigned char ext,
                            unsigned char len, const unsigned char *buf);
 unsigned char mcp_can_check_error(void);
+unsigned char mcp_can_get_error(void);
 unsigned char mcp_can_set_mode(unsigned char mode);
 
 #ifdef __cplusplus

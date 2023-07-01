@@ -70,6 +70,10 @@ byte mcp_can_check_error(void){
   return( CAN->checkError());
 }
 
+byte mcp_can_get_error(void) {
+  return ( CAN->getError() );
+}
+
 byte mcp_can_set_mode(unsigned char mode) {
   return( CAN->setMode(mode));
 }

@@ -253,7 +253,8 @@ void log_debug(char *str);
 #define DBG_LEVEL_ERROR 1
 static const char *debugString[] = {"OFF", "ERROR", "INFO", "DEBUG"};
 
-int debug = 0;  // debug on/off
+int debug = 1;  // debug on/off
+int gSilent = 0;  // noisy/silent mode on off. This should only be set if debugging on serial port
 //#define SIMULATE_JOINTS
 
 void log_info(char *str) 
@@ -630,9 +631,9 @@ static void buttonRead(Button &button)
         button.justReleased = TRUE;
       }
       if (debug) {
-        char strBuf[256];
+        char strBuf[32];
         sprintf(strBuf, "%s button %d\n", button.justPressed ? "PRESSED" : "RELEASED", button.pin);
-        Serial.print(strBuf);
+        log_info(strBuf);
       }
     }
   }
@@ -792,18 +793,10 @@ static void setSculptureTargetPosition(int16_t *positionArray) {
     }
     sprintf(ptr, "\r\n");
     fprintf(NETWORKFILE, modelString);  // NB - this goes directly to the 485 port
-    Serial.print(modelString);          // NB - this goes back to the rpi serial port, where it's supposed to be relayed to the controller
-
-    if (debug) {
-      debug_info(modelString);
+    // XXX - the next line commented out only b/c debugging
+    if (!gSilent) {
+        Serial.print(modelString);          // NB - this goes back to the rpi serial port, where it's supposed to be relayed to the controller
     }
-}
-
-void debug_info(char *debugStr)  // XXX add formatting
-{
-    char buf[512];
-    sprintf(buf, "<!md{\"level\":\"info\", \"str\":\"%s\"}>\n", debugStr);
-    Serial.print(buf);
 }
 
 
@@ -1418,7 +1411,11 @@ static void parseMaquetteCommand(char *buf, int len) {
       Serial.print(towerId);
       Serial.println("+>"); // XXX fixme above
       break;
-        
+    case 'n':  // toggle noisy/silent. This is really only for debugging on the serial line, where the standard printfs make life unbearable
+      gSilent = 1 - gSilent;
+      Serial.print("<!mn>")
+      break;      
+   
     case 'S': // simulation. Get the position that we would be sending the towers
        sprintf(outBuf, "<!mS[[%d,%d,%d], [%d,%d,%d],[%d,%d,%d],[%d,%d,%d]]>", 
             canonicalJointPosition[0][0], canonicalJointPosition[0][1], canonicalJointPosition[0][2],
@@ -1493,7 +1490,7 @@ static void parseTowerCommand(char *buf, int len) {
         log_debug("Get tower status");
         // XXX FIXME - Unclear here if this should be towerIdx (0 based) rather than towerId (1 based)
         ret = CAN_RequestGeneralStatus(towerId);
-        sprintf(outBuf, "Get tower status returns %d\n", ret);
+        sprintf(outBuf, "Get tower status returns %d\n\r", ret);
         Serial.print(outBuf);
         break;
     case 'j':
@@ -1652,15 +1649,12 @@ static void readCAN()
  *  doing nothing other than checking for errors...
  */
 
- /*
   if (mcp_can_check_error()) {  // first let's check for errors...
-    Serial.println("Error on CAN bus!");
-    
-  } else 
-*/
-  
-  if (CAN_MSGAVAIL == mcp_can_check_receive()) {        
-    Serial.println("DATA on CAN!!");
+    char printStr[16];
+    sprintf(printStr, "Error on CAN bus: %d", mcp_can_get_error());
+    log_error(printStr);
+    debug = 0;  // XXX - just want to see this once, right now...
+  } else if (CAN_MSGAVAIL == mcp_can_check_receive()) { 
     CAN_receive();
   } 
 }
@@ -1796,7 +1790,7 @@ static void HandleCANGeneralStatus(uint8_t towerId, uint8_t *buf)
 
     CAN_BufferToStatus(buf, &canStatus);
     
-    sprintf(serialBuf, "<!x%d{\"homed\":[%s,%s,%s], \"switches\": [%d, %d, %d], \"enabled\": [%s, %s, %s], \"running\": %s,\"error\": %d}>", 
+    sprintf(serialBuf, "<!s%d{\"homed\":[%s,%s,%s], \"switches\": [%d, %d, %d], \"enabled\": [%s, %s, %s], \"running\": %s,\"error\": %d}>", 
                               towerId,
                               TF_STRING(canStatus.homed[0]), 
                               TF_STRING(canStatus.homed[1]), 

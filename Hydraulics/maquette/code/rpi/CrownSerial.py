@@ -3,7 +3,6 @@ import serial
 import select
 from sys import platform
 from threading import Thread, Lock
-import logging
 import time
 import queue
 
@@ -142,7 +141,11 @@ def checkForResponse():
             c = ser.read(1)
 
     if command_finished:
-        return b"".join(command).decode("utf-8")
+        try:
+            return b"".join(command).decode("utf-8")
+        except Exception as e:
+            print(f"Error decoding {command} - {e}")
+            return None
     else:
         return None
 

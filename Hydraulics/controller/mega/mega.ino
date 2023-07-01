@@ -39,8 +39,6 @@
 // this for sculpture tower enable/disable? If not, how do I know which
 // towers and joints are currently enabled and disabled? And shouldn't this
 // information be stored in the controller?
-// - Web page forwarding. Right now the maquette web page has all the maquette information.
-// ?? Maybe I just redirect to pi-maquette local and have a nice day?
 
 // Note on the serial protocol:
 // The serial protocol on both the RS485 line (to the driver at the sculpture arm)
@@ -1133,7 +1131,7 @@ static void HandleCANGeneralStatus(uint8_t towerId, uint8_t *buf)
     CAN_BufferToStatus(buf, &canStatus);
    
     uint8_t serialBuf[MAX_SERIAL_BUF]; 
-    snprintf(serialBuf,sizeof(serialBuf), "<!x%d{\"homed\":[%s,%s,%s], \"switches\": [%d, %d, %d], \"enabled\": [%s, %s, %s], \"running\": %s,\"error\": %d}>", 
+    snprintf(serialBuf,sizeof(serialBuf), "<!s%d{\"homed\":[%s,%s,%s], \"switches\": [%d, %d, %d], \"enabled\": [%s, %s, %s], \"running\": %s,\"error\": %d}>", 
                               towerId,
                               TF_STRING(canStatus.homed[0]), 
                               TF_STRING(canStatus.homed[1]), 
