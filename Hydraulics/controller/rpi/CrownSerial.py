@@ -61,7 +61,6 @@ class PollableQueue(multiprocessing.queues.Queue):
 writeQueue = None
 
 def init():
-    print("SER INIT")
     global ser
     global writeQueue
     global listenerMutex
@@ -87,7 +86,7 @@ def shutdown():
 
 def run(writeQueue, listenerMutex, running):
     logger = logging.getLogger("Serial")
-    handler = logging.handlers.RotatingFileHandler(filename = "/var/log/crown/serial.log", maxBytes=100000)
+    handler = logging.handlers.RotatingFileHandler(filename = "/var/log/crown/serial.log", maxBytes=100000, backupCount=1)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
