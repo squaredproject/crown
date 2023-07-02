@@ -735,9 +735,10 @@ function checkRunning(towerId, callbackfn) {
     $.ajax({
         type: 'GET',
         url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId-1),
-        data: {"running":true,
+        /* data: {"running":true,
                "homed": true 
               },
+        */
         success: function(data, status, req) {
             clearTimeout(checkRunningTimeout);
             if (data[towerId]["running"] != true 
