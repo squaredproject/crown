@@ -177,7 +177,7 @@ def checkForResponse(logger):
 
         if not command_finished and len(command) >= MAX_COMMAND_LEN:
             in_command = False
-            logger.error(f"Exceeded maximum size of command {command}, resetting")
+            logger.error(f"Exceeded maximum size of command {command}, resetting buffer")
             command = []
         if command_finished:
             break
