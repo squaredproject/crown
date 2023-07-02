@@ -645,20 +645,6 @@ function getMaquetteStatus() {
     });
 }
 
-function towerResponseToTower(towerJson, towerIdx)
-{
-    var tower = gTowers[towerIdx]
-    tower.running = towerJson.running;
-    tower.error   = towerJson.error;
-    for (var i=0; i<3; i++) {
-        tower.joints[i].pos = towerJson.joints[i].pos;
-        tower.joints[i].min = towerJson.joints[i].min;
-        tower.joints[i].max = towerJson.joints[i].max;
-        tower.joints[i].center = towerJson.joints[i].center;
-        tower.joints[i].homed  = towerJson.joints[i].homed;
-        tower.joints[i].enabled = towerJson.joints[i].enabled;
-    }
-}
 
 function setTowerCenterAndEnable(towerId) {
     setTowerCenter(towerId, true, function(tf) {
@@ -828,8 +814,7 @@ function getTowerByIdx(towerIdx){
         type: 'GET',
         url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerIdx),
         success: function(data, status, req) {
-            towerResponseToTower(data[towerIdx+1], towerIdx);
-            renderTowerInfo(towerIdx)
+            renderTowerInfo(towerIdx, data)
             },
         error: function(data, status, req) {
             console.log("Error requesting data\n");
@@ -1218,17 +1203,18 @@ function renderSculptureStatus(data)
     }
 }
 
-function renderTowerInfo(tIdx) {
-    var tower = gTowers[tIdx];
+function renderTowerInfo(tIdx, towerData) {
+    var tower = towerData;
     // XXX - sculpture mode is a whole sculpture value, but all of the towers are independent.
     // what to do here?
     // $("#T" + (idx+1) + "SculptureMode").val(tower.running);  // Check values - have I changed SculptureMode?
     // $("#t" + idx + "Status[name=error]").text(tower.error);
+    console.log("Tower is " + tower + " idx is " + tIdx);
     let towerCentered = true;
-    for (let jIdx=0; jIdx<3; jIx++) {
+    for (let jIdx=0; jIdx<3; jIdx++) {
         let joint = tower.joints[jIdx];
         let jointEnableElem = $("#T" + (tIdx+1) + "J" + (jIdx+1) + "Enable");
-        jointEnableItem.val(joint.enabled);
+        jointEnableElem.val(joint.enabled);
         setColorOnSelect(jointEnableElem);
         let jointPosElem = $("#T" + (tIdx+1) + "J" + (jIdx+1) + "Position");  // XXX - this is a slider here
         jointPosElem.val(joint.pos); 
@@ -1238,8 +1224,8 @@ function renderTowerInfo(tIdx) {
     towerCenterElem.select(towerCentered);
     setColorOnSelect(towerCenterElem);
     let towerEnabledElem = $("#T" + (tIdx+1) + "Enable");
-    towerElem.select(tower.running);
-    setColorOnSelect(towerElem);
+    towerEnabledElem.select(tower.running);
+    setColorOnSelect(towerEnabledElem);
 
     // render tower position // XXX - I need canonical values here...
     let jointAngle0 = tower.joints[0] * Math.PI/9; // XXX what are the values, really?
