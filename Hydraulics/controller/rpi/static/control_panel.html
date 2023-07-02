@@ -496,7 +496,7 @@
           <span class="towerhead">Tower 3 Position</span>
           <div>
           <div class="tower-canvas-pane">
-            <canvas id="mT3Canvas" class="tower-canvas">
+            <canvas id="T3Canvas" class="tower-canvas">
           </div>
           <div class="sculpture-tower-position-pane">
             <div class="tower-position-detail">
@@ -520,7 +520,7 @@
           <span class="towerhead">Tower 4 Position</span>
           <div>
           <div class="tower-canvas-pane">
-            <canvas id="mT4Canvas" class="tower-canvas">
+            <canvas id="T4Canvas" class="tower-canvas">
           </div>
           <div class="sculpture-tower-position-pane">
             <div class="tower-position-detail">
@@ -1245,8 +1245,8 @@ function renderTowerInfo(tIdx) {
     let jointAngle0 = tower.joints[0] * Math.PI/9; // XXX what are the values, really?
     let jointAngle1 = tower.joints[1] * Math.PI/9; // XXX what are the values, really?
     let jointAngle2 = tower.joints[2] * Math.PI/9; // XXX what are the values, really?
-    let canvas = document.getElementById("T" + (tIdx+1) + "Canvas");
-    drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);  
+    //let canvas = document.getElementById("T" + (tIdx+1) + "Canvas");
+    //drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);  
     
     /*
     var jointEnabledText = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled + "]";
