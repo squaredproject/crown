@@ -884,7 +884,6 @@ function enableMaquetteJoint(towerId, jointId, enabletf){
     
     
 
-gTowers = [];
 gRefreshStatusInterval = -1;
 maquetteMode = "off";
 
@@ -1196,7 +1195,7 @@ function renderSculptureStatus(data)
     }
 
     for (let tId=1; tId<5; tId++) {
-        let towerPanel = "#" + tId + "Control";
+        let towerPanel = "#T" + tId + "Control .tower-control-inner";
         if (data[tId]) {
             $(towerPanel).removeClass('unconnected');
             renderTowerInfo(tId-1, data[tId]);
