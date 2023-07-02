@@ -187,7 +187,7 @@ void log_debug(char *str);
 #define DBG_LEVEL_ERROR 1
 static const char *debugString[] = {"OFF", "ERROR", "INFO", "DEBUG"};
 
-int debug = 0; // DBG_LEVEL_DEBUG;  // debug on/off
+int debug = 1; // DBG_LEVEL_DEBUG;  // debug on/off
 
 void log_info(char *str) 
 {
@@ -365,7 +365,7 @@ void setup(){
   wdt_disable();  // Disable watchdog
   delay(100);
   SwitchInit();
-  // CAN_init();  // XXX - CAN is not yet in the controller box
+  CAN_init();  // XXX - CAN is not yet in the controller box
   Serial.println("Starting Controller...");
   fprintf(NETWORKFILE, "Starting Controller...\n");
   wdt_enable(WDTO_8S);
@@ -422,6 +422,8 @@ static int towerIdInRedZone = INVALID_TOWER;
 static bool positionIsSafe(const char *cmd_str) {
 
     bool positionOkay = true;
+
+    return positionOkay;
 
     // WARNING: tower and joint on the wire are 1 to N, but we want zero
     // index in this spot. 
@@ -545,31 +547,15 @@ static void handleConductorInput() {
 }
 
 
-static int timerIdx = 0;
-static unsigned long mainloopTimeout = 0;
-
 void loop() {
     
     unsigned long curTime = millis();
 
     handleSerialCommand();  // Includes position data from playback and maquette 
     handleConductorInput();
-    // readCAN();  // XXX - CAN module not physically hooked up yet
+    readCAN();  // XXX - CAN module not physically hooked up yet
     setModeFromSwitch();
     wdt_reset();  // Pat watchdog
-    
-    if (curTime > mainloopTimeout) {
-      mainloopTimeout = curTime + MAIN_LOOP_TIMEOUT_MILLIS;
-
-      timerIdx++;
-
-      if (timerIdx > 20) { // only run main control loop every 10th of a second // XXX - this is wrong, I think
-        timerIdx = 0; 
-      
-      // At the moment there really isn't much of a main loop. We're just gathering up
-      // inputs and handling them when it becomes appropriate to do so... 
-     }
-   }
 }
 
 
@@ -689,19 +675,16 @@ static void parseLocalCommand(char *buf, int len) {
     uint16_t jtarget[3];  /* joint target data */
     uint16_t jcenter[3];  /* joint center data. Raw units from the potentiometer */
     int ntokens;
-    int error = FALSE; // XXX kill this
     
     if (bufEnd <= buf) return;
     
     c = *ptr++;
-    log_debug("local command!!!");
-    Serial.println(c);
    
-    // Serial.println("switching on char..."); 
     switch (c) {
     case 'D':  // set debug level
-      Serial.println("Setting debug level"); 
-      ptr++; // XXX skipping ':', see note about parsing better globally
+      Serial.print("Setting debug level to ");
+      Serial.println(*(ptr+1)); 
+      ptr++; // NB - skipping ':', see note about parsing better globally.  XXX - test that this actually works from the website
       c = *ptr++;
       if (((c - '0') >= 0) && ((c - '0') <= 3)) {
         debug = c - '0';
@@ -787,7 +770,8 @@ static void parseLocalCommand(char *buf, int len) {
       break;
         
     default:
-      Serial.println("Couldn not find case for char");
+      Serial.print("Unknown command ");
+      Serial.println(c);
       break; 
     }
     Serial.println("Finish parse maquette command");
@@ -1096,7 +1080,7 @@ static void CAN_receive()
 
 
 
-#define MAX_SERIAL_BUF 512
+#define MAX_SERIAL_BUF 256
 
 // Translate CAN messages into a friendlier format, send them on... 
 
@@ -1126,6 +1110,8 @@ static void HandleCANJointLimits(uint8_t towerId, uint8_t jointId, uint8_t *buf)
 
 static void HandleCANGeneralStatus(uint8_t towerId, uint8_t *buf) 
 {
+    Serial.println("CAN status message received");
+
     CAN_StatusStruct canStatus;
 
     CAN_BufferToStatus(buf, &canStatus);
