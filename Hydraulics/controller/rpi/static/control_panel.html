@@ -266,6 +266,7 @@
       <div class="calibration_instructions">
       Sculpture must be calibrated before each use. To calibrate a tower, position it
       upright on (set input source to 'Manual', and use the position sliders to move the tower), and select 'Calibrate' from the drop down.
+      <button type="button" id="sculptureStatusRefresh">Refresh</button>
       </div> <!-- sculpture calibration instructions -->
       <div class="flex-container" id="sculptureTowerControlBlock">
         <div class="towerControl" id="T1Control">
@@ -937,6 +938,10 @@ function initControls() {
     console.log("init called");
     $('#mStatusRefresh').click(function() {
         requestMaquetteStatus();
+    });
+
+    $('#sculptureStatusRefresh').click(function() {
+        requestSculptureStatus();
     });
  
     $('#mStatusLive').click(function() {
