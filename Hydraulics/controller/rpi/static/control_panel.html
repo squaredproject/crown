@@ -275,6 +275,9 @@
           <button type="button" id="T1CenterEnable">Set Center and Enable</button>
           </div>
           <div>
+          <button type="button" id="T1GotoCenter">Move Tower To Center</button>
+          </div>
+          <div>
           <select id="T1Enable" class="tower-select">
             <option value="true">ENABLED</option>
             <option value="false">DISABLED</option>
@@ -311,6 +314,9 @@
           <span class="towerhead">Tower 2</span>
           <div>
           <button type="button" id="T2CenterEnable">Set Center and Enable</button>
+          </div>
+          <div>
+          <button type="button" id="T2GotoCenter">Move Tower To Center</button>
           </div>
           <div>
           <select id="T2Enable" class="tower-select">
@@ -351,6 +357,9 @@
           <button type="button" id="T3CenterEnable">Set Center and Enable</button>
           </div>
           <div>
+          <button type="button" id="T3GotoCenter">Move Tower To Center</button>
+          </div>
+          <div>
           <select id="T3Enable" class="tower-select">
             <option value="true">ENABLED</option>
             <option value="false">DISABLED</option>
@@ -387,6 +396,9 @@
           <span class="towerhead">Tower 4</span>
           <div>
           <button type="button" id="T4CenterEnable">Set Center and Enable</button>
+          </div>
+          <div>
+          <button type="button" id="T4GotoCenter">Move Tower To Center</button>
           </div>
           <div>
           <select id="T4Enable" class="tower-select">
@@ -1003,7 +1015,12 @@ function initControls() {
             setColorOnSelect($(this));
             enableSculptureTower(towerId, this.value);
         });
-    
+
+        let moveTowerToCenterId = '#T' + towerId + 'GotoCenter';
+        $(moveTowerToCenterId).click(function(){
+            moveTowerToCenter(towerId);
+        });   
+ 
         let centerEnableButtonId = '#T' + towerId + 'CenterEnable';
         $(centerEnableButtonId).click(function() {
            setTowerCenterAndEnable(towerId);
@@ -1280,9 +1297,24 @@ function enableSculptureJoint(towerId, jointId, enabletf){
     });
 }
     
+function moveTowerToCenter(towerId) {
+    setPosition(towerId, 0, 0, 0);
+}
 
-function setPosition(tid, j1, j2, j3) {
-    // PUT /crown/sculpture/tower/[tid]/position
+function setPosition(towerId, j1, j2, j3) {
+    $.ajax({
+        type: 'PUT',
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/position",
+        data: {"j1": j1,
+               "j2": j2,
+               "j3": j3},
+        success: function(data, status, req) {
+            console.log("Attempting to move tower " + towerId + " to center position");
+            },
+        error: function(data, status, req) {
+            console.log("Fail to center tower " + towerId);
+        }
+    });
 }
 
 
