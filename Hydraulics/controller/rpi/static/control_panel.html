@@ -658,7 +658,7 @@ function setTowerCenter(towerId, calibrate_tf, callbackfn=null) {
     console.log("set tower " + towerId + " center");
     $.ajax({
         type: 'PUT',
-        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerId-1) + "/center",
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + towerId + "/center",
         data: {'calibrate': calibrate_tf},  // XXX - not set up to handle in sculpture yet; make parallel to maquette
         success: function(data, status, req) {
             //checkTowerCenter(towerId); // XXX I don't know how to check the tower center, so punting here
@@ -706,7 +706,7 @@ function setRunning(towerId, callbackfn) {
     console.log("setting tower running");
     $.ajax({
         type: 'PUT',
-        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId-1) + "/running",
+        url: CROWN_SCULPTURE_BASE + "/towers/" + towerId + "/running",
         data: {"running":true,
                "homed": true,
                "centered": true
