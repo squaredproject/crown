@@ -971,7 +971,8 @@ function initControls() {
             $(enableJointId).change(function() {
                 // const id = $('#mT' + towerIdx + 'J' + jointIdx + 'Enable');
                 // const tf = $(id).find(":selected").val();
-                setOptionText(this.id, this.value=="true"? ["J" + jointIdx + " ENABLED", "J" + jointIdx + " DISABLE"] : ["J" + jointIdx + " ENABLE", "J" + jointIdx + " DISABLED"]) 
+                const jIdx = jointIdx;
+                setOptionText(this.id, this.value=="true"? ["J" + jIdx + " ENABLED", "J" + jIdx + " DISABLE"] : ["J" + jIdx + " ENABLE", "J" + jIdx + " DISABLED"]) 
                 setColorOnSelect($(this));
                 enableMaquetteJoint(towerIdx, jointIdx, $(this).val());
             });
@@ -1027,7 +1028,8 @@ function initControls() {
             let jointIdx = jIdx + 1;  // As above, joint idx in API is one-based
             let enableJointId = '#T' + towerId + 'J' + jointIdx + 'Enable';
             $(enableJointId).change(function() {
-                setOptionText(this.id, this.value=="true"? ["J" + towerId + " ENABLED", "J" + towerId + " DISABLE"] : ["J" + towerId + " ENABLE", "J" + towerId + " DISABLED"]);
+                const jId = jointIdx;
+                setOptionText(this.id, this.value=="true"? ["J" + jId + " ENABLED", "J" + jId + " DISABLE"] : ["J" + jId + " ENABLE", "J" + jId + " DISABLED"]);
                 setColorOnSelect($(this));
                 enableSculptureJoint(towerId, jointIdx, this.value);
             });
