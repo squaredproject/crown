@@ -122,11 +122,15 @@ class AsyncRequester:
         logger.debug("free listener finished")
 
         if self.data_ready:
-            logger.debug("Async request - have response")
-            return True
+            logger.debug("Async request - have all responses")
+            return len(self.request_list)
         else:
-            logger.info("Timeout - No data returned, aborting\n")
-            return False
+            logger.info("Timeout - No or incomplete data returned\n")
+            n_responses = 0
+            for request in self.request_list:
+                if request.have_response():
+                    n_responses += 1
+            return n_responses
 
     def _request(self):
         """Re-request anything that we haven't gotten a response for"""
@@ -366,74 +370,83 @@ def _getSculptureState(towers):
     # First, let's set up the object that's going to collate the results
     result_list = {}
    
-    for tower_id in []: #towers:
+    for tower_id in towers:
         if tower_id not in gTowerRange:
             continue
         calls = []
         calls.append(AsyncRequest(TOWER_POSITION_REQUEST, tower_id=tower_id))
-        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=0))
         calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=1))
         calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=2))
+        calls.append(AsyncRequest(JOINT_LIMITS_REQUEST, tower_id=tower_id, joint_id=3))
         calls.append(AsyncRequest(GENERAL_STATUS_REQUEST, tower_id=tower_id))
 
-        requester = AsyncRequester(calls)
-        results = requester.run()
-        if results:
-            joint_list = []
-            for joint_id in range(0, 3):
-                joint_list.append(
-                     {
-                        "id": joint_id,
-                        "position": [],
-                        "max": 0,
-                        "min": 0,
-                        "center": 0,
-                        "enabled": True,
-                        "homed": True,
-                    }
-                )
-            tower_obj = {
-                "tower": tower_id,
-                "joints": joint_list,
-                "running": True,
-                "error": False,
-            }
-            logger.debug(f"adding tower_id {tower_id} to resultList")
-            result_list[tower_id] = tower_obj
+    requester = AsyncRequester(calls, timeout=1.5)
+    n_results = requester.run()
+    if n_results > 0:
 
-            # Now, go through all the responses, and collate them correctly
-            for call in calls:
-                # the format of the individual responses is json string data
-                result_obj = json.loads(call.response)
-                tower_id = call.tower_id
-                if call.command == TOWER_POSITION_REQUEST:
-                    # print("resultlist towerId is {}".format(result_list[tower_id]))
-                    # print("joints 0 is {}".format(result_list[tower_id]['joints'][0]))
-                    result_list[tower_id]["joints"][0]["position"] = result_obj[0]
-                    result_list[tower_id]["joints"][1]["position"] = result_obj[1]
-                    result_list[tower_id]["joints"][2]["position"] = result_obj[2]
-                if call.command == GENERAL_STATUS_REQUEST:
-                    result_list[tower_id]["running"] = result_obj["running"]
-                    result_list[tower_id]["error"] = result_obj["error"]
-                    result_list[tower_id]["joints"][0]["enabled"] = result_obj["enabled"][0]
-                    result_list[tower_id]["joints"][0]["homed"] = result_obj["homed"][0]
-                    result_list[tower_id]["joints"][1]["enabled"] = result_obj["enabled"][1]
-                    result_list[tower_id]["joints"][1]["homed"] = result_obj["homed"][1]
-                    result_list[tower_id]["joints"][2]["enabled"] = result_obj["enabled"][2]
-                    result_list[tower_id]["joints"][2]["homed"] = result_obj["homed"][2]
-                if call.command == JOINT_LIMITS_REQUEST:
-                    joint_idx = (
-                        call.joint_id - 1
-                    )  # joints 0 based. because we hate life XXX I don't have to propagate that
-                    result_list[tower_id]["joints"][joint_idx]["center"] = result_obj[
-                        "center"
-                    ]
-                    result_list[tower_id]["joints"][joint_idx]["min"] = result_obj["min"]
-                    result_list[tower_id]["joints"][joint_idx]["max"] = result_obj["max"]
+        # Go through all the responses, and collate them correctly
+        # We note that not all the requests may have responses, for instance, if the CAN
+        # bus is not responding on one of the towers
+        for call in calls: 
+            # Skip any calls that we did not see a response to
+            if not call.have_response():
+                # XXX - would be nice to add some debug logging here
+                continue
+
+            # if the call is for a tower that we haven't yet set up, set it up now
+            tower_id = call.tower_id
+            if tower_id not in result_list:
+                joint_list = []
+                for joint_id in range(0, 3):
+                    joint_list.append(
+                        {
+                            "id": joint_id,
+                            "position": [],
+                            "max": 0,
+                            "min": 0,
+                            "center": 0,
+                            "enabled": True,
+                            "homed": True,
+                        }
+                    )
+                tower_obj = {
+                    "tower": tower_id,
+                    "joints": joint_list,
+                    "running": True,
+                    "error": False,
+                }
+                result_list[tower_id] = tower_obj
+
+            # the format of the individual responses is json string data
+            result_obj = json.loads(call.response)
+            if call.command == TOWER_POSITION_REQUEST:
+                # print("resultlist towerId is {}".format(result_list[tower_id]))
+                # print("joints 0 is {}".format(result_list[tower_id]['joints'][0]))
+                result_list[tower_id]["joints"][0]["position"] = result_obj[0]
+                result_list[tower_id]["joints"][1]["position"] = result_obj[1]
+                result_list[tower_id]["joints"][2]["position"] = result_obj[2]
+            if call.command == GENERAL_STATUS_REQUEST:
+                result_list[tower_id]["running"] = result_obj["running"]
+                result_list[tower_id]["error"] = result_obj["error"]
+                result_list[tower_id]["joints"][0]["enabled"] = result_obj["enabled"][0]
+                result_list[tower_id]["joints"][0]["homed"] = result_obj["homed"][0]
+                result_list[tower_id]["joints"][1]["enabled"] = result_obj["enabled"][1]
+                result_list[tower_id]["joints"][1]["homed"] = result_obj["homed"][1]
+                result_list[tower_id]["joints"][2]["enabled"] = result_obj["enabled"][2]
+                result_list[tower_id]["joints"][2]["homed"] = result_obj["homed"][2]
+            if call.command == JOINT_LIMITS_REQUEST:
+                joint_idx = (
+                    call.joint_id - 1
+                )  # joints 0 based. because we hate life XXX I don't have to propagate that
+                result_list[tower_id]["joints"][joint_idx]["center"] = result_obj[
+                    "center"
+                ]
+                result_list[tower_id]["joints"][joint_idx]["min"] = result_obj["min"]
+                result_list[tower_id]["joints"][joint_idx]["max"] = result_obj["max"]
     
     general_call = AsyncRequest(INPUT_MODE_REQUEST, to_maquette=True)
     general_results = AsyncRequester([general_call]).run()
-    if general_results:
+    if general_results > 0:
         logger.debug("Results are {general_results}")
         result_obj = json.loads(general_call.response)
         result_list["general"] = result_obj
