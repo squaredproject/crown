@@ -31,14 +31,12 @@ it seems that some of the files from Playa 2018 are no good.
 
 ## Running headless on a pi
 
-- Install java in /opt/java. Easy thing to do is download the ARM32 package, decompress, copy over to /opt/java.
-- Add java to your path
+- sudo apt install openjdk-8-jdk-headless
 - Execute 'compile.sh' to make the class files
 - Copy `crown.service` to `/etc/systemd/service`
 - use systemctl. sudo systemctl start crown.service
 - sudo systemctl stop, sudo systemctl enable
 - to see the logs, use `journalctl crown.service`
-- Ins
 
 ## LED Map
 
@@ -133,10 +131,3 @@ You can validate that the kernel portions are working by first doing an 'lsusb' 
 the device is showing up in USb, then doing ALSA commands to see it in hte list of Alsa midi,
 then it should show up in the java iterators.
 
-## 2023 notes
-
-Use openjdk-8-jdk-headless
-
-Ah, the excitement in 2017 of switching to a modern LX Studio. We'll be switching to cromatic now.
-
-A few 
