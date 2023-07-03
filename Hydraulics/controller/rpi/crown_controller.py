@@ -447,7 +447,7 @@ def _getSculptureState(towers):
     general_call = AsyncRequest(INPUT_MODE_REQUEST, to_maquette=True)
     general_results = AsyncRequester([general_call]).run()
     if general_results > 0:
-        logger.debug("Results are {general_results}")
+        logger.debug(f"Results are {general_results}")
         result_obj = json.loads(general_call.response)
         result_list["general"] = result_obj
 
@@ -669,8 +669,8 @@ def crown_force_home(tower_id):
     return make_response("Success", 200)
 
 
-@app.route("/crown/sculpture/towers/<int:tower_idx>/running", methods=["PUT"])
-def crown_set_run_state(tower_idx):
+@app.route("/crown/sculpture/towers/<int:tower_id>/running", methods=["PUT"])
+def crown_set_run_state(tower_id):
     args = []
     centered = None
     if "running" in request.values:
@@ -679,7 +679,7 @@ def crown_set_run_state(tower_idx):
             if request.values["running"] in [True, "true", 1, "on", "running"]
             else 0
         )
-        print(f"Running is {onOff}")
+        logger.info(f"Set running is {onOff} for tower {tower_id}")
         args.append(onOff)
         if onOff:
             # homed = request.values.get("homed", False)
@@ -688,8 +688,10 @@ def crown_set_run_state(tower_idx):
             # args.append(centered)
             # print(f"Set sculpture running with home and center: homed = {homed}, centered = {centered}")
             pass
-        send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_idx, args=args)
-    return make_response("Success", 200)
+        send_sculpture_message(SET_RUN_STATE_COMMAND, tower_id=tower_id, args=args)
+        return make_response("Success", 200)
+    else:
+        return make_response("Missing parameter running", 400)
 
 
 @app.route(

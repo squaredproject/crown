@@ -1130,7 +1130,7 @@ static void HandleCANGeneralStatus(uint8_t towerId, uint8_t *buf)
     CAN_BufferToStatus(buf, &canStatus);
    
     uint8_t serialBuf[MAX_SERIAL_BUF]; 
-    snprintf(serialBuf,sizeof(serialBuf), "<!s%d{\"homed\":[%s,%s,%s], \"switches\": [%d, %d, %d], \"enabled\": [%s, %s, %s], \"running\": %s,\"error\": %d}>", 
+    snprintf(serialBuf,sizeof(serialBuf), "<!s%d{\"homed\":[%s,%s,%s], \"switches\": [%d, %d, %d], \"enabled\": [%s, %s, %s], \"running\": %s, \"error\": %d}>", 
                               towerId,
                               TF_STRING(canStatus.homed[0]), 
                               TF_STRING(canStatus.homed[1]), 

@@ -1164,7 +1164,7 @@ function renderMaquetteStatus(status){
         // calibrated
         console.log("tower center " + idx);
         let towerCenterElem = $("#mT" + (idx+1) + "Center");
-        towerCenterElem.select(tower["calibrated"]);
+        towerCenterElem.val(tower["calibrated"].toString());
         setColorOnSelect(towerCenterElem);
         // joint enabled/disable
         for (var jIdx=0; jIdx<3; jIdx++) {
@@ -1223,10 +1223,10 @@ function renderTowerInfo(tIdx, towerData) {
         towerCentered = towerCentered && joint.homed;
     }
     let towerCenterElem = $("#T" + (tIdx+1) + "Center");
-    towerCenterElem.select(towerCentered);
+    towerCenterElem.val(towerCentered.toString());
     setColorOnSelect(towerCenterElem);
     let towerEnabledElem = $("#T" + (tIdx+1) + "Enable");
-    towerEnabledElem.select(tower.running);
+    towerEnabledElem.val(tower.running.toString());
     setColorOnSelect(towerEnabledElem);
 
     // render tower position // XXX - I need canonical values here...
@@ -1263,7 +1263,7 @@ function enableSculptureTower(towerId, tf) {
     $.ajax({
         type: 'PUT',
         url: CROWN_SCULPTURE_BASE  + "/towers/" + towerId + "/running",
-        data: {'run_state': tf},
+        data: {'running': tf},
         success: function(data, status, req) {
             console.log("Enabled sculpture tower " + towerId);
             },
@@ -1297,7 +1297,7 @@ function moveTowerToCenter(towerId) {
 function setPosition(towerId, j1, j2, j3) {
     $.ajax({
         type: 'PUT',
-        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/position",
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/targets",
         data: {"j1": j1,
                "j2": j2,
                "j3": j3},
