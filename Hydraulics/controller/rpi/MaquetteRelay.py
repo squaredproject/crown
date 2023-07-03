@@ -96,6 +96,7 @@ class MaquettePositionReceiver:
         self.maquette_position_gatherer = Process(
             target=self.run, name="Maquette Receiver", args=(recording_queue, serial_out.writeQueue, port, recv_pipe,)
         )
+        self.callback_id = serial.registerListener(self.switch_state_callback, args=[self.msg_pipe])
         logging.info("Maquette Receiver: Initialize")
         self.maquette_position_gatherer.start()
 
@@ -118,15 +119,11 @@ class MaquettePositionReceiver:
         running = True
         frame = []
         accumulated_data = ""
-        mode = "mode_manual"  # Should get a message from the switch... let's see if that always comes in.
+        mode = "MANUAL"
         while running:
             readable, writeable, error = select.select(
                 [listener_socket, pipe], [], [listener_socket], 0.1
             )
-            if pipe in readable:  # Signal shutdown
-                logger.info("Maquette Receiver: Received signal on pipe, shutting down receiver")
-                running = False
-                break
 
             if listener_socket in readable:  # Connection ready
                 (client_socket, address) = listener_socket.accept()
@@ -142,7 +139,7 @@ class MaquettePositionReceiver:
                             logger.info("Maquette Receiver: received disconnect signal")
                             running = False
                             break
-                        elif cmd in ["mode_maquette", "mode_conductor", "mode_manual"]:
+                        elif cmd in ["MAQUETTE", "CONDUCTOR", "MANUAL"]:
                             mode = cmd
                             logger.info(f"Changing mode to {cmd}")
                     if client_socket in error:
@@ -164,7 +161,7 @@ class MaquettePositionReceiver:
                                     packet_end = accumulated_data.find(">")
                                     if packet_end > 0:
                                         packet = accumulated_data[packet_start:packet_end+1]
-                                        if mode == "mode_maquette":
+                                        if mode == "MAQUETTE":
                                             if (serial_queue.qsize() > 30):
                                                 logger.info(f"Maquette Receiver: Too much data on enet for serial queue, queue size {serial_queue.qsize()}, dropping enet packet {packet}")
                                             else:
@@ -183,18 +180,23 @@ class MaquettePositionReceiver:
                                     break
                             except Exception as e:
                                 logger.info(f"Error {e} ")
-                    # XXX check the timeout for polling the switch status
-
+                
                 client_socket.close()
-        print("Shutdown receiver")
+        logger.info("Shutdown receiver")
         listener_socket.close()
         pipe.close()
 
-    def switch_state_callback(response, pipe):
-        pipe.send(response)
+    def switch_state_callback(self, pipe, response):
+        # quick parsing - this must start with !mi{"mode": 
+        if not response[0:12] == '!mi{"mode": ':
+            return
+        mode = response[13:-2]
+        self.msg_pipe.send(mode)
 
     def shutdown(self):
+        print("MAQUETTE RELAY SHUTDOWN")
         self.msg_pipe.send("shutdown")
+        serial.freeListener(self.callback_id)
         self.maquette_position_gatherer.join()
 
 

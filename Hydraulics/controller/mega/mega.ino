@@ -555,7 +555,20 @@ void loop() {
     handleConductorInput();
     readCAN();  // XXX - CAN module not physically hooked up yet
     setModeFromSwitch();
+    broadcastSwitchState(curTime);
     wdt_reset();  // Pat watchdog
+}
+
+
+void broadcastSwitchState(unsigned long curTime)
+{
+    static unsigned long broadcastTime = 0;
+    if (curTime > broadcastTime) {
+        char outBuf[32];
+        sprintf(outBuf, "<!mi{\"mode\": \"%s\"}>", modeNames[mode]);
+        Serial.print(outBuf);
+        broadcastTime = curTime + 1000;
+    }
 }
 
 

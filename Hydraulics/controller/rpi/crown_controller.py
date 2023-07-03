@@ -980,4 +980,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
 
+    maquette_receiver.shutdown()
     serial.shutdown()
+
