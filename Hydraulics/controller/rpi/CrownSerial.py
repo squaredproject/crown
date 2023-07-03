@@ -124,6 +124,7 @@ def serial_open():
             time.sleep(1)
         ser.port = tty
         ser.open()
+        ser.reset_input_buffer()
     except serial.SerialException:  # maybe serialUtil.SerialException?
         print("Failed to open serial port at " + str(tty))
 
