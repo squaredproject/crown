@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 import logging
+import logging.handlers
 import time
 import json
 from sys import platform
@@ -140,7 +141,8 @@ class AsyncRequester:
             # if there are no responses left, trigger wakeup of main thread.   # XXX - use select
         except Exception as e:
             myself.data_ready = False
-            logging.warning("Exception on async serial callback")
+            logger = logging.getLogger("Crown Serial")
+            logger.warning(f"Exception {e} on async serial callback")
             traceback.print_exc()
 
         return False
@@ -760,7 +762,8 @@ def crown_get_maquette_state():
     else:
         """Only valid POST currently is to set the mode"""
         mode = request.values.get("mode")
-        logging.debug(f"Set mode input is {mode}")
+        logger = logging.getLogger("Crown")
+        logger.info(f"Set mode input is {mode}")
         if mode:  # in request.values:
             # mode = request.values["mode"]
             modeInt = -1
@@ -773,7 +776,7 @@ def crown_get_maquette_state():
             elif mdoe == "PLAYBACK":
                 modeInt = 3
             if modeInt >= 0:
-                logging.debug(f"Setting mode to {modeInt}")
+                logger.debug(f"Setting mode to {modeInt}")
                 return _simple_web_async_request(
                     SET_MAQUETTE_MODE_COMMAND, args=[modeInt], to_maquette=True
                 )
@@ -926,7 +929,14 @@ elif platform == "darwin":
 
 
 if __name__ == "__main__":
-    logging.basicConfig(filename=logfile, level=logging.DEBUG)
+    global logger
+    logger  = logging.getLogger("Crown")
+    handler = logging.handlers.RotatingFileHandler(filename=logfile, maxBytes=100000, backupCount=1)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.info("Starting Crown Maquette Controller")
 
     serial.init()
 

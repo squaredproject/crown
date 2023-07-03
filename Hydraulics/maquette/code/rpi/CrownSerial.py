@@ -1,4 +1,5 @@
 # This is serialRouter.py
+import logging
 import serial
 import select
 from sys import platform
@@ -43,6 +44,12 @@ def shutdown():
 
 
 def run():
+    logger = logging.getLogger("Serial")
+    handler = logging.handlers.RotatingFileHandler(filename = "/var/log/crown/serial.log", maxBytes=100000, backupCount=1)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
     serial_open()
     while running:
         try:
