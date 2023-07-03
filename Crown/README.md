@@ -133,3 +133,10 @@ You can validate that the kernel portions are working by first doing an 'lsusb' 
 the device is showing up in USb, then doing ALSA commands to see it in hte list of Alsa midi,
 then it should show up in the java iterators.
 
+## 2023 notes
+
+Use openjdk-8-jdk-headless
+
+Ah, the excitement in 2017 of switching to a modern LX Studio. We'll be switching to cromatic now.
+
+A few 
