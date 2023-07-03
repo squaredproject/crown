@@ -266,6 +266,7 @@
       <div class="calibration_instructions">
       Sculpture must be calibrated before each use. To calibrate a tower, position it
       upright on (set input source to 'Manual', and use the position sliders to move the tower), and select 'Calibrate' from the drop down.
+      <button type="button" id="sculptureStatusRefresh">Refresh</button>
       </div> <!-- sculpture calibration instructions -->
       <div class="flex-container" id="sculptureTowerControlBlock">
         <div class="towerControl" id="T1Control">
@@ -273,6 +274,9 @@
           <span class="towerhead">Tower 1</span>
           <div>
           <button type="button" id="T1CenterEnable">Set Center and Enable</button>
+          </div>
+          <div>
+          <button type="button" id="T1GotoCenter">Move Tower To Center</button>
           </div>
           <div>
           <select id="T1Enable" class="tower-select">
@@ -313,6 +317,9 @@
           <button type="button" id="T2CenterEnable">Set Center and Enable</button>
           </div>
           <div>
+          <button type="button" id="T2GotoCenter">Move Tower To Center</button>
+          </div>
+          <div>
           <select id="T2Enable" class="tower-select">
             <option value="true">ENABLED</option>
             <option value="false">DISABLED</option>
@@ -351,6 +358,9 @@
           <button type="button" id="T3CenterEnable">Set Center and Enable</button>
           </div>
           <div>
+          <button type="button" id="T3GotoCenter">Move Tower To Center</button>
+          </div>
+          <div>
           <select id="T3Enable" class="tower-select">
             <option value="true">ENABLED</option>
             <option value="false">DISABLED</option>
@@ -387,6 +397,9 @@
           <span class="towerhead">Tower 4</span>
           <div>
           <button type="button" id="T4CenterEnable">Set Center and Enable</button>
+          </div>
+          <div>
+          <button type="button" id="T4GotoCenter">Move Tower To Center</button>
           </div>
           <div>
           <select id="T4Enable" class="tower-select">
@@ -483,7 +496,7 @@
           <span class="towerhead">Tower 3 Position</span>
           <div>
           <div class="tower-canvas-pane">
-            <canvas id="mT3Canvas" class="tower-canvas">
+            <canvas id="T3Canvas" class="tower-canvas">
           </div>
           <div class="sculpture-tower-position-pane">
             <div class="tower-position-detail">
@@ -507,7 +520,7 @@
           <span class="towerhead">Tower 4 Position</span>
           <div>
           <div class="tower-canvas-pane">
-            <canvas id="mT4Canvas" class="tower-canvas">
+            <canvas id="T4Canvas" class="tower-canvas">
           </div>
           <div class="sculpture-tower-position-pane">
             <div class="tower-position-detail">
@@ -632,20 +645,6 @@ function getMaquetteStatus() {
     });
 }
 
-function towerResponseToTower(towerJson, towerIdx)
-{
-    var tower = gTowers[towerIdx]
-    tower.running = towerJson.running;
-    tower.error   = towerJson.error;
-    for (var i=0; i<3; i++) {
-        tower.joints[i].pos = towerJson.joints[i].pos;
-        tower.joints[i].min = towerJson.joints[i].min;
-        tower.joints[i].max = towerJson.joints[i].max;
-        tower.joints[i].center = towerJson.joints[i].center;
-        tower.joints[i].homed  = towerJson.joints[i].homed;
-        tower.joints[i].enabled = towerJson.joints[i].enabled;
-    }
-}
 
 function setTowerCenterAndEnable(towerId) {
     setTowerCenter(towerId, true, function(tf) {
@@ -659,7 +658,7 @@ function setTowerCenter(towerId, calibrate_tf, callbackfn=null) {
     console.log("set tower " + towerId + " center");
     $.ajax({
         type: 'PUT',
-        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerId-1) + "/center",
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + towerId + "/center",
         data: {'calibrate': calibrate_tf},  // XXX - not set up to handle in sculpture yet; make parallel to maquette
         success: function(data, status, req) {
             //checkTowerCenter(towerId); // XXX I don't know how to check the tower center, so punting here
@@ -707,7 +706,7 @@ function setRunning(towerId, callbackfn) {
     console.log("setting tower running");
     $.ajax({
         type: 'PUT',
-        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId-1) + "/running",
+        url: CROWN_SCULPTURE_BASE + "/towers/" + towerId + "/running",
         data: {"running":true,
                "homed": true,
                "centered": true
@@ -736,9 +735,10 @@ function checkRunning(towerId, callbackfn) {
     $.ajax({
         type: 'GET',
         url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId-1),
-        data: {"running":true,
+        /* data: {"running":true,
                "homed": true 
               },
+        */
         success: function(data, status, req) {
             clearTimeout(checkRunningTimeout);
             if (data[towerId]["running"] != true 
@@ -815,8 +815,7 @@ function getTowerByIdx(towerIdx){
         type: 'GET',
         url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerIdx),
         success: function(data, status, req) {
-            towerResponseToTower(data[towerIdx+1], towerIdx);
-            renderTowerInfo(towerIdx)
+            renderTowerInfo(towerIdx, data)
             },
         error: function(data, status, req) {
             console.log("Error requesting data\n");
@@ -885,7 +884,6 @@ function enableMaquetteJoint(towerId, jointId, enabletf){
     
     
 
-gTowers = [];
 gRefreshStatusInterval = -1;
 maquetteMode = "off";
 
@@ -925,6 +923,10 @@ function initControls() {
     console.log("init called");
     $('#mStatusRefresh').click(function() {
         requestMaquetteStatus();
+    });
+
+    $('#sculptureStatusRefresh').click(function() {
+        requestSculptureStatus();
     });
  
     $('#mStatusLive').click(function() {
@@ -968,7 +970,8 @@ function initControls() {
             $(enableJointId).change(function() {
                 // const id = $('#mT' + towerIdx + 'J' + jointIdx + 'Enable');
                 // const tf = $(id).find(":selected").val();
-                setOptionText(this.id, this.value=="true"? ["J" + jointIdx + " ENABLED", "J" + jointIdx + " DISABLE"] : ["J" + jointIdx + " ENABLE", "J" + jointIdx + " DISABLED"]) 
+                const jIdx = jointIdx;
+                setOptionText(this.id, this.value=="true"? ["J" + jIdx + " ENABLED", "J" + jIdx + " DISABLE"] : ["J" + jIdx + " ENABLE", "J" + jIdx + " DISABLED"]) 
                 setColorOnSelect($(this));
                 enableMaquetteJoint(towerIdx, jointIdx, $(this).val());
             });
@@ -1003,7 +1006,12 @@ function initControls() {
             setColorOnSelect($(this));
             enableSculptureTower(towerId, this.value);
         });
-    
+
+        let moveTowerToCenterId = '#T' + towerId + 'GotoCenter';
+        $(moveTowerToCenterId).click(function(){
+            moveTowerToCenter(towerId);
+        });   
+ 
         let centerEnableButtonId = '#T' + towerId + 'CenterEnable';
         $(centerEnableButtonId).click(function() {
            setTowerCenterAndEnable(towerId);
@@ -1019,7 +1027,8 @@ function initControls() {
             let jointIdx = jIdx + 1;  // As above, joint idx in API is one-based
             let enableJointId = '#T' + towerId + 'J' + jointIdx + 'Enable';
             $(enableJointId).change(function() {
-                setOptionText(this.id, this.value=="true"? ["J" + towerId + " ENABLED", "J" + towerId + " DISABLE"] : ["J" + towerId + " ENABLE", "J" + towerId + " DISABLED"]);
+                const jId = jointIdx;
+                setOptionText(this.id, this.value=="true"? ["J" + jId + " ENABLED", "J" + jId + " DISABLE"] : ["J" + jId + " ENABLE", "J" + jId + " DISABLED"]);
                 setColorOnSelect($(this));
                 enableSculptureJoint(towerId, jointIdx, this.value);
             });
@@ -1186,7 +1195,7 @@ function renderSculptureStatus(data)
     }
 
     for (let tId=1; tId<5; tId++) {
-        let towerPanel = "#" + tId + "Control";
+        let towerPanel = "#T" + tId + "Control .tower-control-inner";
         if (data[tId]) {
             $(towerPanel).removeClass('unconnected');
             renderTowerInfo(tId-1, data[tId]);
@@ -1196,17 +1205,18 @@ function renderSculptureStatus(data)
     }
 }
 
-function renderTowerInfo(tIdx) {
-    var tower = gTowers[tIdx];
+function renderTowerInfo(tIdx, towerData) {
+    var tower = towerData;
     // XXX - sculpture mode is a whole sculpture value, but all of the towers are independent.
     // what to do here?
     // $("#T" + (idx+1) + "SculptureMode").val(tower.running);  // Check values - have I changed SculptureMode?
     // $("#t" + idx + "Status[name=error]").text(tower.error);
+    console.log("Tower is " + tower + " idx is " + tIdx);
     let towerCentered = true;
-    for (let jIdx=0; jIdx<3; jIx++) {
+    for (let jIdx=0; jIdx<3; jIdx++) {
         let joint = tower.joints[jIdx];
         let jointEnableElem = $("#T" + (tIdx+1) + "J" + (jIdx+1) + "Enable");
-        jointEnableItem.val(joint.enabled);
+        jointEnableElem.val(joint.enabled);
         setColorOnSelect(jointEnableElem);
         let jointPosElem = $("#T" + (tIdx+1) + "J" + (jIdx+1) + "Position");  // XXX - this is a slider here
         jointPosElem.val(joint.pos); 
@@ -1216,15 +1226,15 @@ function renderTowerInfo(tIdx) {
     towerCenterElem.select(towerCentered);
     setColorOnSelect(towerCenterElem);
     let towerEnabledElem = $("#T" + (tIdx+1) + "Enable");
-    towerElem.select(tower.running);
-    setColorOnSelect(towerElem);
+    towerEnabledElem.select(tower.running);
+    setColorOnSelect(towerEnabledElem);
 
     // render tower position // XXX - I need canonical values here...
     let jointAngle0 = tower.joints[0] * Math.PI/9; // XXX what are the values, really?
     let jointAngle1 = tower.joints[1] * Math.PI/9; // XXX what are the values, really?
     let jointAngle2 = tower.joints[2] * Math.PI/9; // XXX what are the values, really?
-    let canvas = document.getElementById("T" + (tIdx+1) + "Canvas");
-    drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);  
+    //let canvas = document.getElementById("T" + (tIdx+1) + "Canvas");
+    //drawTower(canvas, jointAngle0, jointAngle1, jointAngle2);  
     
     /*
     var jointEnabledText = "[" + tower.joints[0].enabled + "," + tower.joints[1].enabled + "," + tower.joints[2].enabled + "]";
@@ -1280,9 +1290,24 @@ function enableSculptureJoint(towerId, jointId, enabletf){
     });
 }
     
+function moveTowerToCenter(towerId) {
+    setPosition(towerId, 0, 0, 0);
+}
 
-function setPosition(tid, j1, j2, j3) {
-    // PUT /crown/sculpture/tower/[tid]/position
+function setPosition(towerId, j1, j2, j3) {
+    $.ajax({
+        type: 'PUT',
+        url: CROWN_SCULPTURE_BASE + "/towers/" + (towerId) + "/position",
+        data: {"j1": j1,
+               "j2": j2,
+               "j3": j3},
+        success: function(data, status, req) {
+            console.log("Attempting to move tower " + towerId + " to center position");
+            },
+        error: function(data, status, req) {
+            console.log("Fail to center tower " + towerId);
+        }
+    });
 }
 
 

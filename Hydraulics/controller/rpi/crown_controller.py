@@ -487,42 +487,28 @@ def _simple_web_async_request(
 
 @app.route("/crown/sculpture/towers/<int:tower_idx>/position", methods=["GET", "PUT"])
 def crown_get_tower_position(tower_idx):
-    if method == "GET":
+    if request.method == "GET":
         """Get current position of all joints (as much as we can tell)"""
         return _simple_web_async_request(TOWER_POSITION_REQUEST, tower_id=tower_idx)
     else:
         """Set the target values for the hydraulics. Fire and forget."""
+        print(f"Request values are {request.values}")
         # XXX - I should also be able to get these values, even if I have to store them on the pi
         if not _validate_tower(tower_idx):
             return make_response("Must have valid tower id", 400)
-        elif set("j1", "j2", "j3") not in set(request.values):
+        elif ("j1" not in request.values or 
+              "j2" not in request.values or
+              "j3" not in request.values):
             return make_response("Must contain joint value parameters j1, j2, j3", 400)
         # Convert -1.0 to 1.0 to -128 to 127, because the protocol doesn't do floats.
         j_pos = []
-        for i in range(1, 3):
-            j_pos[i] = float(request.values["j" + i])
-            j_pos[i] = j_pos[i] * 128
-            j_pos[i] = min(j_pos[i], 127)
-            j_pos[i] = max(j_pos[i], -128)
-
-        send_sculpture_message(
-            SET_CANONICAL_TARGETS_COMMAND,
-            tower_id=tower_idx,
-            joint_id=1,
-            args=int(j_pos[1]),
-        )
-        send_sculpture_message(
-            SET_CANONICAL_TARGETS_COMMAND,
-            tower_id=tower_idx,
-            joint_id=2,
-            args=int(j_pos[2]),
-        )
-        send_sculpture_message(
-            SET_CANONICAL_TARGETS__COMMAND,
-            tower_id=tower_idx,
-            joint_id=3,
-            args=int(j_pos[3]),
-        )
+        for i in range(1, 4):
+            send_sculpture_message(
+                SET_CANONICAL_TARGETS_COMMAND,
+                tower_id=tower_idx,
+                joint_id=i,
+                args=int(request.values["j" + str(i)]),
+            )
         return make_response("Success", 200)
 
 
@@ -742,9 +728,12 @@ def crown_set_center(tower_id):
 def crown_set_targets(tower_id):
     """Set the target values for the hydraulics. Fire and forget."""
     # XXX - I should also be able to get these values, even if I have to store them on the pi
+    print(f"Request values are {request.values}")
     if not _validate_tower(tower_id):
         return make_response("Must have valid tower id", 400)
-    elif set("j1", "j2", "j3") not in set(request.values):
+    elif ("j1" not in request.values or 
+         "j2" not in request.values or
+         "j3" not in request.values):
         return make_response("Must contain joint value parameters j1, j2, j3", 400)
     # XXX - the values here are strings, but the protocol expects ints... FIXME
     send_sculpture_message(

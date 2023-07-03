@@ -510,16 +510,31 @@ int CAN_SendAck(uint8_t cmd_to_ack) {
   return (mcp_can_send(g_txId, 1, cmdLen, cmd));
 }
 
-void CAN_BufferToPosition(uint8_t *buf, CAN_Position *pos) {
-  pos->joint1Pos = buf[CAN_DATA + 0] << 8 | buf[CAN_DATA + 1];
-  pos->joint2Pos = buf[CAN_DATA + 2] << 8 | buf[CAN_DATA + 3];
-  pos->joint3Pos = buf[CAN_DATA + 4] << 8 | buf[CAN_DATA + 5];
+void CAN_BufferToPosition(uint8_t *buf, CAN_Position *pos)
+{
+    if (buf) {
+        pos->joint1Pos = buf[CAN_DATA + 0] << 8 | buf[CAN_DATA + 1];
+        pos->joint2Pos = buf[CAN_DATA + 2] << 8 | buf[CAN_DATA + 3];
+        pos->joint3Pos = buf[CAN_DATA + 4] << 8 | buf[CAN_DATA + 5];
+    } else {
+        // No incoming buffer, mock results
+        pos->joint1Pos = 1304;
+        pos->joint2Pos = 600;
+        pos->joint3Pos = 4560;
+    }
 }
 
-void CAN_BufferToJointLimits(uint8_t *buf, CAN_Limits *limits) {
-  limits->minPos = buf[CAN_DATA + 0] << 8 | buf[CAN_DATA + 1];
-  limits->maxPos = buf[CAN_DATA + 2] << 8 | buf[CAN_DATA + 3];
-  limits->centerPos = buf[CAN_DATA + 4] << 8 | buf[CAN_DATA + 5];
+void CAN_BufferToJointLimits(uint8_t *buf, CAN_Limits *limits)
+{
+    if (buf) {
+        limits->minPos    = buf[CAN_DATA + 0] << 8 | buf[CAN_DATA + 1];
+        limits->maxPos    = buf[CAN_DATA + 2] << 8 | buf[CAN_DATA + 3];
+        limits->centerPos = buf[CAN_DATA + 4] << 8 | buf[CAN_DATA + 5]; 
+    } else {
+        limits->minPos = 200;
+        limits->maxPos = 5000;
+        limits->centerPos = 2500;
+    } 
 }
 
 void CAN_BufferToIntegrators(uint8_t *buf, CAN_Integrators *integrators) {
