@@ -69,7 +69,6 @@ def init():
     ser.nonblocking()
     writeQueue = multiprocessing.Queue()
     # print(f"writequeue put socket is {writeQueue._putsocket}")
-    print(f"writequeue is {writeQueue}")
     listenerMutex = Lock()
     running = True
     serialThread = Thread(target=run, args=(writeQueue, listenerMutex, running))

@@ -420,12 +420,13 @@ def _getSculptureState(towers):
             # the format of the individual responses is json string data
             result_obj = json.loads(call.response)
             if call.command == TOWER_POSITION_REQUEST:
-                # print("resultlist towerId is {}".format(result_list[tower_id]))
-                # print("joints 0 is {}".format(result_list[tower_id]['joints'][0]))
+                // print("Have position for tower {tower_id}")
                 result_list[tower_id]["joints"][0]["position"] = result_obj[0]
                 result_list[tower_id]["joints"][1]["position"] = result_obj[1]
                 result_list[tower_id]["joints"][2]["position"] = result_obj[2]
             if call.command == GENERAL_STATUS_REQUEST:
+                // print(f"Have general status response for tower {tower_id}")
+                // print(result_obj)
                 result_list[tower_id]["running"] = result_obj["running"]
                 result_list[tower_id]["error"] = result_obj["error"]
                 result_list[tower_id]["joints"][0]["enabled"] = result_obj["enabled"][0]
