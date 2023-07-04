@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/home/pi/crown/Crown
-ExecStart=/opt/java/bin/java -Xms256m -Xmx1g -cp "/home/pi/crown/Crown/build-tmp:/home/pi/crown/Crown/code/*" RunHeadless /home/pi/crown/Crown
+ExecStart=java -Xms256m -Xmx1g -cp "/home/pi/crown/Crown/build-tmp:/home/pi/crown/Crown/code/*" RunHeadless /home/pi/crown/Crown
 Restart=on-failure
 User=root
 
