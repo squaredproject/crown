@@ -527,42 +527,42 @@ def crown_get_set_tower_pid(tower_id):
                 SET_P_VALUE_COMMAND,
                 tower_id=tower_id,
                 joint_id=1,
-                args=request.values["joint1_P"],
+                args=int(request.values["joint1_P"]),
             )
         if "joint2_P" in request.values:
             send_sculpture_message(
                 SET_P_VALUE_COMMAND,
                 tower_id=tower_id,
                 joint_id=2,
-                args=request.values["joint2_P"],
+                args=int(request.values["joint2_P"]),
             )
         if "joint3_P" in request.values:
             send_sculpture_message(
                 SET_P_VALUE_COMMAND,
                 tower_id=tower_id,
                 joint_id=3,
-                args=request.values["joint3_P"],
+                args=int(request.values["joint3_P"]),
             )
         if "joint1_I" in request.values:
             send_sculpture_message(
                 SET_I_VALUE_COMMAND,
                 tower_id=tower_id,
                 joint_id=1,
-                args=request.values["joint1_I"],
+                args=int(request.values["joint1_I"]),
             )
         if "joint2_I" in request.values:
             send_sculpture_message(
                 SET_I_VALUE_COMMAND,
                 tower_id=tower_id,
                 joint_id=2,
-                args=request.values["joint2_I"],
+                args=int(request.values["joint2_I"]),
             )
         if "joint3_I" in request.values:
             send_sculpture_message(
                 SET_I_VALUE_COMMAND,
                 tower_id=tower_id,
                 joint_id=3,
-                args=request.values["joint3_I"],
+                args=int(request.values["joint3_I"]),
             )
         return make_response("Succcess", 200)
 
