@@ -397,6 +397,7 @@ def _getSculptureState(towers):
             # if the call is for a tower that we haven't yet set up, set it up now
             tower_id = call.tower_id
             if tower_id not in result_list:
+                logger.debug(f"Adding tower {tower_id} to results list");
                 joint_list = []
                 for joint_id in range(0, 3):
                     joint_list.append(
@@ -421,12 +422,12 @@ def _getSculptureState(towers):
             # the format of the individual responses is json string data
             result_obj = json.loads(call.response)
             if call.command == TOWER_POSITION_REQUEST:
-                # print("Have position for tower {tower_id}")
+                logger.debug(f"Have position for tower {tower_id}")
                 result_list[tower_id]["joints"][0]["position"] = result_obj[0]
                 result_list[tower_id]["joints"][1]["position"] = result_obj[1]
                 result_list[tower_id]["joints"][2]["position"] = result_obj[2]
             if call.command == GENERAL_STATUS_REQUEST:
-                # print(f"Have general status response for tower {tower_id}")
+                logger.debug(f"Have general status response for tower {tower_id}")
                 # print(result_obj)
                 result_list[tower_id]["running"] = result_obj["running"]
                 result_list[tower_id]["error"] = result_obj["error"]
@@ -439,7 +440,8 @@ def _getSculptureState(towers):
             if call.command == JOINT_LIMITS_REQUEST:
                 joint_idx = (
                     call.joint_id - 1
-                )  # joints 0 based. because we hate life XXX I don't have to propagate that
+                )  # joints 0 based
+                logger.debug(f"Have joint limits response for tower {tower_id} joints {joint_id}")
                 result_list[tower_id]["joints"][joint_idx]["center"] = result_obj[
                     "center"
                 ]
