@@ -33,7 +33,7 @@ it seems that some of the files from Playa 2018 are no good.
 
 - sudo apt install openjdk-8-jdk-headless
 - Execute 'compile.sh' to make the class files
-- Copy `crown.service` to `/etc/systemd/service`
+- Copy `crown.service` to `/etc/systemd/system`
 - use systemctl. sudo systemctl start crown.service
 - sudo systemctl stop, sudo systemctl enable
 - to see the logs, use `journalctl crown.service`
