@@ -205,6 +205,7 @@ SET_HOME_STATE_COMMAND = "w"
 SET_JOINT_ENABLE_COMMAND = "E"  # software joint enable/disable
 SET_CANONICAL_TARGETS_COMMAND = "f"
 SET_CANONICAL_JOINT_TARGETS_COMMAND = "F"
+CLEAR_ERROR_CODE_COMMAND = "e"
 
 # Maquette
 MAQUETTE_CALIBRATION_REQUEST = "c"
@@ -484,6 +485,16 @@ def _simple_web_async_request(
         print(f"Exception in simple_web_async_request! {e}\n")
         traceback.print_exc()
     return make_response("Internal error", 500)
+
+
+@app.route("/crown/sculpture/towers/<int:tower_id>/errors", methods=["PUT"])
+def crown_reset_error_code(tower_id):
+    send_sculpture_message(
+        CLEAR_ERROR_CODE_COMMAND,
+        tower_id=tower_id
+    )
+
+    return make_response("Success", 200);
 
 
 @app.route("/crown/sculpture/towers/<int:tower_idx>/position", methods=["GET", "PUT"])

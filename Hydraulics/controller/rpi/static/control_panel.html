@@ -390,6 +390,10 @@
             <option value="false">J3 DISABLED</option>
           </select>
           </div>
+          <div>
+          HW Error Code: <span id="T3ErrorCode"> </span>
+          <button type="button" id="T3ErrorCodeClear">Clear</button>
+          </div>
           </div>
         </div> <!--T3Control-->
         <div class="towerControl" id="T4Control">
@@ -646,6 +650,19 @@ function getMaquetteStatus() {
 }
 
 
+function clearTowerErrorCode(towerId) {
+    $.ajax({
+        type: 'PUT',
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + towerId + "/errors",
+        success: function(data, status, req) {
+            getTowerById(towerId);
+            },
+        error: function(data, status, req) {
+            console.log("Error requesting data\n");
+        }
+    });
+}
+
 function setTowerCenterAndEnable(towerId) {
     setTowerCenter(towerId, true, function(tf) {
         if (tf) {
@@ -804,18 +821,18 @@ function checkError(towerId, callbackfn) {
     });       
 }
 
-function getTowerByIdx(towerIdx){
-    console.log("Get tower by Idx!!\n");
-    if (towerIdx < 0 || towerIdx > 3) {
+function getTowerById(towerId){
+    console.log("Get tower by Id!!\n");
+    if (towerId < 1 || towerId > 4) {
         console.log("Bad input to get tower");
         return;
     }
     
     $.ajax({
         type: 'GET',
-        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerIdx),
+        url: CROWN_SCULPTURE_BASE  + "/towers/" + (towerId),
         success: function(data, status, req) {
-            renderTowerInfo(towerIdx, data)
+            renderTowerInfo(towerId-1, data)
             },
         error: function(data, status, req) {
             console.log("Error requesting data\n");
@@ -931,7 +948,7 @@ function initControls() {
 
     $('#sculptureEnableAll').click(function() {
         for (let tId=1; tId<5; tId++) {
-            enableSculptureTower(tId, false);
+            enableSculptureTower(tId, true);
         }
         requestSculptureStatus();
     });
@@ -1029,6 +1046,11 @@ function initControls() {
         let centerEnableButtonId = '#T' + towerId + 'CenterEnable';
         $(centerEnableButtonId).click(function() {
            setTowerCenterAndEnable(towerId);
+        });
+
+        let errorCodeClearButtonId = '#T' + towerId + 'ErrorCodeClear';
+        $(errorCodeClearButtonId).click(function() {
+           clearTowerErrorCode(towerId);
         });
 
         var centerTowerId = '#T' + towerId + 'Center';
@@ -1244,6 +1266,9 @@ function renderTowerInfo(tIdx, towerData) {
     let towerEnabledElem = $("#T" + (tIdx+1) + "Enable");
     towerEnabledElem.val(tower.running.toString());
     setColorOnSelect(towerEnabledElem);
+
+    let towerErrorCodeElem = $("#T" + (tIdx+1) + "ErrorCode");
+    towerErrorCodeElem.text(towerData["error"]);
 
     // render tower position // XXX - I need canonical values here...
     let jointAngle0 = tower.joints[0] * Math.PI/9; // XXX what are the values, really?
