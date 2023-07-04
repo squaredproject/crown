@@ -36,7 +36,7 @@ it seems that some of the files from Playa 2018 are no good.
 - Copy `crown.service` to `/etc/systemd/system`
 - use systemctl. sudo systemctl start crown.service
 - sudo systemctl stop, sudo systemctl enable
-- to see the logs, use `journalctl crown.service`
+- to see the logs, use `journalctl -u crown.service`
 
 ## LED Map
 
