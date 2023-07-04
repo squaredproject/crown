@@ -14,8 +14,8 @@
 <body>
 <div id="tabs">
    <ul>
-       <li><a href="#maquette_div">Maquette</a></li>
-       <li><a href="#sculpture_div">Sculpture</a></li>
+       <li><a id="sculpture_tab" href="#sculpture_div">Sculpture</a></li>
+       <li><a id="maquette_tab" href="#maquette_div">Maquette</a></li>
    </ul>
     <div id="maquette_div">
     <h3> Maquette </h3>
@@ -251,21 +251,20 @@
   <div id="sculpture_div">
     <h3> Sculpture </h3>
     <div id="sculpture_control">
-      <div id="sculpture_mode" class="pane sculpture-bg">
+      <div id="sculpture_buttons" class="pane sculpture-bg">
       <span class="subhead1">Sculpture Mode:<br></span>
-      <select id="sculptureMode">
-        <option value="false" selected="selected">OFF</option>
-        <option value="true">RUN</option>
-      </select>
+      <button type="button" id="sculptureEnableAll">Enable All Towers</button>
+      <button type="button" id="sculptureDisableAll">Disable All Towers</button>
       <span class="subhead1">Input Source:</span>
       <span id="sculptureInputSource"></span>
       </select>
-      </div> <!-- sculpture mode-->
+      </div> <!-- sculpture buttons-->
       <div id="sculptureTowerControl" class="pane sculpture-bg"> 
       <span class="subhead1"> Sculpture Tower Control:<br> </span>
       <div class="calibration_instructions">
-      Sculpture must be calibrated before each use. To calibrate a tower, position it
-      upright on (set input source to 'Manual', and use the position sliders to move the tower), and select 'Calibrate' from the drop down.
+      Sculpture must be calibrated before each use. To calibrate a tower, disable it (use 'Disable All Towers' button, or disable individual towers),
+      then poke pointy sticks into the hydraulic valves to center all the joints. When the tower is centered, select 'Set Center and Enable' from
+      the dropdown for the tower
       <button type="button" id="sculptureStatusRefresh">Refresh</button>
       </div> <!-- sculpture calibration instructions -->
       <div class="flex-container" id="sculptureTowerControlBlock">
@@ -284,12 +283,12 @@
             <option value="false">DISABLED</option>
           </select>
           </div>
-          <div>
+          <!-- <div>
           <select id="T1Center" class="tower-select">
             <option value="true">CALIBRATED</option>
             <option value="false">DECALIBRATED</option>
           </select>
-          </div>
+          </div> -->
           <div>
           <select id="T1J1Enable" class="tower-select">
             <option value="true">J1 ENABLED</option>
@@ -325,12 +324,12 @@
             <option value="false">DISABLED</option>
           </select>
           </div>
-          <div>
+          <!-- <div>
           <select id="T2Center" class="tower-select">
             <option value="true">CALIBRATED</option>
             <option value="false">DECALIBRATED</option>
           </select>
-          </div>
+          </div> -->
           <div>
           <select id="T2J1Enable" class="tower-select">
             <option value="true">J1 ENABLED</option>
@@ -366,12 +365,13 @@
             <option value="false">DISABLED</option>
           </select>
           </div>
-          <div>
+          <!-- <div>
           <select id="T3Center" class="tower-select">
             <option value="true">CALIBRATED</option>
             <option value="false">DECALIBRATED</option>
           </select>
           </div>
+          -->
           <div>
           <select id="T3J1Enable" class="tower-select">
             <option value="true">J1 ENABLED</option>
@@ -407,12 +407,12 @@
             <option value="false">DISABLED</option>
           </select>
           </div>
-          <div>
+          <!-- <div>
           <select id="T4Center" class="tower-select">
             <option value="true">CALIBRATED</option>
             <option value="false">DECALIBRATED</option>
           </select>
-          </div>
+          </div> -->
           <div>
           <select id="T4J1Enable" class="tower-select">
             <option value="true">J1 ENABLED</option>
@@ -928,6 +928,20 @@ function initControls() {
     $('#sculptureStatusRefresh').click(function() {
         requestSculptureStatus();
     });
+
+    $('#sculptureEnableAll').click(function() {
+        for (let tId=1; tId<5; tId++) {
+            enableSculptureTower(tId, false);
+        }
+        requestSculptureStatus();
+    });
+ 
+    $('#sculptureDisableAll').click(function() {
+        for (let tId=1; tId<5; tId++) {
+            enableSculptureTower(tId, false);
+        }
+        requestSculptureStatus();
+    });
  
     $('#mStatusLive').click(function() {
         // What happens here depends on whether we are
@@ -1212,19 +1226,21 @@ function renderTowerInfo(tIdx, towerData) {
     // $("#T" + (idx+1) + "SculptureMode").val(tower.running);  // Check values - have I changed SculptureMode?
     // $("#t" + idx + "Status[name=error]").text(tower.error);
     console.log("Tower is " + tower + " idx is " + tIdx);
-    let towerCentered = true;
+    // let towerCentered = true;
     for (let jIdx=0; jIdx<3; jIdx++) {
         let joint = tower.joints[jIdx];
         let jointEnableElem = $("#T" + (tIdx+1) + "J" + (jIdx+1) + "Enable");
-        jointEnableElem.val(joint.enabled);
+        jointEnableElem.val(joint.enabled.toString());
         setColorOnSelect(jointEnableElem);
         let jointPosElem = $("#T" + (tIdx+1) + "J" + (jIdx+1) + "Position");  // XXX - this is a slider here
         jointPosElem.val(joint.pos); 
-        towerCentered = towerCentered && joint.homed;
+        //towerCentered = towerCentered && joint.homed;
     }
+    /*
     let towerCenterElem = $("#T" + (tIdx+1) + "Center");
     towerCenterElem.val(towerCentered.toString());
     setColorOnSelect(towerCenterElem);
+    */
     let towerEnabledElem = $("#T" + (tIdx+1) + "Enable");
     towerEnabledElem.val(tower.running.toString());
     setColorOnSelect(towerEnabledElem);
