@@ -1,5 +1,6 @@
 # This is serialRouter.py
 import logging
+import logging.handlers
 import serial
 import select
 from sys import platform
@@ -19,19 +20,25 @@ timeout = 0.1
 
 listeners = {}  # hash of registered listeners
 listenerId = 0  # id to be given to next registered listener
-listenerMutex = Lock()  # mutex for hashlist
+listenerMutex = None  # mutex for hashlist
 
 serialThread = None
 
 running = True
 
-writeQueue = queue.Queue()
+writeQueue = None
 
 
 def init():
     global ser
+    global writeQueue
+    global listenerMutex
+    global running
     ser = serial.Serial(None, baudrate, timeout=timeout)
     ser.nonblocking()
+    writeQueue = queue.Queue()
+    listenerMutex = Lock()
+    running = True
     serialThread = Thread(target=run)
     serialThread.start()
 
@@ -50,6 +57,7 @@ def run():
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
+    logger.info("Starting serial thread")
     serial_open()
     while running:
         try:

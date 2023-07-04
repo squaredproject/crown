@@ -1,4 +1,5 @@
 import logging
+import logging.handlers
 import socket
 from multiprocessing import Process, Queue, Pipe
 from multiprocessing.connection import wait
@@ -8,11 +9,11 @@ import select
 import CrownSerial
 serial = CrownSerial
 
-use_hostnames = True
+use_hostnames = False
 
 CROWN_MAQUETTE_PORT = 5051
-# CROWN_CONTROLLER_ADDR = "10.0.0.2"
-CROWN_CONTROLLER_ADDR = "127.0.0.1"
+CROWN_CONTROLLER_ADDR = "10.0.0.2"
+# CROWN_CONTROLLER_ADDR = "127.0.0.1"
 CROWN_CONTROLLER_NAME = "hydraulics.local"
 
 class MaquettePositionHandler:
@@ -51,6 +52,13 @@ class MaquetteRelay:
         self.maquette_relay_process.start()
 
     def run(self, input_queue, pipe, port):
+        logger  = logging.getLogger("Relay")
+        logfile = "/var/log/crown/relay.log"
+        handler = logging.handlers.RotatingFileHandler(filename=logfile, maxBytes=100000, backupCount=2)
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
         running = True
         sender_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         socket_connected = False
@@ -62,18 +70,18 @@ class MaquetteRelay:
                     else:
                         sender_socket.connect((CROWN_CONTROLLER_ADDR, port))
                     socket_connected = True
-                    print("Socket Connected!!")
+                    logger.info("Socket Connected!!")
                 ready = wait([pipe, input_queue._reader], 0.1)
                 if pipe in ready:
-                    print("Shutting down Maquette Relay")
+                    logger.info("Shutting down Maquette Relay")
                     running = False
                     sender_socket.close()
                 if input_queue._reader in ready:
                     msg = input_queue.get()
-                    print(f"Maquette relay - send message {msg}")
+                    logger.debug(f"Maquette relay - send message {msg}")
                     sender_socket.send(msg.encode("UTF-8"))
             except OSError as e:
-                print(f"Socket exception : {e}")
+                logger.warn(f"Socket exception : {e}")
                 time.sleep(0.5)
                 if socket_connected:
                     sender_socket.close()

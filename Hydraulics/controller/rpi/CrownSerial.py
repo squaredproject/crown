@@ -3,6 +3,7 @@ import select
 from sys import platform
 from threading import Thread, Lock
 import logging
+import logging.handlers
 import time
 import multiprocessing
 import multiprocessing.queues
@@ -68,7 +69,6 @@ def init():
     ser = serial.Serial(None, baudrate, timeout=timeout)
     ser.nonblocking()
     writeQueue = multiprocessing.Queue()
-    # print(f"writequeue put socket is {writeQueue._putsocket}")
     listenerMutex = Lock()
     running = True
     serialThread = Thread(target=run, args=(writeQueue, listenerMutex, running))
