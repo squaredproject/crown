@@ -38,6 +38,14 @@ it seems that some of the files from Playa 2018 are no good.
 - sudo systemctl stop, sudo systemctl enable
 - to see the logs, use `journalctl -u crown.service`
 
+## Little hack for missing IP addresses
+
+We later learned RPIs have unfortunate issues with missing IP addresses and UDP. Fix it this way:
+```
+sudo sh -c 'sudo echo "net.ipv4.neigh.eth0.unres_qlen=1" >>  /etc/sysctl.conf '
+sudo sh -c 'echo "net.ipv4.neigh.eth0.unres_qlen_bytes=4096" >>  /etc/sysctl.conf '
+```
+
 ## LED Map
 
 The IP addresses of the NDBs are set in data/crown_clusters.json. There are only 5, and they each have their
