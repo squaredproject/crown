@@ -2,9 +2,47 @@ Placeholder readme file for creation of hydraulics section of crown
 
 This directory has the following subdirectories:
 * conductor - sources for box that sends harmonious wave forms to the four towers
+* controller - sources for the box that hosts the website, and selects between different inputs
+  (conductor, maquette, or manual configuration from the website)
 * driver - sources for the driver boards that directly control the hydraulics valves
 * knuckleboard - sources for the board at the knuckle that senses position and limits
 * network - sources for networking code
 * maquette - sources for mini-crown controller
 * architecture - overall architecture documentation and information
 * hydraulics - information on pumps, valves, etc
+
+Things that need doing:
+* CAN bus work:
+   - There is currently no way to clear errors on the bus. According to the documentation
+   for the MCP2515 chip that controls the bus, bus errors should clear themselves after
+   a period with no transmission on the bus. This may or may not be the case - the errors
+   that I've seen so far are termination errors or wiring errors that don't really go away.
+   - The request/response protocol I'm using with CAN takes its form from the original
+   fire-and-forget 485 protocol (which is still the core protocol in the system.) This meant
+   that I didn't use unique request/response ids, which means that requestors can eat someone
+   else's response, and hilarity ensues. This is currently causing problems when asking for
+   status of the sculpture - sometimes you get all the data, but often you don't.
+   - The bus needs to be properly terminated to work.
+   - Keep the CAN bus runs between the towers as short as possible. It's only rated for 130ft,
+   and that's with the correct wires which we're not using.
+* Base stupidity:
+   - The control ribbon cables on the are now ordered reverse from what they say (and what
+   you might expect.) I believe I changed this in a fit of pique because it made things
+   slightly easier in the source code. I am so sorry.
+* Homing:
+  - The current thought is not to do homing, but rather to set the center position and then
+    hard code limits. Unfortunately, the code internals don't track whether a tower has
+    been centered, just whether it has been homed.
+* Instability:
+  - Both the maquette pi and the hydraulics pi seem not to boot. Sometimes.
+  - I've seen queues back up when relaying data from the maquette to the controller pi.
+    It's possible that this is benign (accumulation of data when connecting) and the system
+    gets through it after a little while, but it's possible that the system never recovers.
+* Logging:
+  - The maquette and the controller both log to rotating log files in /var/logs/crown.
+* PID values:
+  - These were set the very first time Crown was run, and haven't been changed since. There
+    are probably better values. I've created a couple of utility scripts to get and set
+    the values to make exploration easier.
+--CSW, 7/2023
+
