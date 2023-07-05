@@ -338,7 +338,7 @@ int main(void) {
   _delay_ms(100);
 
   if (1) {
-    putstr("WAVE v0.10_CSW\r\n");
+    putstr("WAVE v0.11_CSW\r\n");
     putstr("addr: ");
     puthex(addr);
     putstr("\r\n");
