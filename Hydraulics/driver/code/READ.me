@@ -1,3 +1,23 @@
-This is raw avr code with a a bit of arduino glue to add Corey J Fowler's CAN bus libraries. The glue causes dependencies on some of the arduino headers - you'll have to change the makefile to find them for your arduino distribution. (Sadly, it seems that the arduino directories get set up differently on different computers, so simply setting a single ARDUINO_ROOT path doesn't work.)
+IMPORTANT - You will almost certainly need to change the makefile to point to the correct arduino libraries.
+            The file I'm checking in contains a reference to my personal directories on my Mac, which is
+            unlikely to work for anyone else.
+            In the makefile you'll see references to other arduino library paths - these are more normal for
+            PCs. However, note that arduino directories seem to get set up differently on different computers
+            so there's no 'one size fits all' ARDUINO_ROOT that we can use.
+OTHER NOTES -
+            1) I found that when I didn't have the correct arduino libraries I could compile, but I got
+               verification errors when I uploaded the binary. Which is weird, but... <shrug>
+            2) The set of 6 pins in (roughly) the center of the board is the programming header. It's not
+               keyed, but the key would be pointing toward the side of the board with the red pushbutton.
+            3) Use 'make program' to upload your code. I've been using a Sparkfun AVR pocket programmer,
+               which has a Tiny chip internally. Seems to work great, and I power the board from the pocket
+               programmer when I use it.
+            4) Note that although this board uses some Arduino code, the installation here doesn't include
+               the arduino bootloader, so you're not going to be able to upload via the serial port
+            4) If somehow you've gotten this far and you don't have avrdude installed, get it now.
+
+Thanks to Corey J Fowler for the CAN bus libraries.
+
+--CSW, 7/03/23
 
 

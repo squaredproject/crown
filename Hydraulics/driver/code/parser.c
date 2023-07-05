@@ -454,6 +454,7 @@ int16_t parseInteger(uint8_t *cmd_str, uint8_t startChr) {
 // process incoming chars - commands start with '<' and end with '>'
 // return 1 if command string is complete - else return zero
 
+// NB - Command string 0 a command from the serial port
 uint8_t accumulateCommandString0(uint8_t c) {
   /* catch beginning of this string */
   if (c == '<') { // this will catch re-starts and stalls as well as valid
@@ -469,6 +470,7 @@ uint8_t accumulateCommandString0(uint8_t c) {
       cmd0_str[cmd0_len++] = c;
     } else {
       putstr("Error - max command length reached\n");
+      cmd0_len = 0;
     }
     if (c == '>') {
       /* char buf[128];
@@ -482,6 +484,7 @@ uint8_t accumulateCommandString0(uint8_t c) {
   return 0;
 }
 
+// NB - Command string 1 is a command on the 485 port
 uint8_t accumulateCommandString1(uint8_t c) {
   /* catch beginning of this string */
   if (c == '<') { // this will catch re-starts and stalls as well as valid
@@ -492,18 +495,21 @@ uint8_t accumulateCommandString1(uint8_t c) {
   }
 
   if (cmd1_len != 0) { // string in progress, accumulate next char
-
     if (cmd1_len < MAX_COMMAND_LENGTH)
       cmd1_str[cmd1_len++] = c;
-
     if (c == '>') {
-      char buf[128];
-      memcpy(buf, cmd1_str, cmd1_len);
-      buf[cmd1_len]   = '\r';
-      buf[cmd1_len+1] = '\n';
-      buf[cmd1_len+2] = '\0';
-      putstr(buf);
+      if (debug_out) {
+        char buf[128];
+        memcpy(buf, cmd1_str, cmd1_len);
+        buf[cmd1_len]   = '\r';
+        buf[cmd1_len+1] = '\n';
+        buf[cmd1_len+2] = '\0';
+        putstr(buf);
+      }
       return 1;
+    }
+    else {
+      cmd1_len = 0;
     }
   }
   return 0;

@@ -107,16 +107,16 @@ ASRC =
 # This is a good value if you're on linux (or mac or wsl) using arduino-cli and you've done 
 # arduino-cli core install arduino:avr
 # currently installed versions are more current
-ARDUINO_ROOT = $(HOME)/.arduino15/packages/arduino
-ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.8.6/cores/arduino
-ARDUINO_VARIANT = mega
-ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.8.6/variants/$(ARDUINO_VARIANT)
+# ARDUINO_ROOT = $(HOME)/.arduino15/packages/arduino
+# ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.8.6/cores/arduino
+# ARDUINO_VARIANT = mega
+# ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.8.6/variants/$(ARDUINO_VARIANT)
 
 # This is csw's value
-# ARDUINO_ROOT = /Users/carolyn/Library/Arduino15/packages/arduino
-#ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.8.4/cores/arduino
-#ARDUINO_VARIANT = mega
-#ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.8.4/variants/$(ARDUINO_VARIANT)
+ARDUINO_ROOT = /Users/carolyn/Library/Arduino15/packages/arduino
+ARDUINO_CORE = $(ARDUINO_ROOT)/hardware/avr/1.8.4/cores/arduino
+ARDUINO_VARIANT = mega
+ARDUINO_VARIANT_DIR = $(ARDUINO_ROOT)/hardware/avr/1.8.4/variants/$(ARDUINO_VARIANT)
 
 
 # Optimization level, can be [0, 1, 2, 3, s]. 
@@ -279,7 +279,8 @@ AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
 # to submit bug reports.
 #AVRDUDE_VERBOSE = -v -v
 
-AVRDUDE_FLAGS = -p $(MCU) -P $(AVRDUDE_PORT) -c $(AVRDUDE_PROGRAMMER)
+# AVRDUDE_FLAGS = -p $(MCU) -P $(AVRDUDE_PORT) -c $(AVRDUDE_PROGRAMMER)
+AVRDUDE_FLAGS = -p $(MCU) -c $(AVRDUDE_PROGRAMMER)
 AVRDUDE_FLAGS += $(AVRDUDE_NO_VERIFY)
 AVRDUDE_FLAGS += $(AVRDUDE_VERBOSE)
 AVRDUDE_FLAGS += $(AVRDUDE_ERASE_COUNTER)

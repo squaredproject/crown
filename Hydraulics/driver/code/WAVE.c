@@ -402,7 +402,7 @@ int main(void) {
     /* roughly 976 hz at 16Mhz clock */
     if (KHZ_Flag) {
       KHZ_Flag = 0;
-      char outBuf[128];
+      //char outBuf[128];
       // sprintf(outBuf, "Sanity ... %d\n", tenhz_count);
 
       Poll_Limit_Switches();
@@ -575,8 +575,13 @@ void Dump_Status(void) {
           (state != NORMAL ? "TRUE" : "FALSE"));
   putstr(buf);
   for (int i = 0; i < 3; i++) {
-    sprintf(buf, "\r\n  Joint %d Enabled : %s", i,
+    sprintf(buf, "\r\n  Joint %d HW Enabled : %s", i,
             ((enable & _BV(i)) ? "TRUE" : "FALSE"));
+    putstr(buf);
+  }
+  for (int i = 0; i < 3; i++) {
+    sprintf(buf, "\r\n  Joint %d SW Enabled : %s", i,
+            ((jcb[i]->sw_enabled) ? "TRUE" : "FALSE"));
     putstr(buf);
   }
   for (int i = 0; i < 3; i++) {
@@ -590,8 +595,6 @@ void setRunning(uint8_t bRunning) { isRunning = (bRunning == TRUE); }
 
 // and the CAN stuff
 static void sendStatus(void) {
-  int ret;
-  char outBuf[64];
   uint8_t enable = ~PINK;
   CAN_StatusStruct status;
   status.runState = isRunning;
@@ -602,9 +605,7 @@ static void sendStatus(void) {
     status.jointEnable[i] = (enable & _BV(i)) ? 1 : 0;
     status.jointSWEnable[i] = (jcb[i]->sw_enabled) ? 1 : 0;
   }
-  putstr("About to send general status!\n");
-  ret = CAN_SendGeneralStatus(&status);
-  sprintf(outBuf, "General Status send returns %d\n", ret);
+  CAN_SendGeneralStatus(&status);
 }
 
 // XXX - check for all indexing on joint and tower! I know I've got it fucked up

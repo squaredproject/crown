@@ -355,9 +355,9 @@ int CAN_SendGeneralStatus(CAN_StatusStruct *status) {
   cmd[CAN_DATA + 1] = (status->state);
   cmd[CAN_DATA + 2] = ((status->sw[0] & 0x07) << 4) | (status->sw[1] & 0x07);
   cmd[CAN_DATA + 3] = (status->sw[2] & 0x07);
-  cmd[CAN_DATA + 4] = (status->jointEnable[0] << 2) |
-                      (status->jointEnable[1] << 1) |
-                      (status->jointEnable[2] << 0);
+  cmd[CAN_DATA + 4] = (status->jointSWEnable[0] << 2) |
+                      (status->jointSWEnable[1] << 1) |
+                      (status->jointSWEnable[2] << 0);
 
   // push into CAN
   return (mcp_can_send(g_txId, 1, cmdLen, cmd));
