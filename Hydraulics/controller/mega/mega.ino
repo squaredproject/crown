@@ -131,9 +131,9 @@ static bool serialBroadcast = true;  // whether we broadcast the position data b
 // Switch Mode  API
 
 // Pin definitions
-#define SWITCH_CONDUCTOR_PIN 38
+#define SWITCH_CONDUCTOR_PIN 36
 #define SWITCH_MAQUETTE_PIN 40
-#define SWITCH_MANUAL_PIN 36
+#define SWITCH_MANUAL_PIN 38
 #define SWITCH_OFF_PIN      42   // XXX FIXME NO PHYSICAL ATTACHMENT!!
 
 // Physical switch controlling mode
